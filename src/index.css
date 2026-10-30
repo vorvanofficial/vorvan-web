@@ -1,0 +1,360 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
+    --font-editorial: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+    --font-brand: 'Cinzel', 'Playfair Display', Georgia, serif;
+    --font-latin-script: 'Great Vibes', 'Pinyon Script', cursive;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  body {
+    font-family: var(--font-editorial);
+    font-size: 17px;
+    line-height: 1.65;
+    letter-spacing: 0.015em;
+    background-color: #0B0A0E;
+    color: #FAF8F5;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  h1, h2, h3, .font-serif-luxury {
+    font-family: var(--font-display);
+  }
+
+  .font-editorial {
+    font-family: var(--font-editorial);
+  }
+
+  .font-latin-italic {
+    font-family: var(--font-editorial);
+    font-style: italic;
+  }
+
+  .font-latin-script {
+    font-family: var(--font-latin-script);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+  }
+
+  .font-brand {
+    font-family: var(--font-brand);
+  }
+
+  .font-mono-tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Semi-Gold & Champagne Luxury Text Utilities */
+.text-gold-champagne {
+  color: #E5C87E;
+}
+
+.text-gold-soft {
+  color: #D8BE82;
+}
+
+.text-gold-shimmer {
+  background: linear-gradient(
+    110deg,
+    #F5E6B8 0%,
+    #D4AF37 38%,
+    #FFF6D6 55%,
+    #C8A24A 85%,
+    #F3E2AD 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.btn-luxury-gold {
+  background: linear-gradient(
+    135deg,
+    #DFC075 0%,
+    #F4E6BA 45%,
+    #C79F4B 100%
+  );
+  color: #0D0B07;
+  border: 1px solid rgba(250, 236, 190, 0.85);
+  box-shadow:
+    0 6px 22px -6px rgba(212, 175, 55, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.btn-luxury-gold:hover {
+  background: linear-gradient(
+    135deg,
+    #EBD08A 0%,
+    #FFF3CF 50%,
+    #D6AE5A 100%
+  );
+  box-shadow:
+    0 8px 26px -4px rgba(212, 175, 55, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+/* Marquee Carousel */
+@keyframes marquee-scroll {
+  0% {
+    transform: translate3d(0%, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* Splash Screen Monogram Entrance */
+@keyframes splash-monogram-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.86) translateY(14px);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+}
+
+/* Fade Up */
+@keyframes luxury-fade-up {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Blur to Sharp */
+@keyframes luxury-blur-sharp {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.97);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+/* Floating Effervescent Perfume Bubble Rise */
+@keyframes bubble-float-up {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 42px, 0) scale(0.5);
+  }
+  20% {
+    opacity: 0.85;
+    transform: translate3d(-8px, 10px, 0) scale(0.95);
+  }
+  65% {
+    opacity: 0.65;
+    transform: translate3d(10px, -65px, 0) scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-6px, -150px, 0) scale(0.75);
+  }
+}
+
+/* Continuous Ambient Mist Orbs */
+@keyframes ambient-orb-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.32;
+  }
+  50% {
+    transform: translate3d(16px, -32px, 0) scale(1.22);
+    opacity: 0.62;
+  }
+}
+
+/* Slow Golden Mandala / Compass Rotation */
+@keyframes slow-filigree-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Shimmering Semi-Gold & Platinum Card Border */
+@keyframes platinum-pulse {
+  0%, 100% {
+    border-color: rgba(212, 175, 55, 0.24);
+    box-shadow: 0 4px 20px -10px rgba(212, 175, 55, 0.08);
+  }
+  50% {
+    border-color: rgba(229, 200, 126, 0.48);
+    box-shadow: 0 10px 30px -12px rgba(212, 175, 55, 0.22);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 36s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+.animate-splash-monogram {
+  animation: splash-monogram-enter 1.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-up {
+  animation: luxury-fade-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-blur-sharp {
+  animation: luxury-blur-sharp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-bubble-rise {
+  animation: bubble-float-up 3.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-ambient-orb {
+  animation: ambient-orb-drift 6.5s ease-in-out infinite;
+}
+
+.animate-filigree-slow {
+  animation: slow-filigree-spin 55s linear infinite;
+}
+
+/* Slowly Drifting Liquid Luxury Mesh Gradient Animations */
+@keyframes liquid-drift-primary {
+  0%, 100% {
+    transform: translate3d(-4%, -3%, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate3d(5%, 4%, 0) scale(1.08) rotate(4deg);
+  }
+  66% {
+    transform: translate3d(-3%, 6%, 0) scale(0.95) rotate(-3deg);
+  }
+}
+
+@keyframes liquid-drift-secondary {
+  0%, 100% {
+    transform: translate3d(5%, 4%, 0) scale(1.04) rotate(0deg);
+  }
+  40% {
+    transform: translate3d(-6%, -4%, 0) scale(0.94) rotate(-5deg);
+  }
+  75% {
+    transform: translate3d(4%, -5%, 0) scale(1.1) rotate(3deg);
+  }
+}
+
+@keyframes liquid-drift-tertiary {
+  0%, 100% {
+    transform: translate3d(0%, 5%, 0) scale(0.96);
+  }
+  50% {
+    transform: translate3d(-5%, -6%, 0) scale(1.12);
+  }
+}
+
+.animate-liquid-mesh-1 {
+  animation: liquid-drift-primary 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-liquid-mesh-2 {
+  animation: liquid-drift-secondary 32s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-liquid-mesh-3 {
+  animation: liquid-drift-tertiary 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-platinum-card {
+  animation: platinum-pulse 5.5s ease-in-out infinite;
+}
+
+/* Scroll Reveal Bidirectional States (Enter & Exit on Scroll) */
+.scroll-reveal-base {
+  transition:
+    opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.75s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform, filter;
+}
+
+.scroll-reveal-hidden-up {
+  opacity: 0;
+  transform: translate3d(0, 36px, 0) scale(0.97);
+  filter: blur(5px);
+}
+
+.scroll-reveal-hidden-left {
+  opacity: 0;
+  transform: translate3d(-34px, 16px, 0) scale(0.97);
+  filter: blur(5px);
+}
+
+.scroll-reveal-hidden-right {
+  opacity: 0;
+  transform: translate3d(34px, 16px, 0) scale(0.97);
+  filter: blur(5px);
+}
+
+.scroll-reveal-hidden-scale {
+  opacity: 0;
+  transform: translate3d(0, 20px, 0) scale(0.91);
+  filter: blur(6px);
+}
+
+.scroll-reveal-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  filter: blur(0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-splash-monogram,
+  .animate-fade-up,
+  .animate-blur-sharp,
+  .animate-bubble-rise,
+  .animate-ambient-orb,
+  .animate-filigree-slow,
+  .animate-liquid-mesh-1,
+  .animate-liquid-mesh-2,
+  .animate-liquid-mesh-3,
+  .animate-platinum-card {
+    animation: none;
+  }
+  .scroll-reveal-base {
+    transition: none;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+

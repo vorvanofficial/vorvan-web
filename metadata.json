@@ -1,0 +1,6 @@
+{
+  "name": "VORVAN — Luxury Fragrance Boutique",
+  "description": "VORVAN (Lifestyle For Everyone) — Kurasi 81 parfum branded mewah & Original Parallel Import Eropa (Louis Vuitton, Creed, MFK Baccarat, Le Labo, Dior, Chanel, YSL) dengan efisiensi valuasi 20%–30% di bawah ritel resmi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
