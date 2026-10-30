@@ -29,7 +29,15 @@ import {
 } from '../utils/businessRules';
 
 interface AuthorizedPaymentChannel {
-  id: 'mandiri' | 'bni' | 'qris' | 'paypal' | 'visa' | 'mastercard' | 'cod';
+  id:
+    | 'mandiri'
+    | 'bni'
+    | 'bri'
+    | 'qris'
+    | 'paypal'
+    | 'visa'
+    | 'mastercard'
+    | 'cod';
   label: string;
   logoUrl?: string;
 }
@@ -48,10 +56,12 @@ const AUTHORIZED_PAYMENT_CHANNELS: AuthorizedPaymentChannel[] = [
       'https://upload.wikimedia.org/wikipedia/id/thumb/5/55/BNI_logo.svg/512px-BNI_logo.svg.png',
   },
   {
+    id: 'bri',
+    label: 'Bank BRI',
+  },
+  {
     id: 'qris',
-    label: 'QRIS Resmi',
-    logoUrl:
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Logo_QRIS.svg/512px-Logo_QRIS.svg.png',
+    label: 'QRIS Instant',
   },
   {
     id: 'paypal',
@@ -152,13 +162,51 @@ const renderGraphicSvgFallback = (id: AuthorizedPaymentChannel['id']) => {
           />
         </svg>
       );
+    case 'bri':
+      return (
+        <svg
+          viewBox="0 0 184 46"
+          className={`h-5 sm:h-6 w-auto select-none ${MONOCHROME_CHAMPAGNE_FILTER_CLASS}`}
+          role="img"
+          aria-label="Bank BRI"
+        >
+          <rect
+            x="4"
+            y="8"
+            width="30"
+            height="30"
+            rx="6"
+            fill="none"
+            stroke="#E5C87E"
+            strokeWidth="2.4"
+          />
+          <path
+            d="M12 15 H21 C24 15 25.5 16.5 25.5 19 C25.5 21 24 22.2 22 22.6 C24.5 23 26 24.5 26 27 C26 29.8 24 31 20.5 31 H12 Z"
+            fill="none"
+            stroke="#E5C87E"
+            strokeWidth="2.1"
+            strokeLinejoin="round"
+          />
+          <text
+            x="42"
+            y="32"
+            fill="#E5C87E"
+            fontFamily="Arial, Helvetica, sans-serif"
+            fontWeight="900"
+            fontSize="24"
+            letterSpacing="0.6"
+          >
+            BANK BRI
+          </text>
+        </svg>
+      );
     case 'qris':
       return (
         <svg
-          viewBox="0 0 126 46"
+          viewBox="0 0 216 46"
           className={`h-5 sm:h-6 w-auto select-none ${MONOCHROME_CHAMPAGNE_FILTER_CLASS}`}
           role="img"
-          aria-label="QRIS Resmi"
+          aria-label="QRIS Instant"
         >
           <rect
             x="4"
@@ -201,12 +249,11 @@ const renderGraphicSvgFallback = (id: AuthorizedPaymentChannel['id']) => {
             fill="#E5C87E"
             fontFamily="Arial, Helvetica, sans-serif"
             fontWeight="900"
-            fontSize="26"
-            letterSpacing="1.5"
+            fontSize="24"
+            letterSpacing="0.6"
           >
-            QRIS
+            QRIS Instant
           </text>
-          <rect x="116" y="12" width="4" height="22" rx="2" fill="#E5C87E" />
         </svg>
       );
     case 'paypal':
@@ -467,7 +514,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
   const paymentMethodLabel =
     activePaymentTab === 'bank_transfer'
-      ? 'Transfer Bank Resmi (Mandiri / BNI)'
+      ? 'Transfer Bank Resmi (Mandiri / BNI / BRI)'
       : activePaymentTab === 'cod_hand_delivery'
       ? 'COD / Private Hand-Delivery'
       : 'International Payment (PayPal / SWIFT)';
@@ -845,25 +892,27 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 className="space-y-5 animate-fade-up"
                 data-testid="payment-content-bank"
               >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   {/* Bank Mandiri Card */}
-                  <div className="p-6 rounded-2xl bg-gradient-to-b from-[#171622] to-[#100F16] border border-[#D4AF37]/45 space-y-4">
-                    <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
-                      <span className="font-brand text-xs uppercase tracking-[0.2em] text-[#E5C87E] font-bold">
-                        BANK MANDIRI (RESMI)
-                      </span>
-                      <span className="text-[11px] text-zinc-400">
-                        Transfer Nasional
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-zinc-400">Nomor Rekening:</p>
-                      <p className="mt-1 font-mono-tabular text-2xl sm:text-3xl font-bold text-white tracking-wider">
-                        {activeSettings.mandiriAccount}
-                      </p>
-                      <p className="mt-1.5 text-xs text-[#F5E6B8] font-medium">
-                        a.n {activeSettings.mandiriHolder}
-                      </p>
+                  <div className="p-6 rounded-2xl bg-gradient-to-b from-[#171622] to-[#100F16] border border-[#D4AF37]/45 flex flex-col justify-between space-y-4">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
+                        <span className="font-brand text-xs uppercase tracking-[0.2em] text-[#E5C87E] font-bold">
+                          BANK MANDIRI (RESMI)
+                        </span>
+                        <span className="text-[11px] text-zinc-400">
+                          Transfer Nasional
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-zinc-400">Nomor Rekening:</p>
+                        <p className="mt-1 font-mono-tabular text-xl sm:text-2xl font-bold text-white tracking-wider break-all">
+                          {activeSettings.mandiriAccount}
+                        </p>
+                        <p className="mt-1.5 text-xs text-[#F5E6B8] font-medium">
+                          a.n {activeSettings.mandiriHolder}
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -892,23 +941,25 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   </div>
 
                   {/* Bank BNI Card */}
-                  <div className="p-6 rounded-2xl bg-gradient-to-b from-[#171622] to-[#100F16] border border-[#D4AF37]/45 space-y-4">
-                    <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
-                      <span className="font-brand text-xs uppercase tracking-[0.2em] text-[#E5C87E] font-bold">
-                        BANK BNI (RESMI)
-                      </span>
-                      <span className="text-[11px] text-zinc-400">
-                        Transfer Nasional
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-zinc-400">Nomor Rekening:</p>
-                      <p className="mt-1 font-mono-tabular text-2xl sm:text-3xl font-bold text-white tracking-wider">
-                        {activeSettings.bniAccount}
-                      </p>
-                      <p className="mt-1.5 text-xs text-[#F5E6B8] font-medium">
-                        a.n {activeSettings.bniHolder}
-                      </p>
+                  <div className="p-6 rounded-2xl bg-gradient-to-b from-[#171622] to-[#100F16] border border-[#D4AF37]/45 flex flex-col justify-between space-y-4">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
+                        <span className="font-brand text-xs uppercase tracking-[0.2em] text-[#E5C87E] font-bold">
+                          BANK BNI (RESMI)
+                        </span>
+                        <span className="text-[11px] text-zinc-400">
+                          Transfer Nasional
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-zinc-400">Nomor Rekening:</p>
+                        <p className="mt-1 font-mono-tabular text-xl sm:text-2xl font-bold text-white tracking-wider break-all">
+                          {activeSettings.bniAccount}
+                        </p>
+                        <p className="mt-1.5 text-xs text-[#F5E6B8] font-medium">
+                          a.n {activeSettings.bniHolder}
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -922,6 +973,54 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                           <Check className="w-4 h-4 text-emerald-400" />
                           <span className="text-emerald-300">
                             Nomor Rekening BNI Tersalin!
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 text-[#E5C87E]" />
+                          <span>Salin Nomor Rekening</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Bank BRI Card */}
+                  <div
+                    className="p-6 rounded-2xl bg-gradient-to-b from-[#171622] to-[#100F16] border border-[#D4AF37]/45 flex flex-col justify-between space-y-4"
+                    data-testid="bank-card-bri"
+                  >
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
+                        <span className="font-brand text-xs uppercase tracking-[0.2em] text-[#E5C87E] font-bold">
+                          BANK BRI (RESMI)
+                        </span>
+                        <span className="text-[11px] text-zinc-400">
+                          Transfer Nasional
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-zinc-400">Nomor Rekening:</p>
+                        <p className="mt-1 font-mono-tabular text-xl sm:text-2xl font-bold text-white tracking-wider break-all">
+                          {activeSettings.briAccount}
+                        </p>
+                        <p className="mt-1.5 text-xs text-[#F5E6B8] font-medium">
+                          a.n {activeSettings.briHolder}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopyAccount(activeSettings.briAccount, 'bri')
+                      }
+                      data-testid="copy-bri-account-btn"
+                      className="w-full py-2.5 px-4 rounded-xl bg-[#0B0A0E] hover:bg-[#1E1C2A] border border-[#D4AF37]/45 text-[#F5E6B8] font-brand text-[11px] font-semibold uppercase tracking-[0.16em] flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                    >
+                      {copiedAccountKey === 'bri' ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-400" />
+                          <span className="text-emerald-300">
+                            Nomor Rekening BRI Tersalin!
                           </span>
                         </>
                       ) : (
@@ -1114,6 +1213,41 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                         className="px-3.5 py-2 rounded-lg bg-[#161521] border border-[#D4AF37]/40 text-xs text-[#F5E6B8] cursor-pointer self-start sm:self-center shrink-0"
                       >
                         {copiedAccountKey === 'swift-bni'
+                          ? 'Tersalin!'
+                          : 'Salin Data SWIFT'}
+                      </button>
+                    </div>
+
+                    {/* BRI SWIFT */}
+                    <div
+                      className="p-4 rounded-xl bg-[#0B0A0E] border border-[#D4AF37]/35 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      data-testid="swift-card-bri"
+                    >
+                      <div className="space-y-1">
+                        <p className="font-brand text-xs font-bold text-[#F5E6B8] uppercase tracking-wider">
+                          Bank BRI
+                        </p>
+                        <p className="font-mono-tabular text-lg font-bold text-white">
+                          {activeSettings.briAccount}{' '}
+                          <span className="text-xs font-normal text-zinc-300">
+                            ({activeSettings.briHolder})
+                          </span>
+                        </p>
+                        <p className="font-mono-tabular text-xs text-[#E5C87E]">
+                          SWIFT Code: <strong>{activeSettings.briSwift}</strong>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyAccount(
+                            `${activeSettings.briAccount} (SWIFT: ${activeSettings.briSwift})`,
+                            'swift-bri'
+                          )
+                        }
+                        className="px-3.5 py-2 rounded-lg bg-[#161521] border border-[#D4AF37]/40 text-xs text-[#F5E6B8] cursor-pointer self-start sm:self-center shrink-0"
+                      >
+                        {copiedAccountKey === 'swift-bri'
                           ? 'Tersalin!'
                           : 'Salin Data SWIFT'}
                       </button>

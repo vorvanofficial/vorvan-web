@@ -1004,6 +1004,60 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    No. Rekening Bank BRI
+                  </label>
+                  <input
+                    type="text"
+                    value={formSettings.briAccount}
+                    onChange={(e) =>
+                      setFormSettings({
+                        ...formSettings,
+                        briAccount: e.target.value,
+                      })
+                    }
+                    data-testid="admin-bri-account-input"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 text-sm font-mono-tabular text-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    Atas Nama (BRI)
+                  </label>
+                  <input
+                    type="text"
+                    value={formSettings.briHolder}
+                    onChange={(e) =>
+                      setFormSettings({
+                        ...formSettings,
+                        briHolder: e.target.value,
+                      })
+                    }
+                    data-testid="admin-bri-holder-input"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 text-sm text-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    SWIFT Code BRI
+                  </label>
+                  <input
+                    type="text"
+                    value={formSettings.briSwift}
+                    onChange={(e) =>
+                      setFormSettings({
+                        ...formSettings,
+                        briSwift: e.target.value,
+                      })
+                    }
+                    data-testid="admin-bri-swift-input"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 text-sm font-mono-tabular text-white outline-none"
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-zinc-800/80">
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1">

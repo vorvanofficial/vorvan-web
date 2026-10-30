@@ -206,6 +206,9 @@ export interface VorvanSiteSettings {
   bniAccount: string;
   bniHolder: string;
   bniSwift: string;
+  briAccount: string;
+  briHolder: string;
+  briSwift: string;
   paypalQrUrl: string;
   binderbyteApiKey?: string;
 }

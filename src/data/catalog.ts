@@ -21,6 +21,9 @@ export const DEFAULT_VORVAN_SETTINGS: VorvanSiteSettings = {
   bniAccount: '1812664893',
   bniHolder: 'ANDRE SATRIA P',
   bniSwift: 'BNINIDJA',
+  briAccount: '001101186645501',
+  briHolder: 'ALFANDI FIRMAN SYAH',
+  briSwift: 'BRINIDJA',
   paypalQrUrl: 'https://raw.githubusercontent.com/vorvanofficial/vorvan/main/paypal.jpg',
   binderbyteApiKey: '',
 };

@@ -27,11 +27,33 @@ export function loadVorvanSettings(): VorvanSiteSettings {
     if (typeof window !== 'undefined' && window.localStorage) {
       const raw = window.localStorage.getItem(VORVAN_SETTINGS_STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as Partial<VorvanSiteSettings>;
-        return {
+        const parsed = JSON.parse(raw) as Partial<VorvanSiteSettings> & {
+          briNumber?: string;
+        };
+        const resolvedBriAccount = (
+          parsed.briAccount ||
+          parsed.briNumber ||
+          ''
+        ).trim();
+        const resolvedBriHolder = (parsed.briHolder || '').trim();
+        const resolvedBriSwift = (parsed.briSwift || '').trim();
+
+        const merged: VorvanSiteSettings = {
           ...DEFAULT_VORVAN_SETTINGS,
           ...parsed,
+          briAccount: resolvedBriAccount || DEFAULT_VORVAN_SETTINGS.briAccount,
+          briHolder: resolvedBriHolder || DEFAULT_VORVAN_SETTINGS.briHolder,
+          briSwift: resolvedBriSwift || DEFAULT_VORVAN_SETTINGS.briSwift,
         };
+
+        if (!resolvedBriAccount || !resolvedBriHolder || !resolvedBriSwift) {
+          window.localStorage.setItem(
+            VORVAN_SETTINGS_STORAGE_KEY,
+            JSON.stringify(merged)
+          );
+        }
+
+        return merged;
       }
     }
   } catch {

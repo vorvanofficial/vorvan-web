@@ -384,6 +384,48 @@ test('Automated courier tracking helpers compute time-based stages, Binderbyte U
   assert.equal(trackAt4Hours.milestones[3].current, true);
 });
 
+test('loadVorvanSettings includes official Bank BRI credentials and auto-updates legacy localStorage entries', async () => {
+  const { loadVorvanSettings, VORVAN_SETTINGS_STORAGE_KEY } = await import(
+    './businessRules.ts'
+  );
+  const { DEFAULT_VORVAN_SETTINGS } = await import('../data/catalog.ts');
+
+  assert.equal(DEFAULT_VORVAN_SETTINGS.briAccount, '001101186645501');
+  assert.equal(DEFAULT_VORVAN_SETTINGS.briHolder, 'ALFANDI FIRMAN SYAH');
+  assert.equal(DEFAULT_VORVAN_SETTINGS.briSwift, 'BRINIDJA');
+
+  // Simulate legacy localStorage without BRI fields
+  const mockStore: Record<string, string> = {
+    [VORVAN_SETTINGS_STORAGE_KEY]: JSON.stringify({
+      whatsappNumber: '628133866590',
+      mandiriAccount: '1780011825615',
+      bniAccount: '1812664893',
+    }),
+  };
+  (globalThis as unknown as { window: unknown }).window = {
+    localStorage: {
+      getItem: (k: string) => mockStore[k] || null,
+      setItem: (k: string, v: string) => {
+        mockStore[k] = v;
+      },
+    },
+  };
+
+  const loaded = loadVorvanSettings();
+  assert.equal(loaded.briAccount, '001101186645501');
+  assert.equal(loaded.briHolder, 'ALFANDI FIRMAN SYAH');
+  assert.equal(loaded.briSwift, 'BRINIDJA');
+
+  // Verify localStorage was automatically updated with BRI credentials
+  const persisted = JSON.parse(mockStore[VORVAN_SETTINGS_STORAGE_KEY]);
+  assert.equal(persisted.briAccount, '001101186645501');
+  assert.equal(persisted.briHolder, 'ALFANDI FIRMAN SYAH');
+  assert.equal(persisted.briSwift, 'BRINIDJA');
+
+  delete (globalThis as unknown as { window?: unknown }).window;
+});
+
+
 
 
 
