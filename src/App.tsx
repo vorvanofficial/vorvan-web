@@ -144,6 +144,159 @@ const STORAGE_EMAIL_KEY = 'vorvan_concierge_client_email';
 const STORAGE_LEADS_KEY = 'vorvan_concierge_leads_log';
 const STORAGE_LOCALE_KEY = 'vorvan_international_locale';
 
+/**
+ * Viewport-Culled Hardware-Accelerated Ticker for Curated Fragrance Houses.
+ * Avoids 13,000px+ GPU mega-textures so mobile pinch-zoom and scrolling stay at locked 60/120fps
+ * and tiles are never evicted by the mobile browser compositor.
+ */
+const CuratedHousesTicker: React.FC = React.memo(() => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const isPausedRef = useRef<boolean>(false);
+  const offsetRef = useRef<number>(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const count = CURATED_FRAGRANCE_HOUSES.length;
+    const widths = new Float64Array(count);
+    const starts = new Float64Array(count);
+    const wasVisible = new Array<boolean>(count).fill(true);
+    let totalWidth = 0;
+    let viewportWidth = container.clientWidth || window.innerWidth || 390;
+
+    const applyPositions = (forceAll = false) => {
+      if (totalWidth <= 0) return;
+      const currentOffset = offsetRef.current;
+
+      for (let i = 0; i < count; i++) {
+        const el = itemRefs.current[i];
+        if (!el) continue;
+        const w = widths[i];
+        let x = (starts[i] - currentOffset) % totalWidth;
+        if (x < -w) {
+          x += totalWidth;
+        }
+
+        const isVisible = x <= viewportWidth + 120 && x + w >= -120;
+        if (isVisible) {
+          if (forceAll || !wasVisible[i]) {
+            el.style.visibility = 'visible';
+            wasVisible[i] = true;
+          }
+          el.style.transform = `translate3d(${x.toFixed(2)}px, 0px, 0px)`;
+        } else if (forceAll || wasVisible[i]) {
+          el.style.visibility = 'hidden';
+          el.style.transform = 'translate3d(-9999px, 0px, 0px)';
+          wasVisible[i] = false;
+        }
+      }
+    };
+
+    const measureLayout = () => {
+      if (!container) return;
+      viewportWidth = container.clientWidth || window.innerWidth || 390;
+      let runningStart = 0;
+      for (let i = 0; i < count; i++) {
+        const el = itemRefs.current[i];
+        const w = el ? el.offsetWidth || 310 : 310;
+        widths[i] = w;
+        starts[i] = runningStart;
+        runningStart += w;
+      }
+      totalWidth = runningStart;
+      if (totalWidth > 0) {
+        offsetRef.current = offsetRef.current % totalWidth;
+      }
+      applyPositions(true);
+    };
+
+    measureLayout();
+
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      (document as Document & { fonts: FontFaceSet }).fonts.ready
+        .then(() => {
+          measureLayout();
+        })
+        .catch(() => {});
+    }
+
+    let rafId: number | null = null;
+    let lastTime: number | null = null;
+    const speedPxPerSec = 52;
+
+    const tick = (now: number) => {
+      const dt =
+        lastTime !== null ? Math.min((now - lastTime) / 1000, 0.05) : 0;
+      lastTime = now;
+
+      if (!isPausedRef.current && totalWidth > 0 && dt > 0) {
+        offsetRef.current =
+          (offsetRef.current + dt * speedPxPerSec) % totalWidth;
+        applyPositions(false);
+      }
+
+      rafId = window.requestAnimationFrame(tick);
+    };
+
+    rafId = window.requestAnimationFrame(tick);
+
+    const handleResize = () => {
+      measureLayout();
+    };
+
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      data-testid="curated-houses-marquee"
+      className="relative z-10 w-full overflow-hidden h-[56px] sm:h-[64px] select-none"
+      onMouseEnter={() => {
+        isPausedRef.current = true;
+      }}
+      onMouseLeave={() => {
+        isPausedRef.current = false;
+      }}
+    >
+      {CURATED_FRAGRANCE_HOUSES.map((brand, idx) => (
+        <div
+          key={brand.name}
+          ref={(el) => {
+            itemRefs.current[idx] = el;
+          }}
+          className="absolute top-0 left-0 h-full flex items-center gap-14 sm:gap-16 pr-14 sm:pr-16 shrink-0 group will-change-transform"
+          style={{
+            transform: 'translate3d(0px, 0px, 0px)',
+            backfaceVisibility: 'hidden',
+          }}
+        >
+          <div className="flex flex-col items-center justify-center text-center opacity-90 hover:opacity-100 transition-opacity">
+            <span className="font-brand text-base sm:text-xl tracking-[0.26em] text-[#F5E6B8] whitespace-nowrap">
+              {brand.name}
+            </span>
+            <span className="font-latin-italic text-xs tracking-widest text-[#D8BE82] mt-1 whitespace-nowrap">
+              {brand.origin} · {brand.est}
+            </span>
+          </div>
+          <span
+            className="w-1.5 h-1.5 rotate-45 bg-[#D4AF37]/70 inline-block shrink-0"
+            aria-hidden="true"
+          />
+        </div>
+      ))}
+    </div>
+  );
+});
+
 export default function App() {
   const [route, setRoute] = useState<ActiveRoute>(() => parseCurrentLocation());
   const [showSplash, setShowSplash] = useState<boolean>(() =>
@@ -484,7 +637,7 @@ export default function App() {
   return (
     <div
       dir={locale === 'AR' ? 'rtl' : 'ltr'}
-      className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#0B0A0E] text-[#FAF8F5] flex flex-col relative pb-16 lg:pb-0"
+      className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#0B0A0E] text-[#FAF8F5] flex flex-col relative"
     >
       {/* 1. CINEMATIC WELCOME SPLASH SCREEN (EXTENDED 5.4s DURATION) */}
       <WelcomeSplashScreen
@@ -903,14 +1056,30 @@ export default function App() {
             {/* 3. BRAND SHOWCASE TICKER — CURATED FRAGRANCE HOUSES */}
             <section
               aria-label="Curated Fragrance Houses"
-              className="relative py-10 bg-[#0A090E]/65 border-b border-[#D4AF37]/25 overflow-hidden"
+              className="relative py-10 bg-[#0A090E] border-b border-[#D4AF37]/25 overflow-hidden isolate"
             >
-              <ParallaxSectionBg
-                speed={0.12}
-                tone="obsidian"
-                align="center"
-                testId="parallax-bg-ticker"
-              />
+              <div
+                aria-hidden="true"
+                data-testid="parallax-bg-ticker"
+                className="absolute inset-0 pointer-events-none select-none overflow-hidden z-0"
+              >
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      'radial-gradient(circle at 50% 45%, rgba(212, 175, 55, 0.11) 0%, rgba(63, 63, 70, 0.06) 45%, rgba(11, 10, 14, 0) 75%)',
+                  }}
+                />
+                <div
+                  className="absolute inset-0 opacity-[0.075]"
+                  style={{
+                    backgroundImage:
+                      'linear-gradient(to right, rgba(229, 200, 126, 0.55) 1px, transparent 1px), linear-gradient(to bottom, rgba(229, 200, 126, 0.38) 1px, transparent 1px)',
+                    backgroundSize: '96px 96px',
+                  }}
+                />
+              </div>
+
               <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
                 <p className="font-brand text-[11px] uppercase tracking-[0.28em] text-[#E5C87E] font-semibold">
                   {t.ticker.title}
@@ -920,32 +1089,7 @@ export default function App() {
                 </span>
               </div>
 
-              <div className="relative w-full overflow-hidden">
-                <div className="animate-marquee flex items-center gap-14 sm:gap-16 px-8">
-                  {[
-                    ...CURATED_FRAGRANCE_HOUSES,
-                    ...CURATED_FRAGRANCE_HOUSES,
-                  ].map((brand, idx) => (
-                    <div
-                      key={`${brand.name}-${idx}`}
-                      className="flex items-center gap-14 sm:gap-16 shrink-0 group"
-                    >
-                      <div className="flex flex-col items-center text-center opacity-85 hover:opacity-100 transition-opacity">
-                        <span className="font-brand text-base sm:text-xl tracking-[0.26em] text-[#F5E6B8] whitespace-nowrap">
-                          {brand.name}
-                        </span>
-                        <span className="font-latin-italic text-xs tracking-widest text-[#D8BE82] mt-1">
-                          {brand.origin} · {brand.est}
-                        </span>
-                      </div>
-                      <span
-                        className="w-1.5 h-1.5 rotate-45 bg-[#D4AF37]/70 inline-block shrink-0"
-                        aria-hidden="true"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <CuratedHousesTicker />
             </section>
 
             {/* 4. BRAND -> GENDER -> PARFUM INTERACTIVE HIERARCHY EXPLORER */}
@@ -1164,7 +1308,7 @@ export default function App() {
       </main>
 
       {/* 9. FOOTER WITH STAGGERED SCROLL REVEAL, PARALLAX DEPTH & ARCHITECTURAL LUXURY CARDS */}
-      <footer className="relative overflow-hidden bg-[#08070B]/92 border-t border-[#D4AF37]/35 pt-14 sm:pt-18 pb-22 lg:pb-14 text-sm z-10">
+      <footer className="relative overflow-hidden bg-[#0B0A0E] border-t border-[#D4AF37]/35 pt-14 sm:pt-18 pb-24 lg:pb-14 text-sm z-10">
         <ParallaxSectionBg
           speed={0.12}
           tone="champagne"
@@ -1318,7 +1462,7 @@ export default function App() {
       {/* ERGONOMIC MOBILE THUMB-ZONE BOTTOM NAVIGATION BAR */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#0B0A0E]/95 backdrop-blur-md border-t border-[#D4AF37]/35 grid grid-cols-4 items-center px-2"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#0B0A0E] border-t border-[#D4AF37]/35 grid grid-cols-4 items-center px-2"
       >
         <button
           type="button"
