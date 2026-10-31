@@ -133,6 +133,9 @@ export interface PrivateInvoice {
   paymentMethodUsed?: string;
   shippingInsuranceIDR: number;
   woodenCratePackagingIDR: number;
+  retailPriceTotalIDR?: number;
+  discountPct?: number;
+  shippingLabel?: string;
   items: PrivateInvoiceItem[];
   notes: string;
 }
@@ -225,6 +228,26 @@ export type ShippingMethodType =
   | 'Ekspedisi SiCepat'
   | 'Kurir Internal VORVAN - COD Antar Langsung';
 
+export type ShippingZoneKey =
+  | 'FREE_VIP'
+  | 'ZONA_1'
+  | 'ZONA_2'
+  | 'ZONA_3'
+  | 'ZONA_4';
+
+export interface VorvanSkuPricingEntry {
+  no: number;
+  brand: string;
+  name: string;
+  gender: 'Men' | 'Women' | 'Unisex';
+  size: string;
+  retail: number;
+  disc: number;
+  cut: number;
+  price: number;
+  tier: 1 | 2 | 3 | 4 | 5;
+}
+
 export interface CustomAdminOrder {
   invoiceId: string;
   trackingId: string;
@@ -238,6 +261,10 @@ export interface CustomAdminOrder {
   volume: string;
   batchCode: string;
   dealPriceIDR: number;
+  retailPriceIDR?: number;
+  discountPct?: number;
+  shippingCostIDR?: number;
+  shippingLabel?: string;
   shippingMethod: ShippingMethodType;
   awbNumber: string;
   shippingStage?: 1 | 2 | 3 | 4;

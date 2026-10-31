@@ -15,19 +15,28 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { FRAGRANCE_CATALOG, VORVAN_CONCIERGE_EMAIL } from '../data/catalog';
+import {
+  FRAGRANCE_CATALOG,
+  SHIPPING_ZONES,
+  VORVAN_81_CATALOG,
+  VORVAN_CONCIERGE_EMAIL,
+} from '../data/catalog';
 import {
   ConciergeEmailLead,
   CustomAdminOrder,
   FragranceItem,
   ShippingMethodType,
+  ShippingZoneKey,
   VorvanSiteSettings,
 } from '../types/fragrance';
 import {
+  autoDetectShippingZoneByCity,
   buildSmartShareUrl,
   computeAutoShippingStage,
+  filterVorvanCheatSheet,
   formatIDRCurrency,
   resolveCourierMetadata,
+  resolveVorvanSkuPricing,
   validateConciergeEmail,
 } from '../utils/businessRules';
 
@@ -38,6 +47,18 @@ const ADMIN_COURIER_OPTIONS: ShippingMethodType[] = [
   'Paxel',
   'Anteraja',
   'COD Kurir Internal VORVAN',
+];
+
+const SHIPPING_ZONE_BUTTONS: {
+  key: ShippingZoneKey;
+  shortTitle: string;
+  subText: string;
+}[] = [
+  { key: 'FREE_VIP', shortTitle: 'FREE VIP / COD', subText: 'Rp 0 (Gratis)' },
+  { key: 'ZONA_1', shortTitle: 'Zona 1 · Jawa & Jabodetabek', subText: 'Rp 25.000' },
+  { key: 'ZONA_2', shortTitle: 'Zona 2 · Bali, Sumatera, Kal', subText: 'Rp 45.000' },
+  { key: 'ZONA_3', shortTitle: 'Zona 3 · Sulawesi, NTB, NTT', subText: 'Rp 65.000' },
+  { key: 'ZONA_4', shortTitle: 'Zona 4 · Maluku & Papua', subText: 'Rp 95.000' },
 ];
 
 interface EmailGatewayModalProps {
@@ -206,15 +227,37 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     'create'
   );
 
+  // Default initial SKU #1 (LV Afternoon Swim)
+  const initialSku = VORVAN_81_CATALOG[0];
+
   // Tab 1: Create Invoice & Resi state
   const [buyerName, setBuyerName] = useState<string>('');
   const [buyerCity, setBuyerCity] = useState<string>('');
   const [selectedFragranceId, setSelectedFragranceId] = useState<string>(
-    FRAGRANCE_CATALOG[0]?.id || 'mfk-baccarat-rouge-540-extrait'
+    FRAGRANCE_CATALOG[0]?.id || 'lv-afternoon-swim'
   );
   const [customFragranceText, setCustomFragranceText] = useState<string>('');
-  const [volume, setVolume] = useState<string>('100ml');
-  const [dealPriceIDR, setDealPriceIDR] = useState<string>('3850000');
+  const [volume, setVolume] = useState<string>(initialSku?.size || '100ml');
+  const [dealPriceIDR, setDealPriceIDR] = useState<string>(
+    String(initialSku?.price || 4550000)
+  );
+  const [retailPriceIDR, setRetailPriceIDR] = useState<string>(
+    String(initialSku?.retail || 6500000)
+  );
+  const [discountPct, setDiscountPct] = useState<string>(
+    String(initialSku?.disc || 30)
+  );
+  const [selectedShippingZone, setSelectedShippingZone] =
+    useState<ShippingZoneKey>('FREE_VIP');
+  const [shippingCostIDR, setShippingCostIDR] = useState<string>(
+    String(SHIPPING_ZONES.FREE_VIP.cost)
+  );
+  const [shippingLabel, setShippingLabel] = useState<string>(
+    SHIPPING_ZONES.FREE_VIP.label
+  );
+  const [cheatSheetQuery, setCheatSheetQuery] = useState<string>('');
+  const [cheatSheetTier, setCheatSheetTier] = useState<string>('ALL');
+
   const [shippingMethod, setShippingMethod] = useState<ShippingMethodType>('JNE');
   const [awbNumber, setAwbNumber] = useState<string>('');
   const [paymentStatus, setPaymentStatus] = useState<'PENDING_PAYMENT' | 'PAID'>(
@@ -241,6 +284,66 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  // Resolve currently selected SKU pricing entry for the live badge
+  const selectedCatalogIndex = FRAGRANCE_CATALOG.findIndex(
+    (f) => f.id === selectedFragranceId
+  );
+  const activeSkuPricing =
+    selectedFragranceId === 'CUSTOM'
+      ? null
+      : resolveVorvanSkuPricing(
+          selectedCatalogIndex >= 0 ? selectedCatalogIndex : selectedFragranceId
+        );
+
+  const handleSelectPerfumeByIdOrIndex = (idOrIdx: string | number) => {
+    if (idOrIdx === 'CUSTOM') {
+      setSelectedFragranceId('CUSTOM');
+      return;
+    }
+    const idx =
+      typeof idOrIdx === 'number'
+        ? idOrIdx
+        : FRAGRANCE_CATALOG.findIndex((f) => f.id === idOrIdx);
+    const catalogItem = idx >= 0 ? FRAGRANCE_CATALOG[idx] : undefined;
+    const skuEntry = resolveVorvanSkuPricing(idx >= 0 ? idx : idOrIdx);
+
+    if (catalogItem) {
+      setSelectedFragranceId(catalogItem.id);
+      setVolume(skuEntry?.size || catalogItem.defaultVolume);
+    }
+    if (skuEntry) {
+      setDealPriceIDR(String(skuEntry.price));
+      setRetailPriceIDR(String(skuEntry.retail));
+      setDiscountPct(String(skuEntry.disc));
+      setVolume(skuEntry.size);
+    }
+  };
+
+  const handleApplyShippingZone = (zoneKey: ShippingZoneKey) => {
+    const zone = SHIPPING_ZONES[zoneKey];
+    if (!zone) return;
+    setSelectedShippingZone(zoneKey);
+    setShippingCostIDR(String(zone.cost));
+    setShippingLabel(zone.label);
+  };
+
+  const handleBuyerCityChange = (nextCity: string) => {
+    setBuyerCity(nextCity);
+    if (nextCity.trim().length >= 3) {
+      const detected = autoDetectShippingZoneByCity(nextCity);
+      if (detected) {
+        setSelectedShippingZone(detected.zoneKey);
+        setShippingCostIDR(String(detected.cost));
+        setShippingLabel(detected.label);
+      }
+    }
+  };
+
+  const filteredCheatSheetItems = filterVorvanCheatSheet(
+    cheatSheetQuery,
+    cheatSheetTier
+  );
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,6 +378,25 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       setCreateError('Mohon masukkan Harga Deal (Rp) yang valid.');
       return;
     }
+    const rawRetail = Number(retailPriceIDR.replace(/\D/g, ''));
+    const numericRetail =
+      rawRetail > numericPrice
+        ? rawRetail
+        : activeSkuPricing?.retail || Math.round(numericPrice / 0.72);
+    const rawDisc = Number(discountPct.replace(/\D/g, ''));
+    const numericDisc =
+      rawDisc > 0 && rawDisc < 95
+        ? rawDisc
+        : Math.max(
+            1,
+            Math.round(((numericRetail - numericPrice) / numericRetail) * 100)
+          );
+    const numericShipCost = Math.max(
+      0,
+      Number(shippingCostIDR.replace(/\D/g, '')) || 0
+    );
+    const cleanShipLabel =
+      shippingLabel.trim() || SHIPPING_ZONES[selectedShippingZone].label;
 
     setCreateError(null);
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
@@ -295,7 +417,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     const perfumeName =
       selectedFragranceId === 'CUSTOM'
         ? customFragranceText.trim() || 'Bespoke Fragrance'
-        : catalogItem?.name || 'Ombre Nomade';
+        : catalogItem?.name || 'Afternoon Swim';
     const conc = catalogItem?.concentration || 'Eau de Parfum';
     const batch = catalogItem?.batchCode || `VRV-${randomDigits}`;
 
@@ -323,6 +445,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       volume: volume.trim() || '100ml',
       batchCode: batch,
       dealPriceIDR: numericPrice,
+      retailPriceIDR: numericRetail,
+      discountPct: numericDisc,
+      shippingCostIDR: numericShipCost,
+      shippingLabel: cleanShipLabel,
       shippingMethod,
       awbNumber: cleanAwb,
       status: paymentStatus,
@@ -499,111 +625,293 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
             </button>
           </div>
 
-          {/* TAB 1: BUAT INVOICE & RESI BARU + SMART SHAREABLE URL */}
+          {/* TAB 1: BUAT INVOICE & RESI BARU + SMART SHAREABLE URL + CONTEKAN 81 SKU */}
           {activeTab === 'create' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <form
-                onSubmit={handleCreateOrderSubmit}
-                className="lg:col-span-7 bg-[#0B0A0E] border border-[#D4AF37]/30 rounded-2xl p-5 sm:p-6 space-y-4"
-              >
-                <h3 className="font-serif-luxury text-xl font-semibold text-[#F5E6B8] border-b border-zinc-800 pb-3">
-                  Formulir Penerbitan Tagihan &amp; Resi Pembeli
-                </h3>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <form
+                  id="vorvan-admin-create-form"
+                  onSubmit={handleCreateOrderSubmit}
+                  className="lg:col-span-7 bg-[#0B0A0E] border border-[#D4AF37]/30 rounded-2xl p-5 sm:p-6 space-y-4"
+                >
+                  <h3 className="font-serif-luxury text-xl font-semibold text-[#F5E6B8] border-b border-zinc-800 pb-3">
+                    Formulir Penerbitan Tagihan &amp; Resi Pembeli
+                  </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Nama Pembeli *
-                    </label>
-                    <input
-                      type="text"
-                      value={buyerName}
-                      onChange={(e) => setBuyerName(e.target.value)}
-                      placeholder="Contoh: Bpk. Hendra Wijaya"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">
+                        Nama Pembeli *
+                      </label>
+                      <input
+                        type="text"
+                        value={buyerName}
+                        onChange={(e) => setBuyerName(e.target.value)}
+                        placeholder="Contoh: Bpk. Hendra Wijaya"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">
+                        Kota / Alamat Lengkap * (Auto-Deteksi Zona Ongkir)
+                      </label>
+                      <input
+                        id="admin-buyer-city"
+                        type="text"
+                        value={buyerCity}
+                        onChange={(e) => handleBuyerCityChange(e.target.value)}
+                        placeholder="Contoh: Kebayoran Baru, Jakarta Selatan"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Kota / Alamat Lengkap *
-                    </label>
-                    <input
-                      type="text"
-                      value={buyerCity}
-                      onChange={(e) => setBuyerCity(e.target.value)}
-                      placeholder="Contoh: Kebayoran Baru, Jakarta Selatan"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Pilihan Parfum (81 Katalog Resmi)
-                    </label>
-                    <select
-                      value={selectedFragranceId}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSelectedFragranceId(val);
-                        const found = FRAGRANCE_CATALOG.find((f) => f.id === val);
-                        if (found) setVolume(found.defaultVolume);
-                      }}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
-                    >
-                      {FRAGRANCE_CATALOG.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.house} — {item.name} ({item.defaultVolume})
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <label
+                        htmlFor="admin-perfume-select"
+                        className="block text-xs text-zinc-400 mb-1"
+                      >
+                        Pilihan Parfum (81 SKU Resmi · Auto-Fill Harga &amp; Diskon)
+                      </label>
+                      <select
+                        id="admin-perfume-select"
+                        value={selectedFragranceId}
+                        onChange={(e) =>
+                          handleSelectPerfumeByIdOrIndex(e.target.value)
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
+                      >
+                        {FRAGRANCE_CATALOG.map((item, idx) => {
+                          const sku = VORVAN_81_CATALOG[idx];
+                          return (
+                            <option key={item.id} value={item.id}>
+                              #{idx + 1} {item.house} — {item.name} (
+                              {sku?.size || item.defaultVolume}) · Rp{' '}
+                              {(sku?.price || 4550000).toLocaleString('id-ID')}
+                            </option>
+                          );
+                        })}
+                        <option value="CUSTOM">
+                          + Ketik Manual Parfum Lainnya (Pre-Order / Custom)
                         </option>
-                      ))}
-                      <option value="CUSTOM">
-                        + Ketik Manual Parfum Lainnya (Pre-Order / Custom)
-                      </option>
-                    </select>
+                      </select>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="admin-bottle-size"
+                        className="block text-xs text-zinc-400 mb-1"
+                      >
+                        Ukuran Botol
+                      </label>
+                      <input
+                        id="admin-bottle-size"
+                        type="text"
+                        value={volume}
+                        onChange={(e) => setVolume(e.target.value)}
+                        placeholder="100ml"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Ukuran Botol
-                    </label>
-                    <input
-                      type="text"
-                      value={volume}
-                      onChange={(e) => setVolume(e.target.value)}
-                      placeholder="100ml"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
-                    />
-                  </div>
-                </div>
 
-                {selectedFragranceId === 'CUSTOM' && (
-                  <div>
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Nama Brand &amp; Parfum Custom *
-                    </label>
-                    <input
-                      type="text"
-                      value={customFragranceText}
-                      onChange={(e) => setCustomFragranceText(e.target.value)}
-                      placeholder="Contoh: Xerjoff — 1861 Naxos EDP"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
-                    />
-                  </div>
-                )}
+                  {/* POIN 2: LIVE AUTO-FILL PRICE & DISCOUNT BADGE */}
+                  {activeSkuPricing && (
+                    <div
+                      id="admin-auto-price-badge"
+                      className="p-3 rounded-xl bg-[#14121D] border border-[#D4AF37]/40 text-xs leading-relaxed text-zinc-200"
+                    >
+                      ✅{' '}
+                      <strong className="text-[#E5C87E]">
+                        {activeSkuPricing.brand} — {activeSkuPricing.name} (
+                        {activeSkuPricing.size})
+                      </strong>{' '}
+                      | Ritel Resmi:{' '}
+                      <del className="text-zinc-400">
+                        Rp {activeSkuPricing.retail.toLocaleString('id-ID')}
+                      </del>{' '}
+                      | Diskon VORVAN:{' '}
+                      <span className="text-emerald-400 font-semibold">
+                        {activeSkuPricing.disc}% (Hemat Rp{' '}
+                        {activeSkuPricing.cut.toLocaleString('id-ID')})
+                      </span>{' '}
+                      | Harga Jual:{' '}
+                      <strong className="text-white font-mono-tabular">
+                        Rp {activeSkuPricing.price.toLocaleString('id-ID')}
+                      </strong>
+                    </div>
+                  )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Harga Deal (Rp) *
-                    </label>
-                    <input
-                      type="text"
-                      value={dealPriceIDR}
-                      onChange={(e) => setDealPriceIDR(e.target.value)}
-                      placeholder="3850000"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-white outline-none"
-                    />
+                  {selectedFragranceId === 'CUSTOM' && (
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">
+                        Nama Brand &amp; Parfum Custom *
+                      </label>
+                      <input
+                        type="text"
+                        value={customFragranceText}
+                        onChange={(e) => setCustomFragranceText(e.target.value)}
+                        placeholder="Contoh: Xerjoff — 1861 Naxos EDP"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {/* AUTO-FILLED PRICING FIELDS (DEAL PRICE, RETAIL PRICE, DISCOUNT %, STATUS) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div>
+                      <label
+                        htmlFor="admin-deal-price"
+                        className="block text-xs text-[#E5C87E] font-medium mb-1"
+                      >
+                        Harga Jual VORVAN (Rp) *
+                      </label>
+                      <input
+                        id="admin-deal-price"
+                        type="text"
+                        value={dealPriceIDR}
+                        onChange={(e) => {
+                          const nextDeal = e.target.value;
+                          setDealPriceIDR(nextDeal);
+                          const dNum = Number(nextDeal.replace(/\D/g, ''));
+                          const rNum = Number(retailPriceIDR.replace(/\D/g, ''));
+                          if (dNum > 0 && rNum > dNum) {
+                            setDiscountPct(
+                              String(Math.round(((rNum - dNum) / rNum) * 100))
+                            );
+                          }
+                        }}
+                        placeholder="4550000"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-[#D4AF37]/50 focus:border-[#E5C87E] text-sm font-mono-tabular font-semibold text-[#F5E6B8] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="admin-retail-price"
+                        className="block text-xs text-zinc-400 mb-1"
+                      >
+                        Harga Ritel Resmi (Rp)
+                      </label>
+                      <input
+                        id="admin-retail-price"
+                        type="text"
+                        value={retailPriceIDR}
+                        onChange={(e) => {
+                          const nextRetail = e.target.value;
+                          setRetailPriceIDR(nextRetail);
+                          const rNum = Number(nextRetail.replace(/\D/g, ''));
+                          const dNum = Number(dealPriceIDR.replace(/\D/g, ''));
+                          if (dNum > 0 && rNum > dNum) {
+                            setDiscountPct(
+                              String(Math.round(((rNum - dNum) / rNum) * 100))
+                            );
+                          }
+                        }}
+                        placeholder="6500000"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-zinc-300 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="admin-discount-pct"
+                        className="block text-xs text-zinc-400 mb-1"
+                      >
+                        Diskon Parallel Import (%)
+                      </label>
+                      <input
+                        id="admin-discount-pct"
+                        type="text"
+                        value={discountPct}
+                        onChange={(e) => setDiscountPct(e.target.value)}
+                        placeholder="30"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-emerald-400 outline-none"
+                      />
+                    </div>
                   </div>
+
+                  {/* POIN 4: SISTEM ONGKIR PINTAR (ZONA FLAT 1-KLIK + AUTO-DETEKSI KOTA) */}
+                  <div className="p-4 rounded-xl bg-[#121118] border border-[#D4AF37]/30 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <label className="block text-xs text-[#E5C87E] font-semibold uppercase tracking-wider">
+                        Zona Ongkir Pintar &amp; Asuransi Kargo (1-Klik / Auto-Deteksi Kota)
+                      </label>
+                      <span className="text-[11px] text-zinc-400">
+                        Ketik kota di atas atau klik tombol zona di bawah:
+                      </span>
+                    </div>
+
+                    <div
+                      className="grid grid-cols-2 sm:grid-cols-5 gap-2"
+                      role="group"
+                      aria-label="Pilih Zona Ongkir Pintar"
+                    >
+                      {SHIPPING_ZONE_BUTTONS.map((zBtn) => {
+                        const isZoneSelected = selectedShippingZone === zBtn.key;
+                        return (
+                          <button
+                            key={zBtn.key}
+                            type="button"
+                            onClick={() => handleApplyShippingZone(zBtn.key)}
+                            data-testid={`shipping-zone-${zBtn.key.toLowerCase()}`}
+                            className={`p-2 rounded-lg text-left transition-all cursor-pointer border ${
+                              isZoneSelected
+                                ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] font-bold'
+                                : 'bg-[#0B0A0E] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/60'
+                            }`}
+                          >
+                            <span className="block text-[10px] font-semibold truncate">
+                              {zBtn.shortTitle}
+                            </span>
+                            <span
+                              className={`block text-[11px] font-mono-tabular mt-0.5 ${
+                                isZoneSelected
+                                  ? 'text-zinc-950 font-bold'
+                                  : 'text-[#E5C87E]'
+                              }`}
+                            >
+                              {zBtn.subText}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      <div>
+                        <label
+                          htmlFor="admin-shipping-cost"
+                          className="block text-[11px] text-zinc-400 mb-1"
+                        >
+                          Nominal Ongkir (Rp)
+                        </label>
+                        <input
+                          id="admin-shipping-cost"
+                          type="text"
+                          value={shippingCostIDR}
+                          onChange={(e) => setShippingCostIDR(e.target.value)}
+                          placeholder="0"
+                          className="w-full px-3 py-2 rounded-lg bg-[#0B0A0E] border border-zinc-700 focus:border-[#E5C87E] text-xs font-mono-tabular text-white outline-none"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label
+                          htmlFor="admin-shipping-label"
+                          className="block text-[11px] text-zinc-400 mb-1"
+                        >
+                          Keterangan Ongkir &amp; Asuransi di Invoice
+                        </label>
+                        <input
+                          id="admin-shipping-label"
+                          type="text"
+                          value={shippingLabel}
+                          onChange={(e) => setShippingLabel(e.target.value)}
+                          placeholder="COMPLIMENTARY (Free VIP Insured Shipping)"
+                          className="w-full px-3 py-2 rounded-lg bg-[#0B0A0E] border border-zinc-700 focus:border-[#E5C87E] text-xs text-white outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1">
                       Status Pembayaran
@@ -623,212 +931,380 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                       <option value="PAID">PAID (Lunas Terverifikasi)</option>
                     </select>
                   </div>
-                </div>
 
-                <div className="p-4 rounded-xl bg-[#121118] border border-[#D4AF37]/30 space-y-3.5">
-                  <div>
-                    <label className="block text-xs text-[#E5C87E] font-semibold uppercase tracking-wider mb-2">
-                      Pilih Kurir Ekspedisi (1x Input Otomatis) *
-                    </label>
-                    <div
-                      className="grid grid-cols-2 sm:grid-cols-3 gap-2"
-                      role="group"
-                      aria-label="Pilih Kurir Ekspedisi"
-                    >
-                      {ADMIN_COURIER_OPTIONS.map((courierOpt) => {
-                        const isSelected = shippingMethod === courierOpt;
-                        return (
-                          <button
-                            key={courierOpt}
-                            type="button"
-                            onClick={() => setShippingMethod(courierOpt)}
-                            data-testid={`courier-option-${courierOpt
-                              .toLowerCase()
-                              .replace(/[^a-z0-9]+/g, '-')}`}
-                            className={`px-3 py-2 rounded-lg text-xs font-mono-tabular font-semibold transition-all cursor-pointer border text-center truncate ${
-                              isSelected
-                                ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] font-bold'
-                                : 'bg-[#0B0A0E] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/60'
-                            }`}
-                          >
-                            {courierOpt}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-zinc-300 mb-1">
-                      Ketik Nomor Resi Asli dari Ekspedisi (AWB Number)
-                    </label>
-                    <input
-                      type="text"
-                      value={awbNumber}
-                      onChange={(e) => setAwbNumber(e.target.value)}
-                      placeholder="Contoh: JNE881920194 / JP99102831 (Kosongkan untuk auto-generate)"
-                      data-testid="admin-awb-input"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#0B0A0E] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-white outline-none"
-                    />
-                    <p className="mt-1.5 text-[11px] text-emerald-400/90 leading-relaxed">
-                      ✓ Begitu disimpan 1 kali, seluruh tahapan pelacakan (Lolos QC Vault → Manifest Kurir → Transit Hub Antar-Kota → Menuju Alamat Penerima) berjalan OTOMATIS &amp; terhubung ke satelit kurir tanpa perlu diedit manual.
-                    </p>
-                  </div>
-                </div>
-
-                {createError && (
-                  <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-800 p-3 rounded-xl">
-                    {createError}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  className="w-full py-3.5 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.18em] cursor-pointer"
-                  data-testid="admin-generate-invoice-btn"
-                >
-                  Terbitkan Kode Invoice (`INV-VRV-XXXX`) &amp; Smart Link
-                </button>
-              </form>
-
-              {/* Right Column: Generated Smart Link & Result Card */}
-              <div className="lg:col-span-5 bg-[#0B0A0E] border border-[#D4AF37]/35 rounded-2xl p-5 sm:p-6 flex flex-col justify-between space-y-5">
-                {createdOrderResult ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      <span>Tagihan &amp; Resi Berhasil Diterbitkan!</span>
-                    </div>
-
-                    <div className="p-4 rounded-xl bg-[#14131A] border border-[#D4AF37]/40 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">Kode Invoice:</span>
-                        <span className="font-mono-tabular font-bold text-[#F5E6B8] text-sm">
-                          {createdOrderResult.invoiceId}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">Nomor Resi:</span>
-                        <span className="font-mono-tabular font-semibold text-white">
-                          {createdOrderResult.awbNumber}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">Pembeli:</span>
-                        <span className="text-white font-medium">
-                          {createdOrderResult.buyerName}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">Parfum:</span>
-                        <span className="text-[#E5C87E] font-medium text-right">
-                          {createdOrderResult.house} — {createdOrderResult.fragranceName}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-400">Harga Deal:</span>
-                        <span className="font-mono-tabular font-bold text-emerald-400">
-                          {formatIDRCurrency(createdOrderResult.dealPriceIDR)}
-                        </span>
+                  <div className="p-4 rounded-xl bg-[#121118] border border-[#D4AF37]/30 space-y-3.5">
+                    <div>
+                      <label className="block text-xs text-[#E5C87E] font-semibold uppercase tracking-wider mb-2">
+                        Pilih Kurir Ekspedisi (1x Input Otomatis) *
+                      </label>
+                      <div
+                        className="grid grid-cols-2 sm:grid-cols-3 gap-2"
+                        role="group"
+                        aria-label="Pilih Kurir Ekspedisi"
+                      >
+                        {ADMIN_COURIER_OPTIONS.map((courierOpt) => {
+                          const isSelected = shippingMethod === courierOpt;
+                          return (
+                            <button
+                              key={courierOpt}
+                              type="button"
+                              onClick={() => setShippingMethod(courierOpt)}
+                              data-testid={`courier-option-${courierOpt
+                                .toLowerCase()
+                                .replace(/[^a-z0-9]+/g, '-')}`}
+                              className={`px-3 py-2 rounded-lg text-xs font-mono-tabular font-semibold transition-all cursor-pointer border text-center truncate ${
+                                isSelected
+                                  ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] font-bold'
+                                  : 'bg-[#0B0A0E] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/60'
+                              }`}
+                            >
+                              {courierOpt}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
-                    <div className="space-y-2.5 pt-2">
-                      <p className="font-brand text-[10px] uppercase tracking-[0.18em] text-[#E5C87E]">
-                        SMART SHAREABLE URL (BISA DIBUKA DI HP PEMBELI MANAPUN):
+                    <div>
+                      <label className="block text-xs text-zinc-300 mb-1">
+                        Ketik Nomor Resi Asli dari Ekspedisi (AWB Number)
+                      </label>
+                      <input
+                        type="text"
+                        value={awbNumber}
+                        onChange={(e) => setAwbNumber(e.target.value)}
+                        placeholder="Contoh: JNE881920194 / JP99102831 (Kosongkan untuk auto-generate)"
+                        data-testid="admin-awb-input"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#0B0A0E] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-white outline-none"
+                      />
+                      <p className="mt-1.5 text-[11px] text-emerald-400/90 leading-relaxed">
+                        ✓ Begitu disimpan 1 kali, seluruh tahapan pelacakan (Lolos QC Vault → Manifest Kurir → Transit Hub Antar-Kota → Menuju Alamat Penerima) berjalan OTOMATIS &amp; terhubung ke satelit kurir tanpa perlu diedit manual.
                       </p>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleCopyText(
-                            buildSmartShareUrl(createdOrderResult, 'invoice'),
-                            'smart-inv'
-                          )
-                        }
-                        className="w-full py-3 px-4 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        {copiedKey === 'smart-inv' ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            <span>Link Tagihan Pembeli Tersalin!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Link2 className="w-4 h-4" />
-                            <span>Salin Link Tagihan Khusus Pembeli</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleCopyText(
-                            buildSmartShareUrl(createdOrderResult, 'track'),
-                            'smart-trk'
-                          )
-                        }
-                        className="w-full py-3 px-4 rounded-xl bg-[#15141D] hover:bg-[#1E1C29] border border-[#D4AF37]/45 text-[#F5E6B8] font-brand text-[11px] font-semibold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        {copiedKey === 'smart-trk' ? (
-                          <>
-                            <Check className="w-4 h-4 text-emerald-400" />
-                            <span>Link Cek Resi Pembeli Tersalin!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4 text-[#E5C87E]" />
-                            <span>Salin Link Cek Resi Khusus Pembeli</span>
-                          </>
-                        )}
-                      </button>
-
-                      <div className="grid grid-cols-2 gap-2 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onOpenInvoicePreview(
-                              createdOrderResult.invoiceId,
-                              createdOrderResult
-                            );
-                            onClose();
-                          }}
-                          className="py-2.5 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 cursor-pointer"
-                        >
-                          Lihat Tampilan Invoice
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onOpenTrackingPreview(
-                              createdOrderResult.awbNumber,
-                              createdOrderResult
-                            );
-                            onClose();
-                          }}
-                          className="py-2.5 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 cursor-pointer"
-                        >
-                          Lihat Tampilan Resi
-                        </button>
-                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="my-auto text-center space-y-3 py-8">
-                    <Link2 className="w-10 h-10 text-[#D4AF37]/60 mx-auto" />
-                    <h4 className="font-serif-luxury text-xl text-white">
-                      Teknologi Smart Shareable URL Ringkas (`?v=...`)
-                    </h4>
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      Setiap tagihan &amp; resi yang Anda buat menghasilkan tautan
-                      terkompresi Base64url super pendek (`?v=...`). Saat dibuka oleh
-                      pembeli, alamat browser otomatis dibersihkan menjadi{' '}
-                      <code className="text-[#E5C87E]">/pay/INV-VRV-XXXX</code> atau{' '}
-                      <code className="text-[#E5C87E]">/track/RESI</code>.
+
+                  {createError && (
+                    <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-800 p-3 rounded-xl">
+                      {createError}
                     </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.18em] cursor-pointer"
+                    data-testid="admin-generate-invoice-btn"
+                  >
+                    Terbitkan Kode Invoice (`INV-VRV-XXXX`) &amp; Smart Link
+                  </button>
+                </form>
+
+                {/* Right Column: Generated Smart Link & Result Card */}
+                <div className="lg:col-span-5 bg-[#0B0A0E] border border-[#D4AF37]/35 rounded-2xl p-5 sm:p-6 flex flex-col justify-between space-y-5">
+                  {createdOrderResult ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Tagihan &amp; Resi Berhasil Diterbitkan!</span>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-[#14131A] border border-[#D4AF37]/40 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-zinc-400">Kode Invoice:</span>
+                          <span className="font-mono-tabular font-bold text-[#F5E6B8] text-sm">
+                            {createdOrderResult.invoiceId}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-zinc-400">Nomor Resi:</span>
+                          <span className="font-mono-tabular font-semibold text-white">
+                            {createdOrderResult.awbNumber}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-zinc-400">Pembeli:</span>
+                          <span className="text-white font-medium">
+                            {createdOrderResult.buyerName}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-zinc-400">Parfum:</span>
+                          <span className="text-[#E5C87E] font-medium text-right">
+                            {createdOrderResult.house} —{' '}
+                            {createdOrderResult.fragranceName} (
+                            {createdOrderResult.volume})
+                          </span>
+                        </div>
+                        {createdOrderResult.retailPriceIDR &&
+                          createdOrderResult.retailPriceIDR >
+                            createdOrderResult.dealPriceIDR && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-zinc-400">Harga Ritel Resmi:</span>
+                              <span className="font-mono-tabular text-zinc-400 line-through">
+                                {formatIDRCurrency(createdOrderResult.retailPriceIDR)}
+                              </span>
+                            </div>
+                          )}
+                        <div className="flex items-center justify-between">
+                          <span className="text-zinc-400">
+                            Harga VORVAN (Diskon {createdOrderResult.discountPct || 25}
+                            %):
+                          </span>
+                          <span className="font-mono-tabular font-semibold text-emerald-400">
+                            {formatIDRCurrency(createdOrderResult.dealPriceIDR)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-zinc-400">Ongkir &amp; Asuransi:</span>
+                          <span className="font-mono-tabular text-zinc-200">
+                            {(createdOrderResult.shippingCostIDR ?? 0) === 0
+                              ? 'COMPLIMENTARY (Rp 0)'
+                              : formatIDRCurrency(
+                                  createdOrderResult.shippingCostIDR || 0
+                                )}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+                          <span className="text-[#F5E6B8] font-semibold">
+                            Total Tagihan Pembeli:
+                          </span>
+                          <span className="font-mono-tabular font-bold text-[#F5E6B8] text-sm">
+                            {formatIDRCurrency(
+                              createdOrderResult.dealPriceIDR +
+                                (createdOrderResult.shippingCostIDR || 0)
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2.5 pt-2">
+                        <p className="font-brand text-[10px] uppercase tracking-[0.18em] text-[#E5C87E]">
+                          SMART SHAREABLE URL (BISA DIBUKA DI HP PEMBELI MANAPUN):
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopyText(
+                              buildSmartShareUrl(createdOrderResult, 'invoice'),
+                              'smart-inv'
+                            )
+                          }
+                          className="w-full py-3 px-4 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {copiedKey === 'smart-inv' ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              <span>Link Tagihan Pembeli Tersalin!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Link2 className="w-4 h-4" />
+                              <span>Salin Link Tagihan Khusus Pembeli</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopyText(
+                              buildSmartShareUrl(createdOrderResult, 'track'),
+                              'smart-trk'
+                            )
+                          }
+                          className="w-full py-3 px-4 rounded-xl bg-[#15141D] hover:bg-[#1E1C29] border border-[#D4AF37]/45 text-[#F5E6B8] font-brand text-[11px] font-semibold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {copiedKey === 'smart-trk' ? (
+                            <>
+                              <Check className="w-4 h-4 text-emerald-400" />
+                              <span>Link Cek Resi Pembeli Tersalin!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4 text-[#E5C87E]" />
+                              <span>Salin Link Cek Resi Khusus Pembeli</span>
+                            </>
+                          )}
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onOpenInvoicePreview(
+                                createdOrderResult.invoiceId,
+                                createdOrderResult
+                              );
+                              onClose();
+                            }}
+                            className="py-2.5 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 cursor-pointer"
+                          >
+                            Lihat Tampilan Invoice
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onOpenTrackingPreview(
+                                createdOrderResult.awbNumber,
+                                createdOrderResult
+                              );
+                              onClose();
+                            }}
+                            className="py-2.5 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 cursor-pointer"
+                          >
+                            Lihat Tampilan Resi
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="my-auto text-center space-y-3 py-8">
+                      <Link2 className="w-10 h-10 text-[#D4AF37]/60 mx-auto" />
+                      <h4 className="font-serif-luxury text-xl text-white">
+                        Teknologi Smart Shareable URL Ringkas (`?v=...`)
+                      </h4>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Setiap tagihan &amp; resi yang Anda buat menghasilkan tautan
+                        terkompresi Base64url super pendek (`?v=...`) yang sudah memuat
+                        harga ritel resmi, persentase diskon VORVAN, serta rincian zona
+                        ongkir secara otomatis. Saat dibuka oleh pembeli, alamat browser
+                        otomatis dibersihkan menjadi{' '}
+                        <code className="text-[#E5C87E]">/pay/INV-VRV-XXXX</code> atau{' '}
+                        <code className="text-[#E5C87E]">/track/RESI</code>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* POIN 3: CONTEKAN HARGA CEPAT (CHEAT SHEET 81 SKU DARI EXCEL VORVAN) */}
+              <div className="bg-[#0B0A0E] border border-[#D4AF37]/35 rounded-2xl p-5 sm:p-6 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                  <div>
+                    <span className="text-[10px] font-brand uppercase tracking-[0.2em] text-[#E5C87E] block">
+                      CONTEKAN HARGA CEPAT · 81 SKU RESMI EXCEL VORVAN
+                    </span>
+                    <h3 className="font-serif-luxury text-lg sm:text-xl font-semibold text-white">
+                      Tabel Katalog Harga Ritel, Diskon %, Potongan &amp; Harga VORVAN
+                    </h3>
                   </div>
-                )}
+                  <span className="text-xs text-zinc-400 font-mono-tabular">
+                    Menampilkan {filteredCheatSheetItems.length} dari 81 SKU
+                  </span>
+                </div>
+
+                {/* Search & Tier Filters */}
+                <div className="flex flex-col md:flex-row gap-3">
+                  <input
+                    id="admin-cheatsheet-search"
+                    type="text"
+                    value={cheatSheetQuery}
+                    onChange={(e) => setCheatSheetQuery(e.target.value)}
+                    placeholder="Cari nama parfum / rumah mode (mis: Afternoon Swim, Baccarat, Aventus)..."
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-xs sm:text-sm text-white outline-none"
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: 'ALL', label: 'Semua (81)' },
+                      { id: '1', label: 'Tier 1 (>3.5 Jt)' },
+                      { id: '2', label: 'Tier 2 (3.0–3.5 Jt)' },
+                      { id: '3', label: 'Tier 3 (2.5–3.0 Jt)' },
+                      { id: '4', label: 'Tier 4 (2.0–2.5 Jt)' },
+                      { id: '5', label: 'Tier 5 (<2.0 Jt)' },
+                    ].map((tBtn) => {
+                      const active = cheatSheetTier === tBtn.id;
+                      return (
+                        <button
+                          key={tBtn.id}
+                          type="button"
+                          onClick={() => setCheatSheetTier(tBtn.id)}
+                          data-testid={`cheatsheet-tier-${tBtn.id.toLowerCase()}`}
+                          className={`px-3 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border ${
+                            active
+                              ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] font-bold'
+                              : 'bg-[#14131A] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/50'
+                          }`}
+                        >
+                          {tBtn.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Scrollable 81 SKU Cheat Sheet Table */}
+                <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-zinc-800">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 bg-[#14131A] border-b border-zinc-700 text-[11px] uppercase tracking-wider text-zinc-400">
+                      <tr>
+                        <th className="py-2.5 px-3">No</th>
+                        <th className="py-2.5 px-3">Brand — Nama Parfum</th>
+                        <th className="py-2.5 px-2 text-center">Ukuran</th>
+                        <th className="py-2.5 px-3 text-right">Harga Ritel</th>
+                        <th className="py-2.5 px-2 text-center">Diskon</th>
+                        <th className="py-2.5 px-3 text-right">Potongan</th>
+                        <th className="py-2.5 px-3 text-right">Harga VORVAN</th>
+                        <th className="py-2.5 px-3 text-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody
+                      id="vorvan-cheatsheet-tbody"
+                      className="divide-y divide-zinc-800/70 bg-[#0E0D12]"
+                    >
+                      {filteredCheatSheetItems.map((sku) => (
+                        <tr
+                          key={sku.no}
+                          className="hover:bg-[#171520] transition-colors"
+                        >
+                          <td className="py-2 px-3 text-xs text-zinc-400 font-mono-tabular">
+                            {sku.no}
+                          </td>
+                          <td className="py-2 px-3 text-xs text-white">
+                            <strong className="text-[#E5C87E]">{sku.brand}</strong>{' '}
+                            — {sku.name}{' '}
+                            <span className="text-[10px] text-zinc-400">
+                              ({sku.gender})
+                            </span>
+                          </td>
+                          <td className="py-2 px-2 text-xs text-zinc-300 text-center font-mono-tabular">
+                            {sku.size}
+                          </td>
+                          <td className="py-2 px-3 text-xs text-zinc-400 text-right font-mono-tabular">
+                            <del>Rp {sku.retail.toLocaleString('id-ID')}</del>
+                          </td>
+                          <td className="py-2 px-2 text-xs text-emerald-400 font-semibold text-center font-mono-tabular">
+                            {sku.disc}%
+                          </td>
+                          <td className="py-2 px-3 text-xs text-zinc-300 text-right font-mono-tabular">
+                            -Rp {sku.cut.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-3 text-xs text-[#F5E6B8] font-bold text-right font-mono-tabular">
+                            Rp {sku.price.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSelectPerfumeByIdOrIndex(sku.no - 1);
+                                const formEl = document.getElementById(
+                                  'vorvan-admin-create-form'
+                                );
+                                formEl?.scrollIntoView({
+                                  behavior: 'smooth',
+                                  block: 'start',
+                                });
+                              }}
+                              data-testid={`cheatsheet-use-${sku.no}`}
+                              className="px-2.5 py-1 rounded-md btn-luxury-gold text-zinc-950 text-[11px] font-bold cursor-pointer"
+                            >
+                              Pakai
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

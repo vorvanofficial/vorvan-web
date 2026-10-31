@@ -425,6 +425,99 @@ test('loadVorvanSettings includes official Bank BRI credentials and auto-updates
   delete (globalThis as unknown as { window?: unknown }).window;
 });
 
+test('VORVAN 81 SKU Official Pricing, Auto-Detect Shipping Zones, Cheat Sheet Filter, and Retail/Shipping Invoice Breakdown work deterministically', async () => {
+  const {
+    resolveVorvanSkuPricing,
+    autoDetectShippingZoneByCity,
+    filterVorvanCheatSheet,
+    encodeSmartOrderParam,
+    decodeSmartOrderParam,
+    resolvePrivateInvoice,
+    calculateInvoiceTotals,
+  } = await import('./businessRules.ts');
+  const { VORVAN_81_CATALOG } = await import('../data/catalog.ts');
+
+  assert.equal(VORVAN_81_CATALOG.length, 81);
+  assert.equal(VORVAN_81_CATALOG[0].name, 'Afternoon Swim');
+  assert.equal(VORVAN_81_CATALOG[0].retail, 6500000);
+  assert.equal(VORVAN_81_CATALOG[0].disc, 30);
+  assert.equal(VORVAN_81_CATALOG[0].price, 4550000);
+
+  const byIndex = resolveVorvanSkuPricing(0);
+  assert.ok(byIndex);
+  assert.equal(byIndex.price, 4550000);
+
+  const byName = resolveVorvanSkuPricing('Baccarat Rouge 540 Extrait');
+  assert.ok(byName);
+  assert.equal(byName.retail, 7650000);
+  assert.equal(byName.disc, 30);
+  assert.equal(byName.price, 5355000);
+
+  // Auto-detect shipping zones
+  assert.equal(autoDetectShippingZoneByCity('Brebes, Jawa Tengah')?.zoneKey, 'FREE_VIP');
+  assert.equal(autoDetectShippingZoneByCity('Brebes, Jawa Tengah')?.cost, 0);
+  assert.equal(
+    autoDetectShippingZoneByCity('Kebayoran Baru, Jakarta Selatan')?.zoneKey,
+    'ZONA_1'
+  );
+  assert.equal(
+    autoDetectShippingZoneByCity('Kebayoran Baru, Jakarta Selatan')?.cost,
+    25000
+  );
+  assert.equal(autoDetectShippingZoneByCity('Denpasar, Bali')?.zoneKey, 'ZONA_2');
+  assert.equal(autoDetectShippingZoneByCity('Denpasar, Bali')?.cost, 45000);
+  assert.equal(autoDetectShippingZoneByCity('Makassar, Sulawesi')?.zoneKey, 'ZONA_3');
+  assert.equal(autoDetectShippingZoneByCity('Makassar, Sulawesi')?.cost, 65000);
+  assert.equal(autoDetectShippingZoneByCity('Jayapura, Papua')?.zoneKey, 'ZONA_4');
+  assert.equal(autoDetectShippingZoneByCity('Jayapura, Papua')?.cost, 95000);
+
+  // Cheat sheet filtering
+  const tier1Only = filterVorvanCheatSheet('', '1');
+  assert.ok(tier1Only.length > 0);
+  assert.ok(tier1Only.every((item) => item.tier === 1));
+
+  const searchAventus = filterVorvanCheatSheet('Aventus', 'ALL');
+  assert.ok(searchAventus.some((item) => item.name.includes('Aventus')));
+
+  // Smart URL roundtrip preserves shipping cost and auto-resolves retail price & discount %
+  const orderWithShip = {
+    invoiceId: 'INV-VRV-7711',
+    trackingId: 'JNE-771122',
+    createdAt: '31 Okt 2026 · 10:00 WIB',
+    buyerName: 'Bpk. Raditya',
+    buyerCity: 'Kebayoran Baru, Jakarta Selatan',
+    house: 'Louis Vuitton',
+    fragranceName: 'Afternoon Swim',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    batchCode: 'LV-26A',
+    dealPriceIDR: 4550000,
+    retailPriceIDR: 6500000,
+    discountPct: 30,
+    shippingCostIDR: 25000,
+    shippingLabel: 'Jawa & Jabodetabek (1 Kg + Asuransi Kargo)',
+    shippingMethod: 'JNE' as const,
+    awbNumber: 'JNE-771122',
+    status: 'PENDING_PAYMENT' as const,
+  };
+
+  const token = encodeSmartOrderParam(orderWithShip);
+  const decoded = decodeSmartOrderParam(token);
+  assert.ok(decoded);
+  assert.equal(decoded.dealPriceIDR, 4550000);
+  assert.equal(decoded.retailPriceIDR, 6500000);
+  assert.equal(decoded.discountPct, 30);
+  assert.equal(decoded.shippingCostIDR, 25000);
+
+  const invoice = resolvePrivateInvoice('INV-VRV-7711', [], decoded);
+  assert.equal(invoice.retailPriceTotalIDR, 6500000);
+  assert.equal(invoice.discountPct, 30);
+  assert.equal(invoice.shippingInsuranceIDR, 25000);
+  const totals = calculateInvoiceTotals(invoice);
+  assert.equal(totals.grandTotalIDR, 4575000);
+});
+
+
 
 
 

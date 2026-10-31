@@ -2,7 +2,9 @@ import {
   DEFAULT_VORVAN_SETTINGS,
   FRAGRANCE_CATALOG,
   PRIVATE_INVOICES_SEED,
+  SHIPPING_ZONES,
   TRACKING_RECORDS_SEED,
+  VORVAN_81_CATALOG,
   VORVAN_TELEGRAM_USERNAME,
   VORVAN_WHATSAPP_NUMBER,
 } from '../data/catalog';
@@ -14,9 +16,11 @@ import {
   PrivateInvoice,
   PrivateTrayItem,
   ShippingMethodType,
+  ShippingZoneKey,
   TrackingMilestone,
   TrackingRecord,
   VorvanSiteSettings,
+  VorvanSkuPricingEntry,
 } from '../types/fragrance';
 
 export const VORVAN_SETTINGS_STORAGE_KEY = 'vorvan_site_settings_v1';
@@ -515,6 +519,10 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
   }
 
   const priceK = Math.max(1, Math.round((order.dealPriceIDR || 0) / 1000));
+  const priceField =
+    typeof order.shippingCostIDR === 'number'
+      ? `${priceK}:${Math.max(0, Math.round(order.shippingCostIDR / 1000))}`
+      : String(priceK);
   const statusDigit = order.status === 'PAID' ? '1' : '0';
   const courierCode = encodeCourierShort(order.shippingMethod);
   const awb = sanitize(order.awbNumber || order.trackingId);
@@ -524,7 +532,7 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
   const compactPipe = [
     invShort,
     fragField,
-    priceK,
+    priceField,
     statusDigit,
     courierCode,
     awb,
@@ -533,6 +541,117 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
   ].join('|');
 
   return toBase64Url(compactPipe);
+}
+
+/**
+ * Resolves official VORVAN 81 SKU pricing & discount metadata by catalog index (0..80),
+ * fragrance ID, or brand/perfume name.
+ */
+export function resolveVorvanSkuPricing(
+  catalogIdxOrIdOrName: number | string
+): VorvanSkuPricingEntry | null {
+  if (typeof catalogIdxOrIdOrName === 'number') {
+    return VORVAN_81_CATALOG[catalogIdxOrIdOrName] || null;
+  }
+
+  const clean = (catalogIdxOrIdOrName || '').trim();
+  if (!clean) return null;
+
+  const byCatalogIdIdx = FRAGRANCE_CATALOG.findIndex((f) => f.id === clean);
+  if (byCatalogIdIdx >= 0 && VORVAN_81_CATALOG[byCatalogIdIdx]) {
+    return VORVAN_81_CATALOG[byCatalogIdIdx];
+  }
+
+  const lower = clean.toLowerCase();
+  const exactMatch = VORVAN_81_CATALOG.find(
+    (p) =>
+      `${p.brand} - ${p.name}`.toLowerCase() === lower ||
+      `${p.brand} — ${p.name}`.toLowerCase() === lower ||
+      p.name.toLowerCase() === lower
+  );
+  if (exactMatch) return exactMatch;
+
+  // Prefer catalog item whose name contains the query (e.g. "Baccarat Rouge 540 Extrait" -> "Baccarat Rouge 540 Extrait de Parfum")
+  const byCatalogContainsIdx = FRAGRANCE_CATALOG.findIndex(
+    (f) =>
+      f.name.toLowerCase() === lower ||
+      `${f.house} - ${f.name}`.toLowerCase() === lower ||
+      `${f.house} — ${f.name}`.toLowerCase() === lower ||
+      f.name.toLowerCase().includes(lower)
+  );
+  if (byCatalogContainsIdx >= 0 && VORVAN_81_CATALOG[byCatalogContainsIdx]) {
+    return VORVAN_81_CATALOG[byCatalogContainsIdx];
+  }
+
+  const bySkuContains = VORVAN_81_CATALOG.find((p) =>
+    p.name.toLowerCase().includes(lower)
+  );
+  if (bySkuContains) return bySkuContains;
+
+  // Fallback: longest SKU name that is contained inside `lower`
+  const reverseMatches = VORVAN_81_CATALOG.filter((p) =>
+    lower.includes(p.name.toLowerCase())
+  ).sort((a, b) => b.name.length - a.name.length);
+  return reverseMatches[0] || null;
+}
+
+/**
+ * Auto-detects the flat shipping zone & cost based on the buyer's city or address text.
+ */
+export function autoDetectShippingZoneByCity(addressText: string): {
+  zoneKey: ShippingZoneKey;
+  label: string;
+  cost: number;
+} | null {
+  const txt = (addressText || '').toLowerCase().trim();
+  if (!txt) return null;
+
+  if (/brebes|tegal|slawi|pemalang|cod/.test(txt)) {
+    return { zoneKey: 'FREE_VIP', ...SHIPPING_ZONES.FREE_VIP };
+  }
+  if (
+    /jakarta|bogor|depok|tangerang|bekasi|bandung|semarang|solo|jogja|yogyakarta|surabaya|malang|cirebon|purwokerto|pekalongan|jawa/.test(
+      txt
+    )
+  ) {
+    return { zoneKey: 'ZONA_1', ...SHIPPING_ZONES.ZONA_1 };
+  }
+  if (
+    /bali|denpasar|medan|palembang|lampung|pekanbaru|batam|padang|pontianak|balikpapan|samarinda|banjarmasin|sumatera|kalimantan/.test(
+      txt
+    )
+  ) {
+    return { zoneKey: 'ZONA_2', ...SHIPPING_ZONES.ZONA_2 };
+  }
+  if (/makassar|manado|palu|kendari|lombok|mataram|kupang|sulawesi|ntb|ntt/.test(txt)) {
+    return { zoneKey: 'ZONA_3', ...SHIPPING_ZONES.ZONA_3 };
+  }
+  if (/ambon|ternate|jayapura|sorong|merauke|timika|maluku|papua/.test(txt)) {
+    return { zoneKey: 'ZONA_4', ...SHIPPING_ZONES.ZONA_4 };
+  }
+  return null;
+}
+
+/**
+ * Filters the 81 SKU Cheat Sheet by search query and tier (ALL, 1..5).
+ */
+export function filterVorvanCheatSheet(
+  searchQuery: string = '',
+  tierFilter: string = 'ALL'
+): VorvanSkuPricingEntry[] {
+  const q = (searchQuery || '').toLowerCase().trim();
+  return VORVAN_81_CATALOG.filter((item) => {
+    const matchText =
+      !q ||
+      `${item.brand} ${item.name} ${item.gender} ${item.size}`
+        .toLowerCase()
+        .includes(q);
+    const matchTier =
+      !tierFilter ||
+      tierFilter === 'ALL' ||
+      String(item.tier) === String(tierFilter);
+    return matchText && matchTier;
+  });
 }
 
 /**
@@ -572,29 +691,32 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
           let concentration = 'Eau de Parfum';
           let volume = '100ml';
           let batchCode = `VRV-${invTrim}`;
+          let resolvedSku: VorvanSkuPricingEntry | null = null;
 
           if (fragField.startsWith('~')) {
             const customParts = fragField.slice(1).split('~');
             house = customParts[0] || 'VORVAN Private Selection';
             fragranceName = customParts[1] || 'Bespoke Fragrance';
             volume = customParts[2] || '100ml';
+            resolvedSku = resolveVorvanSkuPricing(fragranceName);
           } else {
             const [idxPart, customVol] = fragField.split(':');
             const idx = parseInt(idxPart, 10);
-            const item =
-              !Number.isNaN(idx) && FRAGRANCE_CATALOG[idx]
-                ? FRAGRANCE_CATALOG[idx]
-                : FRAGRANCE_CATALOG[0];
+            const safeIdx =
+              !Number.isNaN(idx) && FRAGRANCE_CATALOG[idx] ? idx : 0;
+            const item = FRAGRANCE_CATALOG[safeIdx];
+            resolvedSku = resolveVorvanSkuPricing(safeIdx);
             if (item) {
               house = item.house;
               fragranceName = item.name;
               concentration = item.concentration;
-              volume = customVol || item.defaultVolume;
+              volume = customVol || resolvedSku?.size || item.defaultVolume;
               batchCode = item.batchCode;
             }
           }
 
-          const dealPriceIDR = Math.round((Number(priceKStr) || 0) * 1000);
+          const [dealKPart, shipKPart] = (priceKStr || '').split(':');
+          const dealPriceIDR = Math.round((Number(dealKPart) || 0) * 1000);
           const status: 'PENDING_PAYMENT' | 'PAID' =
             statusDigit === '1' ? 'PAID' : 'PENDING_PAYMENT';
           const shippingMethod = decodeCourierShort(courierCode);
@@ -604,18 +726,60 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
               ? `COD-VRV-${invTrim}`
               : `VRV-RESI-${invTrim}`);
 
+          const cleanCity = (rawCity || 'Indonesia').trim();
+          const detectedZone = autoDetectShippingZoneByCity(cleanCity);
+          const shippingCostIDR =
+            shipKPart !== undefined && shipKPart !== ''
+              ? Math.max(0, Math.round((Number(shipKPart) || 0) * 1000))
+              : shippingMethod.includes('COD')
+              ? 0
+              : detectedZone?.cost ?? 0;
+
+          const matchingZoneEntry = Object.values(SHIPPING_ZONES).find(
+            (z) => z.cost === shippingCostIDR
+          );
+          const shippingLabel =
+            detectedZone && detectedZone.cost === shippingCostIDR
+              ? detectedZone.label
+              : matchingZoneEntry?.label ||
+                (shippingCostIDR === 0
+                  ? SHIPPING_ZONES.FREE_VIP.label
+                  : 'Pengiriman Berasuransi & Double-Wall Thermal Box');
+
+          const finalDealPrice =
+            dealPriceIDR > 0
+              ? dealPriceIDR
+              : resolvedSku?.price || 3850000;
+          const retailPriceIDR =
+            resolvedSku && resolvedSku.retail > finalDealPrice
+              ? resolvedSku.retail
+              : Math.round(finalDealPrice / 0.72);
+          const discountPct =
+            resolvedSku && resolvedSku.price === finalDealPrice
+              ? resolvedSku.disc
+              : Math.max(
+                  1,
+                  Math.round(
+                    ((retailPriceIDR - finalDealPrice) / retailPriceIDR) * 100
+                  )
+                );
+
           return {
             invoiceId,
             trackingId: awbNumber,
             createdAt: 'Terverifikasi · WIB',
             buyerName: rawBuyer.trim(),
-            buyerCity: (rawCity || 'Indonesia').trim(),
+            buyerCity: cleanCity,
             house,
             fragranceName,
             concentration,
             volume,
             batchCode,
-            dealPriceIDR: dealPriceIDR > 0 ? dealPriceIDR : 3850000,
+            dealPriceIDR: finalDealPrice,
+            retailPriceIDR,
+            discountPct,
+            shippingCostIDR,
+            shippingLabel,
             shippingMethod,
             awbNumber,
             status,
@@ -666,6 +830,39 @@ export function buildSmartShareUrl(
 export function buildInvoiceFromCustomOrder(
   order: CustomAdminOrder
 ): PrivateInvoice {
+  const skuPricing = resolveVorvanSkuPricing(order.fragranceName);
+  const dealPrice = order.dealPriceIDR || skuPricing?.price || 3850000;
+  const retailPriceTotalIDR =
+    order.retailPriceIDR && order.retailPriceIDR > dealPrice
+      ? order.retailPriceIDR
+      : skuPricing && skuPricing.retail > dealPrice
+      ? skuPricing.retail
+      : Math.round(dealPrice / 0.72);
+  const discountPct =
+    order.discountPct && order.discountPct > 0
+      ? order.discountPct
+      : skuPricing && skuPricing.price === dealPrice
+      ? skuPricing.disc
+      : Math.max(
+          1,
+          Math.round(((retailPriceTotalIDR - dealPrice) / retailPriceTotalIDR) * 100)
+        );
+
+  const detectedZone = autoDetectShippingZoneByCity(order.buyerCity);
+  const shippingInsuranceIDR =
+    typeof order.shippingCostIDR === 'number'
+      ? order.shippingCostIDR
+      : order.shippingMethod.includes('COD')
+      ? 0
+      : detectedZone?.cost ?? 0;
+
+  const shippingLabel =
+    order.shippingLabel ||
+    detectedZone?.label ||
+    (shippingInsuranceIDR === 0
+      ? SHIPPING_ZONES.FREE_VIP.label
+      : 'Pengiriman Berasuransi & Double-Wall Thermal Box');
+
   return {
     invoiceId: order.invoiceId.toUpperCase(),
     createdAt: order.createdAt || 'Hari Ini · WIB',
@@ -678,8 +875,11 @@ export function buildInvoiceFromCustomOrder(
     paidAt: order.status === 'PAID' ? order.createdAt : undefined,
     paymentMethodUsed:
       order.status === 'PAID' ? 'Terverifikasi Concierge VORVAN' : undefined,
-    shippingInsuranceIDR: 0,
+    shippingInsuranceIDR,
     woodenCratePackagingIDR: 0,
+    retailPriceTotalIDR,
+    discountPct,
+    shippingLabel,
     notes: `Metode Pengiriman: ${order.shippingMethod} (Resi: ${order.awbNumber}). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`,
     items: [
       {
@@ -687,10 +887,10 @@ export function buildInvoiceFromCustomOrder(
         house: order.house,
         fragranceName: order.fragranceName,
         concentration: order.concentration || 'Eau de Parfum',
-        volume: order.volume || '100ml',
+        volume: order.volume || skuPricing?.size || '100ml',
         batchCode: order.batchCode || 'VRV-AUTH',
         quantity: 1,
-        unitPriceIDR: order.dealPriceIDR,
+        unitPriceIDR: dealPrice,
       },
     ],
   };
@@ -954,20 +1154,52 @@ export function resolvePrivateInvoice(
     return buildInvoiceFromCustomOrder(matchedCustom);
   }
 
-  if (!normalized) {
-    return PRIVATE_INVOICES_SEED['INV-SAMPLE'];
-  }
-
-  if (PRIVATE_INVOICES_SEED[normalized]) {
-    return PRIVATE_INVOICES_SEED[normalized];
+  if (!normalized || PRIVATE_INVOICES_SEED[normalized]) {
+    const seed = !normalized
+      ? PRIVATE_INVOICES_SEED['INV-SAMPLE']
+      : PRIVATE_INVOICES_SEED[normalized];
+    const subtotal = seed.items.reduce(
+      (sum, item) => sum + item.unitPriceIDR * item.quantity,
+      0
+    );
+    const retailSum = seed.items.reduce((sum, item) => {
+      const sku = resolveVorvanSkuPricing(item.fragranceName);
+      const itemRetail =
+        sku && sku.retail > item.unitPriceIDR
+          ? sku.retail
+          : Math.round(item.unitPriceIDR / 0.72);
+      return sum + itemRetail * item.quantity;
+    }, 0);
+    const discPct =
+      retailSum > subtotal
+        ? Math.round(((retailSum - subtotal) / retailSum) * 100)
+        : 28;
+    const detectedZone = autoDetectShippingZoneByCity(seed.buyerCity);
+    return {
+      ...seed,
+      retailPriceTotalIDR: seed.retailPriceTotalIDR ?? retailSum,
+      discountPct: seed.discountPct ?? discPct,
+      shippingLabel:
+        seed.shippingLabel ||
+        detectedZone?.label ||
+        'Pengiriman Berasuransi & Double-Wall Thermal Box',
+    };
   }
 
   const hash = Array.from(normalized).reduce(
     (acc, ch) => acc + ch.charCodeAt(0),
     0
   );
-  const sampleFragrance = FRAGRANCE_CATALOG[hash % FRAGRANCE_CATALOG.length];
-  const basePrice = sampleFragrance.tier === 'apex_prestige' ? 4650000 : 2550000;
+  const sampleIdx = hash % FRAGRANCE_CATALOG.length;
+  const sampleFragrance = FRAGRANCE_CATALOG[sampleIdx];
+  const sampleSku = resolveVorvanSkuPricing(sampleIdx);
+  const basePrice =
+    sampleSku?.price ||
+    (sampleFragrance.tier === 'apex_prestige' ? 4650000 : 2550000);
+  const retailPrice = sampleSku?.retail || Math.round(basePrice / 0.72);
+  const discPct =
+    sampleSku?.disc ||
+    Math.round(((retailPrice - basePrice) / retailPrice) * 100);
 
   return {
     invoiceId: normalized,
@@ -978,8 +1210,11 @@ export function resolvePrivateInvoice(
     buyerCity: 'Jakarta, Indonesia',
     conciergeAdvisor: 'VORVAN Official Concierge — Andre Satria P',
     status: 'PENDING_PAYMENT',
-    shippingInsuranceIDR: 35000,
+    shippingInsuranceIDR: 25000,
     woodenCratePackagingIDR: 0,
+    retailPriceTotalIDR: retailPrice,
+    discountPct: discPct,
+    shippingLabel: SHIPPING_ZONES.ZONA_1.label,
     notes:
       'Tagihan privat terenkripsi VORVAN. Dilengkapi proteksi klaim video unboxing utuh & jaminan keaslian batch.',
     items: [
@@ -988,7 +1223,7 @@ export function resolvePrivateInvoice(
         house: sampleFragrance.house,
         fragranceName: sampleFragrance.name,
         concentration: sampleFragrance.concentration,
-        volume: sampleFragrance.defaultVolume,
+        volume: sampleSku?.size || sampleFragrance.defaultVolume,
         batchCode: sampleFragrance.batchCode,
         quantity: 1,
         unitPriceIDR: basePrice,

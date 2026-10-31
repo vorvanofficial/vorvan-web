@@ -777,24 +777,77 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </table>
             </div>
 
-            {/* Totals Breakdown */}
-            <div className="mt-6 pt-6 border-t border-zinc-800 flex flex-col items-end space-y-2 text-xs">
-              <div className="w-full sm:w-80 flex items-center justify-between text-zinc-400">
-                <span>Subtotal Koleksi Parfum</span>
-                <span className="font-mono-tabular text-zinc-200">
+            {/* Totals Breakdown — Retail Valuation Comparison, Parallel Import Savings & Shipping Zone */}
+            <div
+              className="mt-6 pt-6 border-t border-zinc-800 flex flex-col items-end space-y-2.5 text-xs sm:text-[13px]"
+              data-testid="invoice-pricing-summary"
+            >
+              {(baseInvoice.retailPriceTotalIDR || 0) >
+                totals.itemsSubtotalIDR && (
+                <>
+                  <div className="w-full sm:w-[440px] flex items-center justify-between gap-4 text-zinc-400">
+                    <span>Valuasi Ritel Resmi Butik (Indonesia)</span>
+                    <span className="font-mono-tabular line-through text-zinc-500">
+                      {formatIDRCurrency(baseInvoice.retailPriceTotalIDR || 0)}
+                    </span>
+                  </div>
+                  <div className="w-full sm:w-[440px] flex items-center justify-between gap-4 text-[#E5C87E] font-semibold">
+                    <span>
+                      Efisiensi Parallel Import VORVAN (Diskon{' '}
+                      {baseInvoice.discountPct ||
+                        Math.round(
+                          (((baseInvoice.retailPriceTotalIDR || 0) -
+                            totals.itemsSubtotalIDR) /
+                            (baseInvoice.retailPriceTotalIDR || 1)) *
+                            100
+                        )}
+                      %)
+                    </span>
+                    <span className="font-mono-tabular text-emerald-400">
+                      -{' '}
+                      {formatIDRCurrency(
+                        Math.max(
+                          0,
+                          (baseInvoice.retailPriceTotalIDR || 0) -
+                            totals.itemsSubtotalIDR
+                        )
+                      )}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              <div className="w-full sm:w-[440px] flex items-center justify-between gap-4 text-zinc-200 font-semibold">
+                <span>Subtotal Koleksi Parfum (Full-Size Sealed)</span>
+                <span className="font-mono-tabular text-white">
                   {formatIDRCurrency(totals.itemsSubtotalIDR)}
                 </span>
               </div>
-              <div className="w-full sm:w-80 flex items-center justify-between text-zinc-400">
-                <span>Asuransi Pengiriman &amp; Proteksi Vault</span>
-                <span className="font-mono-tabular text-zinc-200">
-                  {formatIDRCurrency(totals.protectionTotalIDR)}
+
+              <div className="w-full sm:w-[440px] flex items-center justify-between gap-4 text-zinc-300">
+                <span>
+                  {baseInvoice.shippingLabel ||
+                    'Pengiriman Berasuransi & Double-Wall Thermal Box'}
+                </span>
+                <span
+                  className={`font-mono-tabular font-semibold ${
+                    totals.protectionTotalIDR === 0
+                      ? 'text-emerald-400'
+                      : 'text-zinc-200'
+                  }`}
+                >
+                  {totals.protectionTotalIDR === 0
+                    ? 'COMPLIMENTARY (Rp 0)'
+                    : formatIDRCurrency(totals.protectionTotalIDR)}
                 </span>
               </div>
-              <div className="w-full sm:w-80 pt-3 border-t border-[#D4AF37]/35 flex items-center justify-between text-base font-semibold text-white">
-                <span>Total Pembayaran</span>
+
+              <div className="w-full sm:w-[440px] mt-1 p-3.5 rounded-xl bg-[#16151F] border border-[#D4AF37]/60 flex items-center justify-between gap-4 text-white">
+                <span className="font-brand text-xs font-bold uppercase tracking-[0.14em] text-[#E5C87E]">
+                  TOTAL NOMINAL DISEPAKATI
+                </span>
                 <span
-                  className="font-mono-tabular text-xl text-[#F5E6B8]"
+                  className="font-mono-tabular text-lg sm:text-xl font-extrabold text-[#F5E6B8]"
                   data-testid="invoice-grand-total"
                 >
                   {formatIDRCurrency(totals.grandTotalIDR)}

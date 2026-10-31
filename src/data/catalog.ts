@@ -3,8 +3,10 @@ import {
   ConciergeEmailLead,
   FragranceItem,
   PrivateInvoice,
+  ShippingZoneKey,
   TrackingRecord,
   VorvanSiteSettings,
+  VorvanSkuPricingEntry,
 } from '../types/fragrance';
 
 export const VORVAN_WHATSAPP_NUMBER = '628133866590';
@@ -3436,4 +3438,139 @@ export const NICHE_PREORDER_HOUSES = [
     popularRequests: ['Roja Elysium Parfum', 'Initio Oud for Greatness', 'Initio Side Effect'],
     leadTime: '10–14 Hari Kerja (Insured Vault Allocation)',
   },
+];
+
+export const SHIPPING_ZONES: Record<
+  ShippingZoneKey,
+  { label: string; cost: number }
+> = {
+  FREE_VIP: { label: 'COMPLIMENTARY (Free VIP Insured Shipping)', cost: 0 },
+  ZONA_1: { label: 'Jawa & Jabodetabek (1 Kg + Asuransi Kargo)', cost: 25000 },
+  ZONA_2: {
+    label: 'Bali, Sumatera & Kalimantan (1 Kg + Asuransi Kargo)',
+    cost: 45000,
+  },
+  ZONA_3: { label: 'Sulawesi, NTB & NTT (1 Kg + Asuransi Kargo)', cost: 65000 },
+  ZONA_4: { label: 'Maluku & Papua (1 Kg + Asuransi Kargo)', cost: 95000 },
+};
+
+export const VORVAN_81_CATALOG: VorvanSkuPricingEntry[] = [
+  // 1. LV (Louis Vuitton)
+  { no: 1, brand: 'LV (Louis Vuitton)', name: 'Afternoon Swim', gender: 'Unisex', size: '100ml', retail: 6500000, disc: 30, cut: 1950000, price: 4550000, tier: 1 },
+  { no: 2, brand: 'LV (Louis Vuitton)', name: 'Ombre Nomade', gender: 'Unisex', size: '100ml', retail: 8150000, disc: 30, cut: 2445000, price: 5705000, tier: 1 },
+  { no: 3, brand: 'LV (Louis Vuitton)', name: 'Les Sables Roses', gender: 'Unisex', size: '100ml', retail: 8150000, disc: 30, cut: 2445000, price: 5705000, tier: 1 },
+  { no: 4, brand: 'LV (Louis Vuitton)', name: 'Imagination', gender: 'Men', size: '100ml', retail: 6500000, disc: 30, cut: 1950000, price: 4550000, tier: 1 },
+  { no: 5, brand: 'LV (Louis Vuitton)', name: "L'Immensité", gender: 'Men', size: '100ml', retail: 6500000, disc: 30, cut: 1950000, price: 4550000, tier: 1 },
+  { no: 6, brand: 'LV (Louis Vuitton)', name: 'Attrape-Rêves', gender: 'Women', size: '100ml', retail: 6500000, disc: 30, cut: 1950000, price: 4550000, tier: 1 },
+  { no: 7, brand: 'LV (Louis Vuitton)', name: 'Spell On You', gender: 'Women', size: '100ml', retail: 6500000, disc: 30, cut: 1950000, price: 4550000, tier: 1 },
+  { no: 8, brand: 'LV (Louis Vuitton)', name: 'Rose des Vents', gender: 'Women', size: '100ml', retail: 6500000, disc: 30, cut: 1950000, price: 4550000, tier: 1 },
+
+  // 2. DIOR
+  { no: 9, brand: 'DIOR', name: 'Dior Sauvage EDP', gender: 'Men', size: '100ml', retail: 2790000, disc: 23, cut: 640000, price: 2150000, tier: 4 },
+  { no: 10, brand: 'DIOR', name: 'Dior Sauvage EDT', gender: 'Men', size: '100ml', retail: 2390000, disc: 21, cut: 500000, price: 1890000, tier: 5 },
+  { no: 11, brand: 'DIOR', name: 'Fahrenheit EDT', gender: 'Men', size: '100ml', retail: 2390000, disc: 22, cut: 525000, price: 1865000, tier: 5 },
+  { no: 12, brand: 'DIOR', name: 'Miss Dior Eau de Parfum', gender: 'Women', size: '100ml', retail: 3720000, disc: 26, cut: 965000, price: 2755000, tier: 3 },
+  { no: 13, brand: 'DIOR', name: "Miss Dior Rose N'Roses", gender: 'Women', size: '100ml', retail: 3000000, disc: 25, cut: 750000, price: 2250000, tier: 3 },
+  { no: 14, brand: 'DIOR', name: 'Miss Dior Blooming Bouquet', gender: 'Women', size: '100ml', retail: 3000000, disc: 25, cut: 750000, price: 2250000, tier: 3 },
+  { no: 15, brand: 'DIOR', name: "J'adore Eau de Parfum", gender: 'Women', size: '100ml', retail: 3720000, disc: 26, cut: 965000, price: 2755000, tier: 3 },
+  { no: 16, brand: 'DIOR', name: 'Oud Ispahan EDP (Privée)', gender: 'Unisex', size: '100ml', retail: 5430000, disc: 29, cut: 1575000, price: 3855000, tier: 2 },
+  { no: 17, brand: 'DIOR', name: 'Oud Ispahan Esprit de Parfum', gender: 'Unisex', size: '80ml', retail: 7980000, disc: 30, cut: 2395000, price: 5585000, tier: 1 },
+
+  // 3. Tom Ford
+  { no: 18, brand: 'Tom Ford', name: 'Ombré Leather EDP', gender: 'Men', size: '100ml', retail: 3650000, disc: 25, cut: 910000, price: 2740000, tier: 3 },
+  { no: 19, brand: 'Tom Ford', name: 'Ombré Leather Parfum', gender: 'Men', size: '100ml', retail: 4100000, disc: 26, cut: 1065000, price: 3035000, tier: 3 },
+  { no: 20, brand: 'Tom Ford', name: 'Soleil Blanc EDP', gender: 'Women', size: '100ml', retail: 6850000, disc: 30, cut: 2055000, price: 4795000, tier: 1 },
+  { no: 21, brand: 'Tom Ford', name: 'Rose Prick EDP', gender: 'Women', size: '100ml', retail: 8975000, disc: 30, cut: 2695000, price: 6280000, tier: 1 },
+  { no: 22, brand: 'Tom Ford', name: 'Oud Wood EDP', gender: 'Unisex', size: '100ml', retail: 6850000, disc: 30, cut: 2055000, price: 4795000, tier: 1 },
+  { no: 23, brand: 'Tom Ford', name: 'Tobacco Vanille EDP', gender: 'Unisex', size: '100ml', retail: 6850000, disc: 30, cut: 2055000, price: 4795000, tier: 1 },
+  { no: 24, brand: 'Tom Ford', name: 'Lost Cherry EDP', gender: 'Unisex', size: '100ml', retail: 8975000, disc: 30, cut: 2695000, price: 6280000, tier: 1 },
+  { no: 25, brand: 'Tom Ford', name: 'Fucking Fabulous EDP', gender: 'Unisex', size: '100ml', retail: 8975000, disc: 30, cut: 2695000, price: 6280000, tier: 1 },
+  { no: 26, brand: 'Tom Ford', name: 'Neroli Portofino EDP', gender: 'Unisex', size: '100ml', retail: 6850000, disc: 30, cut: 2055000, price: 4795000, tier: 1 },
+
+  // 4. YSL
+  { no: 27, brand: 'YSL', name: 'Y Eau de Parfum', gender: 'Men', size: '100ml', retail: 2850000, disc: 23, cut: 655000, price: 2195000, tier: 4 },
+  { no: 28, brand: 'YSL', name: 'MYSLF Eau de Parfum', gender: 'Men', size: '100ml', retail: 2850000, disc: 23, cut: 655000, price: 2195000, tier: 4 },
+  { no: 29, brand: 'YSL', name: 'Libre EDP', gender: 'Women', size: '90ml', retail: 3500000, disc: 26, cut: 910000, price: 2590000, tier: 3 },
+  { no: 30, brand: 'YSL', name: 'Black Opium EDP', gender: 'Women', size: '90ml', retail: 3500000, disc: 26, cut: 910000, price: 2590000, tier: 3 },
+
+  // 5. CREED
+  { no: 31, brand: 'CREED', name: 'Aventus EDP', gender: 'Men', size: '100ml', retail: 6800000, disc: 30, cut: 2040000, price: 4760000, tier: 1 },
+  { no: 32, brand: 'CREED', name: 'Aventus Cologne', gender: 'Men', size: '100ml', retail: 6800000, disc: 30, cut: 2040000, price: 4760000, tier: 1 },
+  { no: 33, brand: 'CREED', name: 'Silver Mountain Water', gender: 'Unisex', size: '100ml', retail: 6500000, disc: 30, cut: 1950000, price: 4550000, tier: 1 },
+  { no: 34, brand: 'CREED', name: 'Millésime Impérial', gender: 'Unisex', size: '100ml', retail: 6500000, disc: 30, cut: 1950000, price: 4550000, tier: 1 },
+
+  // 6. MFK
+  { no: 35, brand: 'MFK', name: 'Baccarat Rouge 540 Extrait', gender: 'Unisex', size: '70ml', retail: 7650000, disc: 30, cut: 2295000, price: 5355000, tier: 1 },
+  { no: 36, brand: 'MFK', name: 'Baccarat Rouge 540 EDP', gender: 'Unisex', size: '70ml', retail: 5450000, disc: 29, cut: 1580000, price: 3870000, tier: 2 },
+  { no: 37, brand: 'MFK', name: 'Oud Satin Mood EDP', gender: 'Unisex', size: '70ml', retail: 5650000, disc: 29, cut: 1640000, price: 4010000, tier: 2 },
+  { no: 38, brand: 'MFK', name: 'Aqua Universalis EDT', gender: 'Men', size: '70ml', retail: 4150000, disc: 27, cut: 1120000, price: 3030000, tier: 3 },
+  { no: 39, brand: 'MFK', name: 'À la rose EDP', gender: 'Women', size: '70ml', retail: 4850000, disc: 28, cut: 1360000, price: 3490000, tier: 2 },
+
+  // 7. Le Labo
+  { no: 40, brand: 'Le Labo', name: 'Another 13 EDP', gender: 'Unisex', size: '100ml', retail: 5650000, disc: 29, cut: 1640000, price: 4010000, tier: 2 },
+  { no: 41, brand: 'Le Labo', name: 'Santal 33 EDP', gender: 'Unisex', size: '100ml', retail: 5650000, disc: 29, cut: 1640000, price: 4010000, tier: 2 },
+  { no: 42, brand: 'Le Labo', name: 'Thé Noir 29 EDP', gender: 'Men', size: '100ml', retail: 5650000, disc: 29, cut: 1640000, price: 4010000, tier: 2 },
+
+  // 8. Celine
+  { no: 43, brand: 'Celine', name: 'Celine Parade EDP', gender: 'Unisex', size: '100ml', retail: 5850000, disc: 29, cut: 1695000, price: 4155000, tier: 2 },
+  { no: 44, brand: 'Celine', name: 'Celine Black Tie EDP', gender: 'Unisex', size: '100ml', retail: 5850000, disc: 29, cut: 1695000, price: 4155000, tier: 2 },
+
+  // 9. Chanel
+  { no: 45, brand: 'Chanel', name: 'Bleu de Chanel Parfum', gender: 'Men', size: '100ml', retail: 3750000, disc: 26, cut: 975000, price: 2775000, tier: 3 },
+  { no: 46, brand: 'Chanel', name: 'Bleu de Chanel EDP', gender: 'Men', size: '100ml', retail: 3190000, disc: 25, cut: 795000, price: 2395000, tier: 3 },
+  { no: 47, brand: 'Chanel', name: 'Bleu de Chanel EDT', gender: 'Men', size: '100ml', retail: 2750000, disc: 23, cut: 630000, price: 2120000, tier: 4 },
+  { no: 48, brand: 'Chanel', name: 'Coco Mademoiselle EDP', gender: 'Women', size: '100ml', retail: 3780000, disc: 26, cut: 980000, price: 2800000, tier: 3 },
+  { no: 49, brand: 'Chanel', name: 'Chanel Chance Eau Tendre EDP', gender: 'Women', size: '100ml', retail: 3400000, disc: 25, cut: 850000, price: 2550000, tier: 3 },
+  { no: 50, brand: 'Chanel', name: 'Chanel Chance Eau Fraîche EDP', gender: 'Women', size: '100ml', retail: 3400000, disc: 25, cut: 850000, price: 2550000, tier: 3 },
+
+  // 10. Armani
+  { no: 51, brand: 'Armani', name: 'Acqua di Giò Profondo EDP', gender: 'Men', size: '125ml', retail: 2850000, disc: 23, cut: 655000, price: 2195000, tier: 4 },
+  { no: 52, brand: 'Armani', name: 'Acqua di Giò Profumo / Parfum', gender: 'Men', size: '100ml', retail: 2820000, disc: 23, cut: 650000, price: 2170000, tier: 4 },
+  { no: 53, brand: 'Armani', name: 'Stronger With You Intensely EDP', gender: 'Men', size: '100ml', retail: 2325000, disc: 21, cut: 490000, price: 1835000, tier: 5 },
+
+  // 11. JPG
+  { no: 54, brand: 'JPG', name: 'Le Male Elixir Parfum', gender: 'Men', size: '125ml', retail: 2310000, disc: 21, cut: 485000, price: 1825000, tier: 5 },
+  { no: 55, brand: 'JPG', name: 'Le Beau Le Parfum EDP Intense', gender: 'Men', size: '125ml', retail: 2250000, disc: 20, cut: 450000, price: 1800000, tier: 5 },
+  { no: 56, brand: 'JPG', name: 'So Scandal! EDP', gender: 'Women', size: '80ml', retail: 2190000, disc: 20, cut: 440000, price: 1750000, tier: 5 },
+
+  // 12. Versace
+  { no: 57, brand: 'Versace', name: 'Eros EDP', gender: 'Men', size: '100ml', retail: 2475000, disc: 22, cut: 545000, price: 1930000, tier: 5 },
+  { no: 58, brand: 'Versace', name: 'Eros Flame EDP', gender: 'Men', size: '100ml', retail: 2475000, disc: 22, cut: 545000, price: 1930000, tier: 5 },
+  { no: 59, brand: 'Versace', name: 'Bright Crystal EDT', gender: 'Women', size: '90ml', retail: 2150000, disc: 20, cut: 430000, price: 1720000, tier: 5 },
+
+  // 13. Byredo
+  { no: 60, brand: 'Byredo', name: 'Blanche EDP', gender: 'Unisex', size: '100ml', retail: 4550000, disc: 28, cut: 1275000, price: 3275000, tier: 2 },
+  { no: 61, brand: 'Byredo', name: "Bal d'Afrique EDP", gender: 'Unisex', size: '100ml', retail: 4550000, disc: 28, cut: 1275000, price: 3275000, tier: 2 },
+  { no: 62, brand: 'Byredo', name: 'Gypsy Water EDP', gender: 'Unisex', size: '100ml', retail: 4550000, disc: 28, cut: 1275000, price: 3275000, tier: 2 },
+
+  // 14. Diptyque
+  { no: 63, brand: 'Diptyque', name: 'Fleur de Peau EDP', gender: 'Unisex', size: '75ml', retail: 3950000, disc: 27, cut: 1065000, price: 2885000, tier: 3 },
+  { no: 64, brand: 'Diptyque', name: 'Fleur de Peau EDT', gender: 'Unisex', size: '100ml', retail: 3150000, disc: 25, cut: 790000, price: 2360000, tier: 3 },
+  { no: 65, brand: 'Diptyque', name: 'Orphéon EDP', gender: 'Unisex', size: '75ml', retail: 3950000, disc: 27, cut: 1065000, price: 2885000, tier: 3 },
+
+  // 15. Maison Margiela
+  { no: 66, brand: 'Maison Margiela', name: 'Replica Lazy Sunday Morning EDT', gender: 'Unisex', size: '100ml', retail: 2550000, disc: 22, cut: 560000, price: 1990000, tier: 4 },
+  { no: 67, brand: 'Maison Margiela', name: 'Replica Jazz Club EDT', gender: 'Men', size: '100ml', retail: 2550000, disc: 22, cut: 560000, price: 1990000, tier: 4 },
+  { no: 68, brand: 'Maison Margiela', name: 'Replica By the Fireplace EDT', gender: 'Men', size: '100ml', retail: 2550000, disc: 22, cut: 560000, price: 1990000, tier: 4 },
+  { no: 69, brand: 'Maison Margiela', name: 'Replica Springtime in a Park EDT', gender: 'Women', size: '100ml', retail: 2550000, disc: 22, cut: 560000, price: 1990000, tier: 4 },
+
+  // 16. Jo Malone
+  { no: 70, brand: 'Jo Malone', name: 'English Pear & Freesia Cologne', gender: 'Women', size: '100ml', retail: 2900000, disc: 24, cut: 695000, price: 2205000, tier: 4 },
+  { no: 71, brand: 'Jo Malone', name: 'Wood Sage & Sea Salt Cologne', gender: 'Unisex', size: '100ml', retail: 2900000, disc: 24, cut: 695000, price: 2205000, tier: 4 },
+
+  // 17. Prada
+  { no: 72, brand: 'Prada', name: 'Paradoxe EDP', gender: 'Women', size: '90ml', retail: 2950000, disc: 24, cut: 710000, price: 2240000, tier: 4 },
+  { no: 73, brand: 'Prada', name: 'Paradoxe Intense EDP', gender: 'Women', size: '90ml', retail: 3150000, disc: 25, cut: 790000, price: 2360000, tier: 3 },
+
+  // 18. Gucci
+  { no: 74, brand: 'Gucci', name: 'Flora Gorgeous Gardenia EDP', gender: 'Women', size: '100ml', retail: 3500000, disc: 26, cut: 910000, price: 2590000, tier: 3 },
+  { no: 75, brand: 'Gucci', name: 'Guilty Pour Homme EDT', gender: 'Men', size: '90ml', retail: 2450000, disc: 22, cut: 540000, price: 1910000, tier: 5 },
+
+  // 19. Valentino
+  { no: 76, brand: 'Valentino', name: 'Uomo Born in Roma EDT', gender: 'Men', size: '100ml', retail: 2350000, disc: 21, cut: 495000, price: 1855000, tier: 5 },
+  { no: 77, brand: 'Valentino', name: 'Uomo Born in Roma Green Stravaganza', gender: 'Men', size: '100ml', retail: 2350000, disc: 21, cut: 495000, price: 1855000, tier: 5 },
+  { no: 78, brand: 'Valentino', name: 'Uomo Born in Roma Intense EDP', gender: 'Men', size: '100ml', retail: 2650000, disc: 23, cut: 610000, price: 2040000, tier: 4 },
+  { no: 79, brand: 'Valentino', name: 'Uomo Born in Roma Coral Fantasy', gender: 'Men', size: '100ml', retail: 2350000, disc: 21, cut: 495000, price: 1855000, tier: 5 },
+  { no: 80, brand: 'Valentino', name: 'Donna Born in Roma Extradose Parfum', gender: 'Women', size: '100ml', retail: 3350000, disc: 25, cut: 840000, price: 2510000, tier: 3 },
+  { no: 81, brand: 'Valentino', name: 'Donna Born in Roma EDP', gender: 'Women', size: '100ml', retail: 2850000, disc: 23, cut: 655000, price: 2195000, tier: 4 },
 ];
