@@ -707,44 +707,54 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
         >
           {/* Header Banner */}
           <div className="p-6 sm:p-10 bg-gradient-to-b from-[#171621] to-[#111016] border-b border-[#D4AF37]/30 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-2 text-xs text-[#E5C87E] uppercase tracking-[0.22em]">
-                <FileText className="w-4 h-4 text-[#E5C87E]" />
-                <span>VORVAN PRIVATE CLIENT INVOICE</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[11px] sm:text-xs text-[#E5C87E] uppercase tracking-[0.2em]">
+                <FileText className="w-4 h-4 text-[#E5C87E] shrink-0" />
+                <span className="whitespace-nowrap">
+                  VORVAN PRIVATE CLIENT INVOICE
+                </span>
               </div>
-              <h2 className="mt-2 font-serif-luxury text-3xl sm:text-4xl font-semibold text-white">
-                Tagihan Privat #{baseInvoice.invoiceId}
+              <h2 className="mt-2 font-serif-luxury text-2xl sm:text-3xl md:text-4xl font-semibold text-white leading-tight flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="whitespace-nowrap">Tagihan Privat</span>
+                <span className="whitespace-nowrap text-[#F5E6B8]">
+                  #{baseInvoice.invoiceId}
+                </span>
               </h2>
-              <p className="mt-1 text-xs text-zinc-300">
-                Diterbitkan pada {baseInvoice.createdAt} · Berlaku hingga{' '}
-                {baseInvoice.expiresAt}
-              </p>
+              <div className="mt-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-2.5 gap-y-1 text-xs text-zinc-300">
+                <span className="whitespace-nowrap">
+                  Diterbitkan pada {baseInvoice.createdAt}
+                </span>
+                <span className="hidden sm:inline text-[#D4AF37]/60">·</span>
+                <span className="whitespace-nowrap">
+                  Berlaku hingga {baseInvoice.expiresAt}
+                </span>
+              </div>
             </div>
 
-            <div className="flex flex-col items-start md:items-end gap-2">
+            <div className="flex flex-col items-start md:items-end gap-2.5 shrink-0">
               {baseInvoice.status === 'PAID' ? (
                 <span
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 text-xs font-bold uppercase tracking-[0.18em]"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 text-xs font-bold uppercase tracking-[0.16em] whitespace-nowrap"
                   data-testid="invoice-status-badge"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>PAID · LUNAS TERVERIFIKASI</span>
                 </span>
               ) : (
                 <span
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-950/50 border border-amber-500/50 text-amber-300 text-xs font-bold uppercase tracking-[0.18em]"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-950/50 border border-amber-500/50 text-amber-300 text-xs font-bold uppercase tracking-[0.16em] whitespace-nowrap"
                   data-testid="invoice-status-badge"
                 >
-                  <Clock className="w-4 h-4" />
+                  <Clock className="w-4 h-4 shrink-0" />
                   <span>MENUNGGU PEMBAYARAN</span>
                 </span>
               )}
-              <span className="text-[11px] text-zinc-400">
-                Penanggung Jawab:{' '}
-                <strong className="text-[#F5E6B8]">
+              <div className="text-[11px] sm:text-xs text-zinc-400 flex flex-col sm:flex-row sm:items-center md:justify-end gap-x-1.5 gap-y-0.5">
+                <span className="whitespace-nowrap">Penanggung Jawab:</span>
+                <strong className="text-[#F5E6B8] whitespace-nowrap">
                   VORVAN Official Concierge — Andre Satria P
                 </strong>
-              </span>
+              </div>
             </div>
           </div>
 
@@ -777,38 +787,44 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               Rincian Alokasi Flacon Parfum
             </h3>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto -mx-2 px-2">
+              <table className="w-full min-w-[540px] text-left border-collapse">
                 <thead>
                   <tr className="border-b border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-400">
-                    <th className="py-3 pr-4">Deskripsi Koleksi</th>
-                    <th className="py-3 px-4">Ukuran</th>
-                    <th className="py-3 px-4">Kode Batch</th>
-                    <th className="py-3 px-4 text-center">Qty</th>
-                    <th className="py-3 pl-4 text-right">Harga Satuan</th>
+                    <th className="py-3 pr-4 whitespace-nowrap">
+                      Deskripsi Koleksi
+                    </th>
+                    <th className="py-3 px-3 whitespace-nowrap">Ukuran</th>
+                    <th className="py-3 px-3 whitespace-nowrap">Kode Batch</th>
+                    <th className="py-3 px-3 text-center whitespace-nowrap">
+                      Qty
+                    </th>
+                    <th className="py-3 pl-3 text-right whitespace-nowrap">
+                      Harga Satuan
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60 text-sm">
                   {baseInvoice.items.map((item) => (
                     <tr key={item.sku}>
-                      <td className="py-4 pr-4">
-                        <p className="font-semibold text-white">
+                      <td className="py-4 pr-4 min-w-[200px]">
+                        <p className="font-semibold text-white whitespace-nowrap">
                           {item.house} — {item.fragranceName}
                         </p>
-                        <p className="text-xs text-zinc-400">
+                        <p className="text-xs text-zinc-400 whitespace-nowrap">
                           {item.concentration} · SKU: {item.sku}
                         </p>
                       </td>
-                      <td className="py-4 px-4 font-mono-tabular text-zinc-300">
+                      <td className="py-4 px-3 font-mono-tabular text-zinc-300 whitespace-nowrap">
                         {item.volume}
                       </td>
-                      <td className="py-4 px-4 font-mono-tabular text-xs text-[#E5C87E]">
+                      <td className="py-4 px-3 font-mono-tabular text-xs text-[#E5C87E] whitespace-nowrap">
                         {item.batchCode}
                       </td>
-                      <td className="py-4 px-4 font-mono-tabular text-center text-zinc-300">
+                      <td className="py-4 px-3 font-mono-tabular text-center text-zinc-300 whitespace-nowrap">
                         {item.quantity}
                       </td>
-                      <td className="py-4 pl-4 font-mono-tabular text-right text-white font-medium">
+                      <td className="py-4 pl-3 font-mono-tabular text-right text-white font-medium whitespace-nowrap">
                         {formatIDRCurrency(item.unitPriceIDR * item.quantity)}
                       </td>
                     </tr>
@@ -827,7 +843,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 <>
                   <div className="w-full sm:w-[440px] flex items-center justify-between gap-4 text-zinc-400">
                     <span>Valuasi Ritel Resmi Butik (Indonesia)</span>
-                    <span className="font-mono-tabular line-through text-zinc-500">
+                    <span className="font-mono-tabular line-through text-zinc-500 whitespace-nowrap shrink-0">
                       {formatIDRCurrency(baseInvoice.retailPriceTotalIDR || 0)}
                     </span>
                   </div>
@@ -843,7 +859,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                         )}
                       %)
                     </span>
-                    <span className="font-mono-tabular text-emerald-400">
+                    <span className="font-mono-tabular text-emerald-400 whitespace-nowrap shrink-0">
                       -{' '}
                       {formatIDRCurrency(
                         Math.max(
@@ -859,7 +875,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
               <div className="w-full sm:w-[440px] flex items-center justify-between gap-4 text-zinc-200 font-semibold">
                 <span>Subtotal Koleksi Parfum (Full-Size Sealed)</span>
-                <span className="font-mono-tabular text-white">
+                <span className="font-mono-tabular text-white whitespace-nowrap shrink-0">
                   {formatIDRCurrency(totals.itemsSubtotalIDR)}
                 </span>
               </div>
@@ -870,7 +886,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                     'Pengiriman Berasuransi & Double-Wall Thermal Box'}
                 </span>
                 <span
-                  className={`font-mono-tabular font-semibold ${
+                  className={`font-mono-tabular font-semibold whitespace-nowrap shrink-0 ${
                     totals.protectionTotalIDR === 0
                       ? 'text-emerald-400'
                       : 'text-zinc-200'
@@ -887,7 +903,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   TOTAL NOMINAL DISEPAKATI
                 </span>
                 <span
-                  className="font-mono-tabular text-lg sm:text-xl font-extrabold text-[#F5E6B8]"
+                  className="font-mono-tabular text-lg sm:text-xl font-extrabold text-[#F5E6B8] whitespace-nowrap shrink-0"
                   data-testid="invoice-grand-total"
                 >
                   {formatIDRCurrency(totals.grandTotalIDR)}
@@ -1132,15 +1148,23 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
             {!isPaymentUnlocked ? (
               <div
                 id="vorvan-bank-locked-overlay"
-                className="p-6 sm:p-8 rounded-2xl bg-[#14131B] border border-dashed border-[#D4AF37]/45 text-center space-y-2"
+                className="px-6 py-7 sm:px-10 sm:py-9 rounded-2xl bg-[#14131B] border border-dashed border-[#D4AF37]/45 text-center space-y-3"
                 data-testid="payment-tabs-locked-banner"
               >
-                <Lock className="w-6 h-6 text-[#E5C87E] mx-auto" />
-                <p className="text-xs sm:text-sm text-zinc-200 font-medium">
-                  🔒 Silakan centang kotak persetujuan Syarat &amp; Ketentuan di
-                  atas untuk membuka Tab 1, Tab 2 &amp; Tab 3 (Nomor Rekening
-                  Resmi, QRIS, COD &amp; International Payment) serta Tombol
-                  Konfirmasi Pembayaran.
+                <div className="w-11 h-11 rounded-full bg-[#1C1A29] border border-[#D4AF37]/40 flex items-center justify-center mx-auto">
+                  <Lock className="w-5 h-5 text-[#E5C87E]" />
+                </div>
+                <p className="font-brand text-[11px] uppercase tracking-[0.18em] text-[#E5C87E] font-semibold">
+                  Saluran Pembayaran &amp; Konfirmasi Terkunci
+                </p>
+                <p className="text-xs sm:text-sm text-zinc-200 font-normal max-w-lg mx-auto leading-relaxed">
+                  Silakan centang kotak persetujuan Syarat &amp; Ketentuan di
+                  atas terlebih dahulu untuk membuka{' '}
+                  <strong className="text-[#F5E6B8]">
+                    Tab 1, Tab 2 &amp; Tab 3
+                  </strong>{' '}
+                  (Nomor Rekening Resmi, QRIS, COD &amp; International Payment)
+                  serta Tombol Konfirmasi Pembayaran.
                 </p>
               </div>
             ) : (

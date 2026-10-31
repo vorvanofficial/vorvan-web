@@ -35,35 +35,39 @@ export const ReturnPolicyContent: React.FC<ReturnPolicyProps> = ({
     <div className="space-y-10">
       {/* Header with Calligraphic Script Crown & Shimmering Semi-Gold Title */}
       <ScrollReveal variant="scale">
-        <div className="flex items-start justify-between gap-4 border-b border-[#D4AF37]/25 pb-7 text-center">
-          <div className="w-full max-w-3xl mx-auto space-y-2.5">
-            <p className="font-latin-script text-3xl sm:text-4xl text-gold-champagne">
-              Charte d’Authenticité & Garantie
-            </p>
-            <p className="font-brand text-[10px] sm:text-xs uppercase tracking-[0.26em] text-[#E5C87E] font-semibold">
-              {t.kicker}
-            </p>
-            <h2
-              className="font-serif-luxury text-3xl sm:text-5xl font-semibold text-gold-shimmer leading-tight tracking-wide"
-              style={{ textWrap: 'balance' }}
-            >
-              {t.title}
-            </h2>
-            <p className="font-latin-italic text-base sm:text-lg text-zinc-200 max-w-2xl mx-auto leading-relaxed pt-1">
-              {t.subtitle}
-            </p>
-          </div>
-
+        <div className="relative border-b border-[#D4AF37]/25 pb-7 text-center">
           {isModal && onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+              className="absolute -top-2 right-0 p-2 text-zinc-400 hover:text-white transition-colors cursor-pointer z-10"
               aria-label="Tutup Kebijakan Retur"
             >
               <X className="w-5 h-5" />
             </button>
           )}
+
+          <div
+            className={`w-full max-w-3xl mx-auto space-y-2.5 text-center ${
+              isModal ? 'pt-6 sm:pt-0 sm:px-10' : ''
+            }`}
+          >
+            <p className="font-latin-script text-3xl sm:text-4xl text-gold-champagne text-center">
+              Charte d’Authenticité & Garantie
+            </p>
+            <p className="font-brand text-[10px] sm:text-xs uppercase tracking-[0.26em] text-[#E5C87E] font-semibold text-center">
+              {t.kicker}
+            </p>
+            <h2
+              className="font-serif-luxury text-3xl sm:text-5xl font-semibold text-gold-shimmer leading-tight tracking-wide text-center"
+              style={{ textWrap: 'balance' }}
+            >
+              {t.title}
+            </h2>
+            <p className="font-latin-italic text-base sm:text-lg text-zinc-200 max-w-2xl mx-auto leading-relaxed pt-1 text-center">
+              {t.subtitle}
+            </p>
+          </div>
         </div>
       </ScrollReveal>
 
