@@ -380,3 +380,306 @@
   }
 }
 
+/* ============================================================================
+   VORVAN UX UPGRADE: OPSI A PLUS (AUTO-GLIDE + STICKY BRAND RIBBON + COMPACT GENDER PILLS)
+   ============================================================================ */
+
+/* 1. Pita Geser 19 Merk Cepat (Quick-Switch Ribbon) */
+.vorvan-quick-brand-bar {
+  position: sticky;
+  top: 64px;
+  z-index: 45;
+  background: rgba(12, 11, 10, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(212, 175, 55, 0.25);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.25);
+  padding: 10px 12px;
+  margin: 0 -12px 16px -12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.vorvan-quick-brand-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.vorvan-back-grid-btn {
+  flex-shrink: 0;
+  background: rgba(212, 175, 55, 0.14);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  color: #e6c665;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 7px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.vorvan-back-grid-btn:hover {
+  background: rgba(212, 175, 55, 0.24);
+  border-color: #e7c975;
+}
+
+.vorvan-ribbon-chip {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #d1d5db;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 7px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.vorvan-ribbon-chip:hover {
+  border-color: rgba(212, 175, 55, 0.45);
+  color: #ffffff;
+}
+.vorvan-ribbon-chip.active {
+  background: linear-gradient(135deg, #e7c975 0%, #c59b27 100%);
+  color: #0b0a09;
+  border-color: #e7c975;
+  font-weight: 700;
+  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.35);
+}
+
+/* 2. Baris Kapsul Gender Ramping (Menggantikan 4 Kotak Raksasa — Anti Kepotong di HP) */
+.vorvan-compact-gender-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .vorvan-compact-gender-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
+.vorvan-gender-pill {
+  width: 100%;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  color: #e5e7eb;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 9px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vorvan-gender-pill:hover {
+  border-color: rgba(231, 201, 117, 0.65);
+  color: #ffffff;
+}
+.vorvan-gender-pill.active {
+  background: linear-gradient(135deg, #e7c975 0%, #c59b27 100%);
+  color: #0b0a09;
+  border-color: #e7c975;
+  font-weight: 700;
+}
+
+/* ============================================================================
+   VORVAN LEGAL SHIELD — MANDATORY CLICKWRAP AGREEMENT & ANTI-DISPUTE MODULE
+   ============================================================================ */
+#vorvan-legal-shield {
+  margin-top: 20px;
+  border: 1px solid #d4af37;
+  border-radius: 8px;
+  background: #fcfaf5;
+  padding: 16px;
+  color: #1f2937;
+  font-family: inherit;
+}
+
+.vorvan-legal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.vorvan-legal-header-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #92400e;
+  text-transform: uppercase;
+}
+
+#btn-toggle-legal {
+  background: none;
+  border: 1px solid #d4af37;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#vorvan-legal-clauses {
+  max-height: 135px;
+  overflow-y: auto;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #374151;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+#vorvan-legal-clauses.expanded {
+  max-height: none;
+}
+
+.vorvan-legal-clause-item {
+  margin: 0 0 8px 0;
+}
+
+.vorvan-legal-clause-item:last-child {
+  margin: 0;
+}
+
+.vorvan-clickwrap-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  user-select: none;
+}
+
+#vorvan-agree-checkbox {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  accent-color: #b45309;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vorvan-clickwrap-text {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #78350f;
+}
+
+#vorvan-payment-box {
+  position: relative;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f9fafb;
+  transition: all 0.25s ease;
+}
+
+#vorvan-payment-box.unlocked {
+  border-style: solid;
+  border-color: #d4af37;
+  background: #ffffff;
+}
+
+#vorvan-bank-locked-overlay {
+  text-align: center;
+  padding: 8px 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.vorvan-bca-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.vorvan-bca-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vorvan-bca-number {
+  font-size: 17px;
+  font-weight: 800;
+  color: #111827;
+  letter-spacing: 0.04em;
+}
+
+.vorvan-bca-copy-btn {
+  background: #111827;
+  color: #f3f4f6;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vorvan-bca-holder {
+  font-size: 12.5px;
+  color: #374151;
+  margin-top: 2px;
+}
+
+#btn-vorvan-confirm-wa {
+  margin-top: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #9ca3af;
+  color: #ffffff;
+  cursor: not-allowed;
+  transition: all 0.25s ease;
+}
+
+#btn-vorvan-confirm-wa.enabled {
+  background: #16a34a;
+  cursor: pointer;
+}
+
+#vorvan-legal-timestamp-log {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #065f46;
+  font-weight: 600;
+  text-align: center;
+}

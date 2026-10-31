@@ -517,9 +517,42 @@ test('VORVAN 81 SKU Official Pricing, Auto-Detect Shipping Zones, Cheat Sheet Fi
   assert.equal(totals.grandTotalIDR, 4575000);
 });
 
+test('VORVAN Legal Shield Clickwrap Agreement timestamp and WhatsApp verification message preserve official WhatsApp number and exact legal paragraph', async () => {
+  const {
+    formatLegalTimestampWIB,
+    buildVerifiedLegalWhatsAppMessage,
+    buildVerifiedLegalWhatsAppUrl,
+  } = await import('./businessRules.ts');
+  const { VORVAN_WHATSAPP_NUMBER } = await import('../data/catalog.ts');
 
+  const fixedDate = new Date('2026-10-31T08:30:15Z');
+  const ts = formatLegalTimestampWIB(fixedDate);
+  assert.ok(ts.endsWith(' WIB'));
 
+  const msg = buildVerifiedLegalWhatsAppMessage({
+    docNo: 'INV-VRV-8829',
+    clientName: 'Bpk. Raditya Pratama',
+    perfumeDesc: 'Maison Francis Kurkdjian — Baccarat Rouge 540 Extrait (70ml)',
+    grandTotal: 'Rp 5.355.000',
+    agreedTimestamp: '31 Okt 2026, 15.30.15 WIB',
+  });
 
+  assert.ok(
+    msg.includes(
+      '✅ [Persetujuan Layanan Elektronik Tercatat pada 31 Okt 2026, 15.30.15 WIB: Saya telah membaca dan menyetujui Ketentuan Layanan, Garansi Unboxing & Sprayer, Kebijakan Final Sale, serta Karakteristik Subjektif Aroma VORVAN].'
+    )
+  );
+  assert.ok(!msg.includes('BCA'));
+  assert.ok(!msg.includes('KUHPerdata'));
 
+  const url = buildVerifiedLegalWhatsAppUrl({
+    docNo: 'INV-VRV-8829',
+    clientName: 'Bpk. Raditya Pratama',
+    perfumeDesc: 'Maison Francis Kurkdjian — Baccarat Rouge 540 Extrait (70ml)',
+    grandTotal: 'Rp 5.355.000',
+    agreedTimestamp: '31 Okt 2026, 15.30.15 WIB',
+  });
 
+  assert.ok(url.startsWith(`https://wa.me/${VORVAN_WHATSAPP_NUMBER}?text=`));
+});
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LUXURY_BRAND_HOUSES } from '../data/catalog';
 import {
   BrandHouseId,
@@ -29,6 +29,10 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
     'ALL'
   );
 
+  const brandGridRef = useRef<HTMLDivElement | null>(null);
+  const brandShowcaseRef = useRef<HTMLDivElement | null>(null);
+  const ribbonBarRef = useRef<HTMLDivElement | null>(null);
+
   const t = getTranslation(locale).explorer;
 
   const activeBrand =
@@ -48,13 +52,57 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
   const matchingFragrances =
     filteredByGender.length > 0 ? filteredByGender : allBrandFragrances;
 
-  const handleSelectBrand = (brandId: BrandHouseId) => {
+  // Keep active chip centered inside the horizontal quick-switch ribbon
+  useEffect(() => {
+    const bar = ribbonBarRef.current;
+    if (!bar) return;
+    const activeChip = bar.querySelector(
+      `[data-ribbon-brand="${selectedBrandId}"]`
+    ) as HTMLElement | null;
+    if (activeChip) {
+      const targetLeft =
+        activeChip.offsetLeft -
+        bar.clientWidth / 2 +
+        activeChip.clientWidth / 2;
+      bar.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+    }
+  }, [selectedBrandId]);
+
+  const smoothScrollToBrandShowcase = () => {
+    setTimeout(() => {
+      const targetEl = brandShowcaseRef.current;
+      if (targetEl && typeof window !== 'undefined') {
+        const yOffset = -70; // Ruang untuk sticky header
+        const y =
+          targetEl.getBoundingClientRect().top + window.pageYOffset + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
+    }, 90);
+  };
+
+  const smoothScrollToBrandGrid = () => {
+    const gridEl = brandGridRef.current;
+    if (gridEl && typeof window !== 'undefined') {
+      const yOffset = -80;
+      const y =
+        gridEl.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
+  const handleSelectBrand = (
+    brandId: BrandHouseId,
+    shouldAutoGlide: boolean = false
+  ) => {
     setSelectedBrandId(brandId);
     const hasCurrentGender =
       selectedGender === 'ALL' ||
       filterFragrancesByBrandAndGender(brandId, selectedGender).length > 0;
     if (!hasCurrentGender) {
       setSelectedGender('ALL');
+    }
+    if (shouldAutoGlide) {
+      smoothScrollToBrandShowcase();
     }
   };
 
@@ -84,10 +132,13 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
     },
   ];
 
+  // Clean "Est. 1854" so it never renders as "EST. EST. 1854"
+  const formattedEstLabel = `EST. ${activeBrand.est.replace(/^est\.?\s*/i, '')}`;
+
   return (
     <section
       id="brand-hierarchy-explorer"
-      className="relative overflow-hidden py-16 sm:py-24 bg-[#0B0A0F] border-t border-[#D4AF37]/25"
+      className="relative overflow-x-clip py-16 sm:py-24 bg-[#0B0A0F] border-t border-[#D4AF37]/25"
       data-testid="brand-hierarchy-section"
     >
       <ParallaxSectionBg
@@ -97,7 +148,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
         align="right"
         testId="parallax-bg-houses"
       />
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 sm:space-y-12">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
         {/* Section Header — Centered Precision on Mobile */}
         <ScrollReveal variant="up">
           <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-8 border-b border-[#D4AF37]/25">
@@ -118,9 +169,10 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
           </div>
         </ScrollReveal>
 
-        {/* LUXURY BRAND HOUSE SELECTOR (11 BRANDS) — NO "LANGKAH 01" LABEL */}
+        {/* LUXURY BRAND HOUSE SELECTOR (19 BRANDS) — AUTO-GLIDE ON CLICK */}
         <ScrollReveal variant="up" delayMs={60} className="space-y-4">
           <div
+            ref={brandGridRef}
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5"
             role="tablist"
             aria-label="Pilih Rumah Parfum Mewah"
@@ -133,7 +185,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
                   type="button"
                   role="tab"
                   aria-selected={isSelected}
-                  onClick={() => handleSelectBrand(brand.id)}
+                  onClick={() => handleSelectBrand(brand.id, true)}
                   data-testid={`brand-tab-${brand.id}`}
                   className={`min-h-[68px] p-3.5 rounded-xl text-center border transition-all duration-200 cursor-pointer flex flex-col items-center justify-center ${
                     isSelected
@@ -163,117 +215,118 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
           </div>
         </ScrollReveal>
 
-        {/* GENDER CLASSIFICATION ([ GENTLEMAN ] • [ FEMME ] • [ UNISEX ]) — NO "LANGKAH 02" & NON-WRAPPING BRACKETS */}
-        <ScrollReveal variant="scale" delayMs={90}>
-          <div
-            key={`house-banner-${activeBrand.id}`}
-            className="p-5 sm:p-8 bg-gradient-to-b from-[#16151D] to-[#100F15] border border-[#D4AF37]/35 rounded-2xl space-y-6 animate-fade-up"
+        {/* 1. PITA GESER 19 MERK CEPAT (STICKY QUICK-SWITCH RIBBON) */}
+        <div
+          ref={ribbonBarRef}
+          className="vorvan-quick-brand-bar"
+          role="region"
+          aria-label="Pita Geser Cepat 19 Merk"
+          data-testid="vorvan-quick-brand-bar"
+        >
+          <button
+            type="button"
+            onClick={smoothScrollToBrandGrid}
+            className="vorvan-back-grid-btn"
+            data-testid="vorvan-back-grid-btn"
           >
-            <div className="flex flex-col lg:flex-row items-center justify-between text-center lg:text-left gap-4 pb-6 border-b border-[#D4AF37]/20">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-center lg:justify-start gap-2 font-brand text-[10px] text-[#E5C87E] uppercase tracking-[0.24em]">
-                  <span>{activeBrand.origin}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>EST. {activeBrand.est}</span>
-                </div>
-                <h3 className="font-brand text-2xl sm:text-3xl text-gold-shimmer font-semibold tracking-[0.2em]">
-                  {activeBrand.name}
-                </h3>
-                <p className="font-latin-italic text-base text-zinc-200 leading-relaxed max-w-2xl">
-                  “{activeBrand.signaturePhilosophy}”
-                </p>
-              </div>
-
-              {/* Single-Line Non-Wrapping Bracket Strip */}
-              <div className="flex items-center justify-center lg:justify-end">
-                <div className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 py-2 rounded-xl bg-[#0B0A0E]/90 border border-[#D4AF37]/30 font-brand text-[10px] sm:text-xs text-[#F5E6B8] tracking-[0.12em] sm:tracking-[0.18em] font-semibold whitespace-nowrap">
-                  <span className="whitespace-nowrap">[ GENTLEMAN ]</span>
-                  <span aria-hidden="true" className="text-[#D4AF37]">
-                    •
-                  </span>
-                  <span className="whitespace-nowrap">[ FEMME ]</span>
-                  <span aria-hidden="true" className="text-[#D4AF37]">
-                    •
-                  </span>
-                  <span className="whitespace-nowrap">[ UNISEX ]</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Interactive Gender Buttons — Strictly Non-Wrapping Brackets & Flush Height */}
-            <div
-              className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch"
-              role="group"
-              aria-label={`Pilih kategori gender untuk ${activeBrand.name}`}
-            >
-              {genderOptions.map((g) => {
-                const active = selectedGender === g.id;
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => setSelectedGender(g.id)}
-                    data-testid={`gender-btn-${g.id.toLowerCase()}`}
-                    className={`h-full p-3.5 sm:p-4 rounded-xl border text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-between ${
-                      active
-                        ? 'btn-luxury-gold shadow-md'
-                        : 'bg-[#0C0B10] text-zinc-200 border-[#D4AF37]/25 hover:border-[#E5C87E]/70'
-                    }`}
-                  >
-                    <span
-                      className={`inline-flex items-center justify-center gap-1 font-brand text-[10px] sm:text-xs font-bold uppercase tracking-[0.12em] sm:tracking-[0.16em] whitespace-nowrap ${
-                        active ? 'text-zinc-950' : 'text-[#F5E6B8]'
-                      }`}
-                    >
-                      <span>[</span>
-                      <span>{g.label}</span>
-                      <span>]</span>
-                    </span>
-                    <p
-                      className={`mt-2 font-latin-italic text-xs leading-snug line-clamp-2 ${
-                        active ? 'text-zinc-900 font-semibold' : 'text-zinc-300'
-                      }`}
-                    >
-                      {g.subtitle}
-                    </p>
-                  </button>
-                );
-              })}
-
+            ↑ 19 Merk
+          </button>
+          {LUXURY_BRAND_HOUSES.map((brand) => {
+            const isChipActive = brand.id === selectedBrandId;
+            return (
               <button
+                key={`ribbon-${brand.id}`}
                 type="button"
-                onClick={() => setSelectedGender('ALL')}
-                data-testid="gender-btn-all"
-                className={`h-full p-3.5 sm:p-4 rounded-xl border text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-between ${
-                  selectedGender === 'ALL'
-                    ? 'btn-luxury-gold shadow-md'
-                    : 'bg-[#0C0B10] text-zinc-200 border-[#D4AF37]/25 hover:border-[#E5C87E]/70'
+                data-ribbon-brand={brand.id}
+                data-testid={`ribbon-chip-${brand.id}`}
+                onClick={() => handleSelectBrand(brand.id, false)}
+                className={`vorvan-ribbon-chip font-brand ${
+                  isChipActive ? 'active' : ''
                 }`}
               >
-                <span
-                  className={`inline-flex items-center justify-center gap-1 font-brand text-[10px] sm:text-xs font-bold uppercase tracking-[0.1em] sm:tracking-[0.14em] whitespace-nowrap ${
-                    selectedGender === 'ALL' ? 'text-zinc-950' : 'text-[#F5E6B8]'
-                  }`}
-                >
-                  <span>[</span>
-                  <span>{t.allCollectionLabel}</span>
-                  <span>]</span>
-                </span>
-                <p
-                  className={`mt-2 font-latin-italic text-xs leading-snug line-clamp-2 ${
-                    selectedGender === 'ALL'
-                      ? 'text-zinc-900 font-semibold'
-                      : 'text-zinc-300'
-                  }`}
-                >
-                  {t.allCollectionSub}
-                </p>
+                {brand.shortName}
               </button>
-            </div>
-          </div>
-        </ScrollReveal>
+            );
+          })}
+        </div>
 
-        {/* MATCHING FRAGRANCE CARDS — EQUAL HEIGHT & FLUSH BOTTOM/SIDE FRAMES (NO "LANGKAH 03") */}
+        {/* ACTIVE BRAND SHOWCASE + COMPACT GENDER PILLS */}
+        <div ref={brandShowcaseRef}>
+          <ScrollReveal variant="scale" delayMs={70}>
+            <div
+              key={`house-banner-${activeBrand.id}`}
+              className="p-5 sm:p-7 bg-gradient-to-b from-[#16151D] to-[#100F15] border border-[#D4AF37]/35 rounded-2xl space-y-4 animate-fade-up"
+            >
+              <div className="flex flex-col lg:flex-row items-center justify-between text-center lg:text-left gap-4 pb-4 border-b border-[#D4AF37]/20">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-center lg:justify-start gap-2 font-brand text-[10px] text-[#E5C87E] uppercase tracking-[0.24em]">
+                    <span>{activeBrand.origin}</span>
+                    <span aria-hidden="true">·</span>
+                    <span data-testid="active-brand-est">{formattedEstLabel}</span>
+                  </div>
+                  <h3 className="font-brand text-2xl sm:text-3xl text-gold-shimmer font-semibold tracking-[0.2em]">
+                    {activeBrand.name}
+                  </h3>
+                  <p className="font-latin-italic text-base text-zinc-200 leading-relaxed max-w-2xl">
+                    “{activeBrand.signaturePhilosophy}”
+                  </p>
+                </div>
+
+                {/* Single-Line Non-Wrapping Bracket Strip */}
+                <div className="hidden lg:flex items-center justify-end">
+                  <div className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#0B0A0E]/90 border border-[#D4AF37]/30 font-brand text-[10px] sm:text-xs text-[#F5E6B8] tracking-[0.16em] font-semibold whitespace-nowrap">
+                    <span className="whitespace-nowrap">[ GENTLEMAN ]</span>
+                    <span aria-hidden="true" className="text-[#D4AF37]">
+                      •
+                    </span>
+                    <span className="whitespace-nowrap">[ FEMME ]</span>
+                    <span aria-hidden="true" className="text-[#D4AF37]">
+                      •
+                    </span>
+                    <span className="whitespace-nowrap">[ UNISEX ]</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. BARIS KAPSUL GENDER RAMPING (.vorvan-compact-gender-row) */}
+              <div
+                className="vorvan-compact-gender-row"
+                role="group"
+                aria-label={`Pilih kategori gender untuk ${activeBrand.name}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedGender('ALL')}
+                  data-testid="gender-btn-all"
+                  className={`vorvan-gender-pill font-brand ${
+                    selectedGender === 'ALL' ? 'active' : ''
+                  }`}
+                >
+                  [ {t.allCollectionLabel} ]
+                </button>
+
+                {genderOptions.map((g) => {
+                  const active = selectedGender === g.id;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => setSelectedGender(g.id)}
+                      data-testid={`gender-btn-${g.id.toLowerCase()}`}
+                      className={`vorvan-gender-pill font-brand ${
+                        active ? 'active' : ''
+                      }`}
+                    >
+                      [ {g.label} ]
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </ScrollReveal>
+        </div>
+
+        {/* MATCHING FRAGRANCE CARDS — EQUAL HEIGHT & FLUSH BOTTOM/SIDE FRAMES */}
         <div
           key={`${selectedBrandId}-${selectedGender}`}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch animate-blur-sharp"

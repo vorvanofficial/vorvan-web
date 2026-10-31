@@ -1364,10 +1364,79 @@ export function computeParallaxOffset(
   }
   const viewportCenter = viewportHeight / 2;
   const elementCenter = elementTop + elementHeight / 2;
-  const deltaFromCenter = viewportCenter - elementCenter;
+  const deltaFromCenter = viewportHeight / 2 - elementCenter;
   const rawShift = deltaFromCenter * speed;
   const clamped = Math.max(-maxShiftPx, Math.min(maxShiftPx, rawShift));
   return Math.round(clamped * 100) / 100;
 }
 
+/**
+ * Formats a Date into an Indonesian WIB electronic legal timestamp string.
+ */
+export function formatLegalTimestampWIB(date: Date = new Date()): string {
+  return (
+    date.toLocaleString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }) + ' WIB'
+  );
+}
+
+/**
+ * Builds the verified electronic clickwrap WhatsApp confirmation message & URL
+ * for the VORVAN Legal Shield module using the official VORVAN WhatsApp number.
+ */
+export function buildVerifiedLegalWhatsAppMessage(params: {
+  docNo: string;
+  clientName: string;
+  perfumeDesc?: string;
+  grandTotal: string;
+  paymentMethodLabel?: string;
+  agreedTimestamp: string;
+}): string {
+  const docNo = params.docNo.trim() || '-';
+  const clientName = params.clientName.trim() || '-';
+  const grandTotal = params.grandTotal.trim() || '-';
+  const paymentMethodLabel =
+    params.paymentMethodLabel?.trim() ||
+    'Transfer Bank Resmi (Mandiri / BNI / BRI)';
+  const agreedTimestamp = params.agreedTimestamp.trim() || '-';
+  const unitLine = params.perfumeDesc?.trim()
+    ? `• Unit Kurasi: ${params.perfumeDesc.trim()}\n`
+    : '';
+
+  return (
+    `Halo VORVAN Official Concierge — Andre Satria P, saya ingin mengonfirmasi pembayaran untuk Private Invoice berikut:\n\n` +
+    `• Kode Tagihan: ${docNo}\n` +
+    `• Nama Klien: ${clientName}\n` +
+    unitLine +
+    `• Total Tagihan: ${grandTotal}\n` +
+    `• Metode Pembayaran: ${paymentMethodLabel}\n\n` +
+    `✅ [Persetujuan Layanan Elektronik Tercatat pada ${agreedTimestamp}: Saya telah membaca dan menyetujui Ketentuan Layanan, Garansi Unboxing & Sprayer, Kebijakan Final Sale, serta Karakteristik Subjektif Aroma VORVAN].\n\n` +
+    `Berikut saya lampirkan bukti pembayarannya. Terima kasih.`
+  );
+}
+
+export function buildVerifiedLegalWhatsAppUrl(
+  params: {
+    docNo: string;
+    clientName: string;
+    perfumeDesc?: string;
+    grandTotal: string;
+    paymentMethodLabel?: string;
+    agreedTimestamp: string;
+  },
+  waNumber: string = VORVAN_WHATSAPP_NUMBER
+): string {
+  const rawDigits = (waNumber || VORVAN_WHATSAPP_NUMBER).replace(/\D/g, '');
+  const normalizedWa = rawDigits.startsWith('0')
+    ? `62${rawDigits.slice(1)}`
+    : rawDigits || VORVAN_WHATSAPP_NUMBER;
+  const msg = buildVerifiedLegalWhatsAppMessage(params);
+  return `https://wa.me/${normalizedWa}?text=${encodeURIComponent(msg)}`;
+}
 

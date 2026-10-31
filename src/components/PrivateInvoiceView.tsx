@@ -22,8 +22,11 @@ import {
   VorvanSiteSettings,
 } from '../types/fragrance';
 import {
+  buildVerifiedLegalWhatsAppMessage,
+  buildVerifiedLegalWhatsAppUrl,
   calculateInvoiceTotals,
   formatIDRCurrency,
+  formatLegalTimestampWIB,
   loadVorvanSettings,
   resolvePrivateInvoice,
 } from '../utils/businessRules';
@@ -457,6 +460,9 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const [copiedAccountKey, setCopiedAccountKey] = useState<string | null>(null);
   const [paypalImgFailed, setPaypalImgFailed] = useState<boolean>(false);
   const [inputError, setInputError] = useState<string | null>(null);
+  const [isLegalDetailOpen, setIsLegalDetailOpen] = useState<boolean>(false);
+  const [isLegalAgreed, setIsLegalAgreed] = useState<boolean>(false);
+  const [legalAgreedTimestamp, setLegalAgreedTimestamp] = useState<string>('');
 
   useEffect(() => {
     if (invoiceId?.trim() || smartOrder) {
@@ -474,6 +480,11 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
   const effectiveCode =
     customIdInput.trim() || invoiceId.trim() || smartOrder?.invoiceId || 'INV-SAMPLE';
+
+  useEffect(() => {
+    setIsLegalAgreed(false);
+    setLegalAgreedTimestamp('');
+  }, [effectiveCode]);
 
   const baseInvoice: PrivateInvoice = resolvePrivateInvoice(
     effectiveCode,
@@ -505,6 +516,17 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     }, 2200);
   };
 
+  const handleToggleLegalAgree = (checked: boolean) => {
+    if (checked) {
+      const nowWIB = formatLegalTimestampWIB(new Date());
+      setIsLegalAgreed(true);
+      setLegalAgreedTimestamp(nowWIB);
+    } else {
+      setIsLegalAgreed(false);
+      setLegalAgreedTimestamp('');
+    }
+  };
+
   const rawWaDigits = activeSettings.whatsappNumber.replace(/\D/g, '');
   const normalizedWa = rawWaDigits.startsWith('0')
     ? `62${rawWaDigits.slice(1)}`
@@ -519,20 +541,38 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
       ? 'COD / Private Hand-Delivery'
       : 'International Payment (PayPal / SWIFT)';
 
-  const confirmationMessage =
-    `Halo VORVAN Official Concierge — Andre Satria P, saya ingin mengonfirmasi pembayaran untuk Private Invoice berikut:\n\n` +
-    `• Kode Tagihan: ${baseInvoice.invoiceId}\n` +
-    `• Nama Klien: ${baseInvoice.buyerName}\n` +
-    `• Total Tagihan: ${formatIDRCurrency(totals.grandTotalIDR)}\n` +
-    `• Metode Pembayaran: ${paymentMethodLabel}\n\n` +
-    `Berikut saya lampirkan bukti pembayarannya. Terima kasih.`;
+  const perfumeSummaryDesc = baseInvoice.items
+    .map((item) => `${item.house} — ${item.fragranceName} (${item.volume})`)
+    .join(', ');
 
-  const whatsappConfirmUrl = `https://wa.me/${normalizedWa}?text=${encodeURIComponent(
-    confirmationMessage
-  )}`;
+  const effectiveTimestamp =
+    legalAgreedTimestamp || formatLegalTimestampWIB(new Date());
+
+  const confirmationMessage = buildVerifiedLegalWhatsAppMessage({
+    docNo: baseInvoice.invoiceId,
+    clientName: baseInvoice.buyerName,
+    perfumeDesc: perfumeSummaryDesc,
+    grandTotal: formatIDRCurrency(totals.grandTotalIDR),
+    paymentMethodLabel,
+    agreedTimestamp: effectiveTimestamp,
+  });
+
+  const whatsappConfirmUrl = buildVerifiedLegalWhatsAppUrl(
+    {
+      docNo: baseInvoice.invoiceId,
+      clientName: baseInvoice.buyerName,
+      perfumeDesc: perfumeSummaryDesc,
+      grandTotal: formatIDRCurrency(totals.grandTotalIDR),
+      paymentMethodLabel,
+      agreedTimestamp: effectiveTimestamp,
+    },
+    normalizedWa
+  );
   const telegramConfirmUrl = `https://t.me/${cleanTelegram}?text=${encodeURIComponent(
     confirmationMessage
   )}`;
+
+  const isPaymentUnlocked = baseInvoice.status === 'PAID' || isLegalAgreed;
 
   return (
     <section
@@ -867,24 +907,154 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </h3>
             </div>
 
+            {/* VORVAN LEGAL SHIELD — MANDATORY CLICKWRAP AGREEMENT & ANTI-DISPUTE MODULE */}
+            {baseInvoice.status !== 'PAID' && (
+              <div id="vorvan-legal-shield" data-testid="vorvan-legal-shield">
+                {/* Header Klausul */}
+                <div className="vorvan-legal-header">
+                  <span className="vorvan-legal-header-title">
+                    ⚖️ Ketentuan Transaksi, Kebijakan Final Sale &amp; Pelepasan Klaim
+                  </span>
+                  <button
+                    type="button"
+                    id="btn-toggle-legal"
+                    onClick={() => setIsLegalDetailOpen((prev) => !prev)}
+                  >
+                    {isLegalDetailOpen
+                      ? 'Tutup Ringkasan ▴'
+                      : 'Baca Klausul Lengkap ▾'}
+                  </button>
+                </div>
+
+                {/* Isi 5 Klausul Hukum Anti-Gugat (Bisa di-scroll / dibuka penuh) */}
+                <div
+                  id="vorvan-legal-clauses"
+                  className={isLegalDetailOpen ? 'expanded' : ''}
+                >
+                  <p className="vorvan-legal-clause-item">
+                    <strong>
+                      1. Status Kurasi Independen (Parallel Import Disclosure):
+                    </strong>{' '}
+                    Pembeli memahami dan menyetujui bahwa VORVAN beroperasi
+                    sebagai kurator independen jalur Parallel Import (distribusi
+                    langsung lintas negara non-afiliasi ritel mal lokal), di
+                    mana efisiensi harga 20%–30% merupakan keuntungan langsung
+                    dari pemangkasan rantai distribusi tersebut.
+                  </p>
+                  <p className="vorvan-legal-clause-item">
+                    <strong>
+                      2. Pelepasan Klaim Subjektif Aroma &amp; Perspektif Pribadi
+                      (Olfactory Waiver):
+                    </strong>{' '}
+                    Persepsi terhadap aroma (<em>notes</em>), proyeksi (
+                    <em>sillage</em>), ketahanan (<em>longevity</em>), variasi
+                    karakter antar-batch produksi (<em>maceration</em>), maupun{' '}
+                    <strong>
+                      perspektif atau ekspektasi subjektif pribadi Pembeli BUKAN
+                      merupakan cacat produk
+                    </strong>
+                    . Reaksi kimia parfum pada pH kulit dan suhu tubuh tiap
+                    individu bersifat unik, sehingga{' '}
+                    <strong>
+                      VORVAN menolak segala bentuk klaim, komplain, retur,
+                      refund, maupun gugatan yang didasarkan pada masalah aroma
+                      atau penilaian subjektif pribadi
+                    </strong>
+                    .
+                  </p>
+                  <p className="vorvan-legal-clause-item">
+                    <strong>
+                      3. Kebijakan Final Sale (Non-Returnable &amp;
+                      Non-Refundable):
+                    </strong>{' '}
+                    Demi standar higienitas, seluruh transaksi bersifat{' '}
+                    <strong>FINAL SALE</strong>. Produk yang telah dibuka segel
+                    plastiknya (<em>cellophane wrap</em>) atau telah
+                    disemprotkan tidak dapat ditukar atau dikembalikan dengan
+                    alasan apa pun.
+                  </p>
+                  <p className="vorvan-legal-clause-item">
+                    <strong>
+                      4. Garansi Pengiriman &amp; Fungsi Sprayer (Wajib Video
+                      Unboxing):
+                    </strong>{' '}
+                    Garansi penggantian unit baru berlaku penuh apabila: (a)
+                    botol pecah saat ekspedisi, (b) kendala fungsi semprotan
+                    (sprayer/atomizer macet atau tidak dapat menyemprot saat
+                    pertama kali dicoba), atau (c) kesalahan pengiriman varian
+                    oleh tim VORVAN. Syarat klaim cukup melampirkan Video
+                    Unboxing Tanpa Jeda/Edit (Uncut 360°) sejak paket masih
+                    tersegel rapat hingga pengetesan semprotan pertama, maksimal
+                    1x24 jam setelah status resi Delivered.
+                  </p>
+                  <p className="vorvan-legal-clause-item">
+                    <strong>
+                      5. Kesepakatan Layanan &amp; Kenyamanan Transaksi:
+                    </strong>{' '}
+                    Dengan mencentang kotak persetujuan di bawah ini dan
+                    melanjutkan pembayaran, Pembeli menyatakan telah memahami
+                    karakteristik produk serta menyetujui seluruh ketentuan
+                    layanan, kebijakan Final Sale, dan prosedur garansi VORVAN
+                    di atas secara sadar sebagai kesepakatan transaksi yang sah.
+                  </p>
+                </div>
+
+                {/* Kotak Centang Persetujuan Wajib (Clickwrap) */}
+                <label
+                  htmlFor="vorvan-agree-checkbox"
+                  className="vorvan-clickwrap-label"
+                >
+                  <input
+                    type="checkbox"
+                    id="vorvan-agree-checkbox"
+                    checked={isLegalAgreed}
+                    onChange={(e) => handleToggleLegalAgree(e.target.checked)}
+                  />
+                  <span className="vorvan-clickwrap-text">
+                    SAYA TELAH MEMBACA, MEMAHAMI, DAN MENYETUJUI SECARA SADAR
+                    SELURUH KETENTUAN FINAL SALE, KEBIJAKAN NON-RETUR, SERTA
+                    PELEPASAN KLAIM SUBJEKTIF AROMA &amp; PERSPEKTIF PRIBADI
+                    VORVAN DI ATAS.
+                  </span>
+                </label>
+
+                {/* Log Timestamp Persetujuan */}
+                {isLegalAgreed && legalAgreedTimestamp && (
+                  <div id="vorvan-legal-timestamp-log">
+                    ✓ Persetujuan Layanan Elektronik Tercatat:{' '}
+                    {legalAgreedTimestamp}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 3 Tabs Selector */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="tablist">
               <button
                 type="button"
                 role="tab"
+                disabled={!isPaymentUnlocked}
                 aria-selected={activePaymentTab === 'bank_transfer'}
-                onClick={() => setActivePaymentTab('bank_transfer')}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
-                  activePaymentTab === 'bank_transfer'
-                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg'
-                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E]'
+                onClick={() =>
+                  isPaymentUnlocked && setActivePaymentTab('bank_transfer')
+                }
+                className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                  !isPaymentUnlocked
+                    ? 'bg-zinc-900/80 text-zinc-400 border-zinc-700 cursor-not-allowed opacity-75'
+                    : activePaymentTab === 'bank_transfer'
+                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
+                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
                 }`}
                 data-testid="payment-tab-bank"
               >
-                <Building2 className="w-5 h-5 shrink-0 mt-0.5" />
+                {!isPaymentUnlocked ? (
+                  <Lock className="w-5 h-5 shrink-0 mt-0.5 text-zinc-400" />
+                ) : (
+                  <Building2 className="w-5 h-5 shrink-0 mt-0.5" />
+                )}
                 <div>
                   <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 1 · INDONESIA
+                    TAB 1 · INDONESIA {!isPaymentUnlocked && '(TERKUNCI)'}
                   </p>
                   <p className="text-xs sm:text-sm font-semibold mt-0.5">
                     TRANSFER BANK RESMI (INDONESIA)
@@ -895,19 +1065,28 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               <button
                 type="button"
                 role="tab"
+                disabled={!isPaymentUnlocked}
                 aria-selected={activePaymentTab === 'cod_hand_delivery'}
-                onClick={() => setActivePaymentTab('cod_hand_delivery')}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
-                  activePaymentTab === 'cod_hand_delivery'
-                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg'
-                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E]'
+                onClick={() =>
+                  isPaymentUnlocked && setActivePaymentTab('cod_hand_delivery')
+                }
+                className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                  !isPaymentUnlocked
+                    ? 'bg-zinc-900/80 text-zinc-400 border-zinc-700 cursor-not-allowed opacity-75'
+                    : activePaymentTab === 'cod_hand_delivery'
+                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
+                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
                 }`}
                 data-testid="payment-tab-cod"
               >
-                <Truck className="w-5 h-5 shrink-0 mt-0.5" />
+                {!isPaymentUnlocked ? (
+                  <Lock className="w-5 h-5 shrink-0 mt-0.5 text-zinc-400" />
+                ) : (
+                  <Truck className="w-5 h-5 shrink-0 mt-0.5" />
+                )}
                 <div>
                   <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 2 · PRIVATE COURIER
+                    TAB 2 · PRIVATE COURIER {!isPaymentUnlocked && '(TERKUNCI)'}
                   </p>
                   <p className="text-xs sm:text-sm font-semibold mt-0.5">
                     COD / PRIVATE HAND-DELIVERY (AREA TERDEKAT)
@@ -918,19 +1097,30 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               <button
                 type="button"
                 role="tab"
+                disabled={!isPaymentUnlocked}
                 aria-selected={activePaymentTab === 'international_paypal'}
-                onClick={() => setActivePaymentTab('international_paypal')}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
-                  activePaymentTab === 'international_paypal'
-                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg'
-                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E]'
+                onClick={() =>
+                  isPaymentUnlocked &&
+                  setActivePaymentTab('international_paypal')
+                }
+                className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                  !isPaymentUnlocked
+                    ? 'bg-zinc-900/80 text-zinc-400 border-zinc-700 cursor-not-allowed opacity-75'
+                    : activePaymentTab === 'international_paypal'
+                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
+                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
                 }`}
                 data-testid="payment-tab-international"
               >
-                <Globe className="w-5 h-5 shrink-0 mt-0.5" />
+                {!isPaymentUnlocked ? (
+                  <Lock className="w-5 h-5 shrink-0 mt-0.5 text-zinc-400" />
+                ) : (
+                  <Globe className="w-5 h-5 shrink-0 mt-0.5" />
+                )}
                 <div>
                   <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 3 · GLOBAL SETTLEMENT
+                    TAB 3 · GLOBAL SETTLEMENT{' '}
+                    {!isPaymentUnlocked && '(TERKUNCI)'}
                   </p>
                   <p className="text-xs sm:text-sm font-semibold mt-0.5">
                     INTERNATIONAL PAYMENT (PAYPAL QR &amp; SWIFT WIRE)
@@ -939,8 +1129,24 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </button>
             </div>
 
-            {/* TAB 1 CONTENT: TRANSFER BANK RESMI (INDONESIA) */}
-            {activePaymentTab === 'bank_transfer' && (
+            {!isPaymentUnlocked ? (
+              <div
+                id="vorvan-bank-locked-overlay"
+                className="p-6 sm:p-8 rounded-2xl bg-[#14131B] border border-dashed border-[#D4AF37]/45 text-center space-y-2"
+                data-testid="payment-tabs-locked-banner"
+              >
+                <Lock className="w-6 h-6 text-[#E5C87E] mx-auto" />
+                <p className="text-xs sm:text-sm text-zinc-200 font-medium">
+                  🔒 Silakan centang kotak persetujuan Syarat &amp; Ketentuan di
+                  atas untuk membuka Tab 1, Tab 2 &amp; Tab 3 (Nomor Rekening
+                  Resmi, QRIS, COD &amp; International Payment) serta Tombol
+                  Konfirmasi Pembayaran.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* TAB 1 CONTENT: TRANSFER BANK RESMI (INDONESIA) */}
+                {activePaymentTab === 'bank_transfer' && (
               <div
                 className="space-y-5 animate-fade-up"
                 data-testid="payment-content-bank"
@@ -1309,6 +1515,8 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 </div>
               </div>
             )}
+              </>
+            )}
 
             {/* BOTTOM CONFIRMATION BUTTONS: 2 TOMBOL KONFIRMASI EMAS */}
             <div className="pt-6 border-t border-[#D4AF37]/30 space-y-4">
@@ -1326,31 +1534,58 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <a
-                  href={whatsappConfirmUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer"
-                  data-testid="confirm-payment-wa-btn"
-                >
-                  <MessageCircle className="w-4 h-4 shrink-0" />
-                  <span>Konfirmasi Bukti Bayar via WhatsApp</span>
-                  <ArrowUpRight className="w-4 h-4 shrink-0" />
-                </a>
+                {!isPaymentUnlocked ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="py-4 px-5 rounded-xl bg-zinc-800 text-zinc-400 border border-zinc-700 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 cursor-not-allowed opacity-75"
+                    data-testid="confirm-payment-wa-btn"
+                  >
+                    <Lock className="w-4 h-4 shrink-0" />
+                    <span>Konfirmasi Pembayaran via WhatsApp (Terkunci)</span>
+                  </button>
+                ) : (
+                  <a
+                    href={whatsappConfirmUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer"
+                    data-testid="confirm-payment-wa-btn"
+                  >
+                    <MessageCircle className="w-4 h-4 shrink-0" />
+                    <span>Konfirmasi Bukti Bayar via WhatsApp</span>
+                    <ArrowUpRight className="w-4 h-4 shrink-0" />
+                  </a>
+                )}
 
-                <a
-                  href={telegramConfirmUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer"
-                  data-testid="confirm-payment-tg-btn"
-                >
-                  <Send className="w-4 h-4 shrink-0" />
-                  <span>
-                    Konfirmasi Bukti Bayar via Telegram (@{cleanTelegram})
-                  </span>
-                  <ArrowUpRight className="w-4 h-4 shrink-0" />
-                </a>
+                {!isPaymentUnlocked ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="py-4 px-5 rounded-xl bg-zinc-800 text-zinc-400 border border-zinc-700 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 cursor-not-allowed opacity-75"
+                    data-testid="confirm-payment-tg-btn"
+                  >
+                    <Lock className="w-4 h-4 shrink-0" />
+                    <span>
+                      Konfirmasi Pembayaran via Telegram (@{cleanTelegram})
+                      (Terkunci)
+                    </span>
+                  </button>
+                ) : (
+                  <a
+                    href={telegramConfirmUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer"
+                    data-testid="confirm-payment-tg-btn"
+                  >
+                    <Send className="w-4 h-4 shrink-0" />
+                    <span>
+                      Konfirmasi Bukti Bayar via Telegram (@{cleanTelegram})
+                    </span>
+                    <ArrowUpRight className="w-4 h-4 shrink-0" />
+                  </a>
+                )}
               </div>
             </div>
           </div>
