@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { VorvanCrestImage } from './VorvanLogo';
 import { getTranslation, SupportedLocale } from '../i18n/translations';
 
 interface WelcomeSplashScreenProps {
@@ -71,13 +70,9 @@ export const WelcomeSplashScreen: React.FC<WelcomeSplashScreenProps> = ({
         {t.vaultWhisper}
       </div>
 
-      {/* Center Seamless Transparent Logo & Welcome Headline */}
+      {/* Center Welcome Headline */}
       <div className="relative z-10 flex flex-col items-center text-center max-w-xl my-auto">
-        <div className="bg-transparent border-none animate-splash-monogram">
-          <VorvanCrestImage size="xl" />
-        </div>
-
-        <div className="mt-2 space-y-2.5 animate-fade-up">
+        <div className="space-y-2.5 animate-fade-up">
           <p className="font-latin-script text-3xl sm:text-4xl text-gold-champagne">
             {t.scriptCrown}
           </p>
