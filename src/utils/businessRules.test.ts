@@ -556,3 +556,64 @@ test('VORVAN Legal Shield Clickwrap Agreement timestamp and WhatsApp verificatio
   assert.ok(url.startsWith(`https://wa.me/${VORVAN_WHATSAPP_NUMBER}?text=`));
 });
 
+test('Tab 4 Concierge Guide (Panduan 81 Parfum — Iklim Indonesia) filters by moment, gender, and Indonesian scent keywords and formats WA recommendation', async () => {
+  const { filterConciergeGuide81, buildConciergeRecommendationWaText } =
+    await import('./businessRules.ts');
+  const { CONCIERGE_81_GUIDE } = await import('../data/conciergeGuide81.ts');
+
+  assert.equal(CONCIERGE_81_GUIDE.length, 81);
+
+  const allItems = filterConciergeGuide81('', 'ALL', 'All');
+  assert.equal(allItems.length, 81);
+
+  // Filter by moment
+  const hotDayItems = filterConciergeGuide81('', 'HOT_DAY', 'All');
+  assert.ok(hotDayItems.length > 0);
+  assert.ok(hotDayItems.some((item) => item.name === 'Afternoon Swim'));
+  assert.ok(hotDayItems.some((item) => item.name === 'Imagination'));
+
+  const sultanItems = filterConciergeGuide81('', 'SULTAN_GALA', 'All');
+  assert.ok(sultanItems.some((item) => item.name === 'Ombre Nomade'));
+  assert.ok(
+    sultanItems.some((item) => item.name === 'Baccarat Rouge 540 Extrait')
+  );
+
+  // Filter by gender + keyword ("vanilla")
+  const menVanilla = filterConciergeGuide81('vanilla', 'ALL', 'Men');
+  assert.ok(menVanilla.length > 0);
+  assert.ok(menVanilla.every((item) => item.gender === 'Men'));
+  assert.ok(
+    menVanilla.some((item) => item.name.includes('Uomo Born in Roma Intense'))
+  );
+
+  // Format WA recommendation
+  const ubirIntense = CONCIERGE_81_GUIDE.find((item) => item.no === 78)!;
+  assert.equal(
+    ubirIntense.simpleNotes,
+    'Vanilla Bourbon hangat, Lavender bersih, & Smoky Vetiver maskulin'
+  );
+  assert.equal(
+    ubirIntense.climateAdvice,
+    '🌙 SPESIALIS MALAM, NGEDATE & RUANGAN AC (Hindari panas terik siang bolong)'
+  );
+
+  const waText = buildConciergeRecommendationWaText(ubirIntense);
+  assert.ok(waText.includes('✨ *Rekomendasi Concierge VORVAN:*'));
+  assert.ok(
+    waText.includes(
+      '• *Koleksi:* Valentino — Uomo Born in Roma Intense EDP (100ml)'
+    )
+  );
+  assert.ok(
+    waText.includes(
+      '• *Karakter Aroma:* Vanilla Bourbon hangat, Lavender bersih, & Smoky Vetiver maskulin'
+    )
+  );
+  assert.ok(waText.includes('• *Valuasi Resmi Butik:* ~Rp 2.650.000~'));
+  assert.ok(
+    waText.includes(
+      '• *Harga Kurasi VORVAN (Hemat 23%):* *Rp 2.040.000* (Full-Size Sealed + Digital Certificate)'
+    )
+  );
+});
+

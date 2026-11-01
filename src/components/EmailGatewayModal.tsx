@@ -31,14 +31,21 @@ import {
 } from '../types/fragrance';
 import {
   autoDetectShippingZoneByCity,
+  buildConciergeRecommendationWaText,
   buildSmartShareUrl,
   computeAutoShippingStage,
+  filterConciergeGuide81,
   filterVorvanCheatSheet,
   formatIDRCurrency,
   resolveCourierMetadata,
   resolveVorvanSkuPricing,
   validateConciergeEmail,
 } from '../utils/businessRules';
+import {
+  CONCIERGE_MOMENT_BUTTONS,
+  ConciergeGenderFilterKey,
+  ConciergeMomentFilterKey,
+} from '../data/conciergeGuide81';
 
 const ADMIN_COURIER_OPTIONS: ShippingMethodType[] = [
   'JNE',
@@ -223,9 +230,16 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   const [isPinUnlocked, setIsPinUnlocked] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>('');
   const [pinError, setPinError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'create' | 'settings' | 'database'>(
-    'create'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'create' | 'settings' | 'database' | 'concierge'
+  >('create');
+
+  // Tab 4: Concierge Guide (Panduan 81 Parfum — Iklim Indonesia) state
+  const [guideQuery, setGuideQuery] = useState<string>('');
+  const [guideMomentFilter, setGuideMomentFilter] =
+    useState<ConciergeMomentFilterKey>('ALL');
+  const [guideGenderFilter, setGuideGenderFilter] =
+    useState<ConciergeGenderFilterKey>('All');
 
   // Default initial SKU #1 (LV Afternoon Swim)
   const initialSku = VORVAN_81_CATALOG[0];
@@ -343,6 +357,12 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   const filteredCheatSheetItems = filterVorvanCheatSheet(
     cheatSheetQuery,
     cheatSheetTier
+  );
+
+  const filteredConciergeGuideItems = filterConciergeGuide81(
+    guideQuery,
+    guideMomentFilter,
+    guideGenderFilter
   );
 
   const handlePinSubmit = (e: React.FormEvent) => {
@@ -559,8 +579,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
             </button>
           </div>
 
-          {/* 3 ADMIN TABS */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {/* 4 ADMIN TABS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             <button
               type="button"
               onClick={() => setActiveTab('create')}
@@ -620,6 +640,27 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 </p>
                 <p className="text-xs font-semibold truncate">
                   Email Klien ({leads.length}) &amp; Semua Resi
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('concierge')}
+              className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
+                activeTab === 'concierge'
+                  ? 'btn-luxury-gold text-zinc-950 font-bold'
+                  : 'bg-[#0B0A0E] text-zinc-300 border-[#D4AF37]/30 hover:border-[#E5C87E]'
+              }`}
+              data-testid="admin-tab-concierge"
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-brand text-[10px] uppercase tracking-wider truncate">
+                  TAB 4 · CONCIERGE GUIDE
+                </p>
+                <p className="text-xs font-semibold truncate">
+                  Panduan 81 Parfum — Iklim Indonesia
                 </p>
               </div>
             </button>
@@ -1817,8 +1858,260 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
               </div>
             </div>
           )}
+
+          {/* TAB 4: CONCIERGE GUIDE (PANDUAN 81 PARFUM — IKLIM INDONESIA) */}
+          {activeTab === 'concierge' && (
+            <div className="space-y-5" data-testid="admin-concierge-guide-panel">
+              {/* Top Filter Bar: Moment/Weather Buttons, Gender Pills & Instant Search */}
+              <div className="p-5 rounded-2xl bg-[#0B0A0E] border border-[#D4AF37]/40 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+                  <div>
+                    <span className="font-brand text-[10px] uppercase tracking-[0.2em] text-[#E5C87E] block">
+                      CONTEKAN ADMIN SAAT DITANYA PEMBELI · 81 SKU RESMI VORVAN
+                    </span>
+                    <h3 className="font-serif-luxury text-xl sm:text-2xl font-semibold text-white">
+                      Panduan Karakter Wangi, Momen Pakai &amp; Cuaca Indonesia
+                    </h3>
+                  </div>
+                  <span className="text-xs font-mono-tabular text-[#F5E6B8] bg-[#16141F] border border-[#D4AF37]/35 px-3 py-1.5 rounded-lg self-start sm:self-auto">
+                    Menampilkan {filteredConciergeGuideItems.length} dari 81 Parfum
+                  </span>
+                </div>
+
+                {/* 1. Filter Klik Cepat Berdasarkan Momen & Cuaca Indonesia */}
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    Filter Klik Cepat Momen &amp; Cuaca Indonesia:
+                  </label>
+                  <div
+                    className="flex flex-wrap gap-2"
+                    role="group"
+                    aria-label="Filter Momen dan Cuaca Indonesia"
+                  >
+                    {CONCIERGE_MOMENT_BUTTONS.map((btn) => {
+                      const isActive = guideMomentFilter === btn.key;
+                      return (
+                        <button
+                          key={btn.key}
+                          type="button"
+                          onClick={() => setGuideMomentFilter(btn.key)}
+                          data-testid={`concierge-moment-${btn.key.toLowerCase()}`}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                            isActive
+                              ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] font-bold shadow-md'
+                              : 'bg-[#14131A] text-zinc-200 border-zinc-700 hover:border-[#D4AF37]/60'
+                          }`}
+                        >
+                          {btn.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Gender Filter + Search Input */}
+                <div className="flex flex-col md:flex-row gap-3 pt-1">
+                  <div
+                    className="flex items-center gap-1.5 flex-wrap"
+                    role="group"
+                    aria-label="Filter Gender Concierge"
+                  >
+                    {(['All', 'Men', 'Women', 'Unisex'] as ConciergeGenderFilterKey[]).map(
+                      (gKey) => {
+                        const isGenderActive = guideGenderFilter === gKey;
+                        return (
+                          <button
+                            key={gKey}
+                            type="button"
+                            onClick={() => setGuideGenderFilter(gKey)}
+                            data-testid={`concierge-gender-${gKey.toLowerCase()}`}
+                            className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                              isGenderActive
+                                ? 'bg-[#E5C87E] text-zinc-950 border-[#F5E6B8] font-bold'
+                                : 'bg-[#14131A] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/50'
+                            }`}
+                          >
+                            {gKey}
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+
+                  <div className="flex-1 relative">
+                    <input
+                      id="concierge-guide-search"
+                      type="text"
+                      value={guideQuery}
+                      onChange={(e) => setGuideQuery(e.target.value)}
+                      placeholder='Cari parfum, brand, atau wangi ("vanilla", "jeruk", "kopi", "teh", "manis", "segar", "oud")...'
+                      data-testid="concierge-guide-search-input"
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-xs sm:text-sm text-white placeholder:text-zinc-500 outline-none"
+                    />
+                    {guideQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setGuideQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Kartu Panduan Iklim Indonesia untuk Seluruh 81 Parfum */}
+              {filteredConciergeGuideItems.length === 0 ? (
+                <div className="p-8 rounded-2xl bg-[#0B0A0E] border border-zinc-800 text-center space-y-3">
+                  <p className="text-sm text-zinc-300 font-medium">
+                    Tidak ditemukan parfum yang cocok dengan filter / kata kunci tersebut.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGuideQuery('');
+                      setGuideMomentFilter('ALL');
+                      setGuideGenderFilter('All');
+                    }}
+                    className="px-4 py-2 rounded-xl btn-luxury-gold text-zinc-950 text-xs font-bold cursor-pointer"
+                  >
+                    Tampilkan Kembali Semua 81 Parfum
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredConciergeGuideItems.map((item) => {
+                    const copyKey = `wa-rec-${item.no}`;
+                    const isCopied = copiedKey === copyKey;
+                    const climateBadgeStyle =
+                      item.climateCategory === 'HOT_SAFE'
+                        ? 'bg-emerald-950/75 border-emerald-500/50 text-emerald-300'
+                        : item.climateCategory === 'NIGHT_AC'
+                        ? 'bg-amber-950/70 border-[#D4AF37]/60 text-[#F5E6B8]'
+                        : 'bg-purple-950/75 border-purple-400/55 text-purple-200';
+
+                    return (
+                      <div
+                        key={item.no}
+                        data-testid={`concierge-card-${item.no}`}
+                        className="p-4 sm:p-5 rounded-2xl bg-[#0B0A0E] border border-[#D4AF37]/35 hover:border-[#E5C87E]/75 transition-all flex flex-col justify-between space-y-4"
+                      >
+                        <div className="space-y-3">
+                          {/* Top Row: Brand, Variant, Gender, Size & Pricing */}
+                          <div className="flex items-start justify-between gap-3 border-b border-zinc-800/90 pb-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-mono-tabular px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-zinc-400">
+                                  #{item.no}
+                                </span>
+                                <span className="font-brand text-[11px] uppercase tracking-wider text-[#E5C87E] font-bold">
+                                  {item.brand}
+                                </span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#181622] border border-[#D4AF37]/30 text-zinc-200 font-medium">
+                                  {item.gender} · {item.size}
+                                </span>
+                              </div>
+                              <h4 className="mt-1 font-serif-luxury text-lg sm:text-xl font-semibold text-white leading-snug">
+                                {item.name}
+                              </h4>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <div className="text-[11px] font-mono-tabular text-zinc-400 line-through">
+                                Rp {item.retail.toLocaleString('id-ID')}
+                              </div>
+                              <div className="text-sm sm:text-base font-mono-tabular font-bold text-[#F5E6B8]">
+                                Rp {item.price.toLocaleString('id-ID')}
+                              </div>
+                              <span className="inline-block text-[10px] font-mono-tabular font-semibold px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
+                                Hemat {item.disc}%
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Simple Indonesian Notes */}
+                          <div className="p-3 rounded-xl bg-[#13121A] border border-zinc-800/90 space-y-1">
+                            <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+                              Profil Wangi Bahasa Simpel (Notes):
+                            </span>
+                            <p className="text-xs sm:text-sm text-zinc-100 leading-relaxed font-medium">
+                              “{item.simpleNotes}”
+                            </p>
+                          </div>
+
+                          {/* Recommended Moments Badges */}
+                          <div className="space-y-1.5">
+                            <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+                              Rekomendasi Momen Pakai:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {item.momentBadges.map((badge) => (
+                                <span
+                                  key={badge}
+                                  className="px-2.5 py-1 rounded-lg bg-[#171522] border border-[#D4AF37]/35 text-[11px] text-[#F5E6B8] font-medium"
+                                >
+                                  [{badge}]
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Indonesian Climate Advice Banner */}
+                          <div
+                            className={`p-2.5 rounded-xl border text-[11px] sm:text-xs font-bold leading-snug ${climateBadgeStyle}`}
+                          >
+                            {item.climateAdvice}
+                          </div>
+                        </div>
+
+                        {/* 3. Tombol 1-Klik Salin Kalimat Rekomendasi WA */}
+                        <div className="pt-2 border-t border-zinc-800/80 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCopyText(
+                                buildConciergeRecommendationWaText(item),
+                                copyKey
+                              )
+                            }
+                            data-testid={`copy-wa-rec-${item.no}`}
+                            className="flex-1 py-2.5 px-3.5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.99]"
+                          >
+                            {isCopied ? (
+                              <>
+                                <Check className="w-4 h-4 shrink-0" />
+                                <span>Teks Rekomendasi WA Tersalin!</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>📋 Salin Rekomendasi WA</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleSelectPerfumeByIdOrIndex(item.no - 1);
+                              setActiveTab('create');
+                            }}
+                            title="Masukkan parfum ini ke Formulir Invoice Tab 1"
+                            className="py-2.5 px-3 rounded-xl bg-[#15141D] hover:bg-[#1E1C29] border border-[#D4AF37]/40 text-[11px] text-[#F5E6B8] font-semibold cursor-pointer shrink-0"
+                          >
+                            Buat Invoice →
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 };
+

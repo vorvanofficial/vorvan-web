@@ -9,6 +9,12 @@ import {
   VORVAN_WHATSAPP_NUMBER,
 } from '../data/catalog';
 import {
+  CONCIERGE_81_GUIDE,
+  ConciergeGenderFilterKey,
+  ConciergeGuideEntry,
+  ConciergeMomentFilterKey,
+} from '../data/conciergeGuide81';
+import {
   BrandHouseId,
   CustomAdminOrder,
   FragranceItem,
@@ -1438,5 +1444,65 @@ export function buildVerifiedLegalWhatsAppUrl(
     : rawDigits || VORVAN_WHATSAPP_NUMBER;
   const msg = buildVerifiedLegalWhatsAppMessage(params);
   return `https://wa.me/${normalizedWa}?text=${encodeURIComponent(msg)}`;
+}
+
+/**
+ * Filters the 81 Indonesian Climate & Moment Concierge Guide entries
+ * by moment/weather button, gender, and instant search query (brand, perfume name, scent notes, keywords).
+ */
+export function filterConciergeGuide81(
+  query: string = '',
+  momentFilter: ConciergeMomentFilterKey = 'ALL',
+  genderFilter: ConciergeGenderFilterKey = 'All'
+): ConciergeGuideEntry[] {
+  const cleanQuery = query.trim().toLowerCase();
+  const terms = cleanQuery ? cleanQuery.split(/\s+/).filter(Boolean) : [];
+
+  return CONCIERGE_81_GUIDE.filter((item) => {
+    if (momentFilter !== 'ALL' && !item.momentKeys.includes(momentFilter)) {
+      return false;
+    }
+    if (genderFilter !== 'All' && item.gender !== genderFilter) {
+      return false;
+    }
+    if (terms.length > 0) {
+      const haystack = [
+        item.brand,
+        item.name,
+        item.gender,
+        item.size,
+        item.simpleNotes,
+        item.searchKeywords,
+        item.momentBadges.join(' '),
+        item.climateAdvice,
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      return terms.every((t) => haystack.includes(t));
+    }
+    return true;
+  });
+}
+
+/**
+ * Formats the 1-Click WhatsApp Concierge Recommendation text for a buyer.
+ */
+export function buildConciergeRecommendationWaText(
+  entry: ConciergeGuideEntry
+): string {
+  const formattedBadges = entry.momentBadges.map((b) => `[${b}]`).join(' ');
+  const momentAndClimate = `${formattedBadges} — ${entry.climateAdvice}`;
+  const formattedRetail = entry.retail.toLocaleString('id-ID');
+  const formattedPrice = entry.price.toLocaleString('id-ID');
+
+  return (
+    `✨ *Rekomendasi Concierge VORVAN:*\n` +
+    `• *Koleksi:* ${entry.brand} — ${entry.name} (${entry.size})\n` +
+    `• *Karakter Aroma:* ${entry.simpleNotes}\n` +
+    `• *Kecocokan Iklim & Momen:* ${momentAndClimate}\n` +
+    `• *Valuasi Resmi Butik:* ~Rp ${formattedRetail}~\n` +
+    `• *Harga Kurasi VORVAN (Hemat ${entry.disc}%):* *Rp ${formattedPrice}* (Full-Size Sealed + Digital Certificate)`
+  );
 }
 
