@@ -115,6 +115,111 @@ export function saveCustomAdminOrders(orders: CustomAdminOrder[]): void {
   }
 }
 
+export const VORVAN_PAYMENT_PROOFS_STORAGE_KEY = 'vorvan_payment_proofs_v1';
+
+export interface PaymentProofRecord {
+  proofUrl: string;
+  uploadedAt: string;
+  ts: number;
+}
+
+const memoryProofsMap: Record<string, PaymentProofRecord> = {};
+
+export function loadPaymentProofsMap(): Record<string, PaymentProofRecord> {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(VORVAN_PAYMENT_PROOFS_STORAGE_KEY);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return { ...memoryProofsMap };
+}
+
+export function savePaymentProofRecord(
+  invoiceId: string,
+  proofUrl: string,
+  uploadedAt: string
+): void {
+  const cleanId = invoiceId.trim().toUpperCase();
+  memoryProofsMap[cleanId] = {
+    proofUrl,
+    uploadedAt,
+    ts: Date.now(),
+  };
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const current = loadPaymentProofsMap();
+      current[cleanId] = {
+        proofUrl,
+        uploadedAt,
+        ts: Date.now(),
+      };
+      window.localStorage.setItem(
+        VORVAN_PAYMENT_PROOFS_STORAGE_KEY,
+        JSON.stringify(current)
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Compresses an uploaded payment transfer proof image using HTML5 Canvas (max-width: 600px, JPEG quality: 0.7)
+ * to produce a lightweight Base64 data URL (< 50 KB) that persists cleanly across storage and cloud packets.
+ */
+export function compressPaymentProofImage(
+  file: File,
+  maxWidth: number = 600,
+  quality: number = 0.7
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file || (file.type && !file.type.startsWith('image/'))) {
+      reject(new Error('File yang diunggah harus berupa file gambar (JPG/PNG).'));
+      return;
+    }
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      resolve('');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Gagal membaca file gambar.'));
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onerror = () => reject(new Error('Gagal memproses file gambar.'));
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        // Fill white background for transparent PNGs
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function formatInquiryMessage(
   fragrance: Pick<FragranceItem, 'house' | 'name' | 'concentration'> & {
     gender?: GenderCategory;
@@ -544,6 +649,8 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
     awb,
     buyer,
     city,
+    sanitize(order.buyerEmail || ''),
+    sanitize(order.buyerPhone || ''),
   ].join('|');
 
   return toBase64Url(compactPipe);
@@ -683,6 +790,8 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             rawAwb,
             rawBuyer,
             rawCity = 'Indonesia',
+            rawEmail = '',
+            rawPhone = '',
           ] = parts;
 
           const invTrim = (rawInvShort || '').trim().toUpperCase();
@@ -776,6 +885,8 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             createdAt: 'Terverifikasi · WIB',
             buyerName: rawBuyer.trim(),
             buyerCity: cleanCity,
+            buyerEmail: rawEmail.trim() || undefined,
+            buyerPhone: rawPhone.trim() || undefined,
             house,
             fragranceName,
             concentration,
@@ -815,7 +926,28 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
 }
 
 /**
+ * Automatically detects the base domain for official invoice and tracking links.
+ * When running in AI Studio, Google User Content, or local development, defaults to the official
+ * production deployment (https://vorvan-official.vercel.app).
+ * When running on custom domains (.com, .id, or custom production hosts), dynamically adopts window.location.origin.
+ */
+export function getVorvanBaseDomain(): string {
+  if (typeof window === 'undefined') {
+    return 'https://vorvan-official.vercel.app';
+  }
+  const hostname = window.location.hostname || '';
+  return (
+    hostname.includes('aistudio') ||
+    hostname.includes('googleusercontent') ||
+    hostname === 'localhost'
+  )
+    ? 'https://vorvan-official.vercel.app'
+    : window.location.origin;
+}
+
+/**
  * Generates an ultra-short Smart Shareable URL (`?v=...`) for WhatsApp/Telegram.
+ * Uses dynamic domain detection so moving to custom domains (.com / .id) works seamlessly.
  */
 export function buildSmartShareUrl(
   order: CustomAdminOrder,
@@ -823,14 +955,65 @@ export function buildSmartShareUrl(
   originOverride?: string
 ): string {
   const token = encodeSmartOrderParam(order);
-  const origin =
-    originOverride ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://vorvan.id');
+  const origin = originOverride || getVorvanBaseDomain();
   if (mode === 'invoice') {
     return `${origin}/pay/${order.invoiceId.trim().toUpperCase()}?v=${token}`;
   }
-  const trackCode = (order.trackingId || order.awbNumber || order.invoiceId).trim();
+  const trackCode = (order.awbNumber || order.trackingId || order.invoiceId).trim();
   return `${origin}/track/${encodeURIComponent(trackCode)}?v=${token}`;
+}
+
+/**
+ * Normalizes an Indonesian phone number to E.164 without plus (e.g., '0812...' -> '62812...').
+ */
+export function normalizeIndonesianPhoneNumber(phone: string): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) {
+    return `62${digits.slice(1)}`;
+  }
+  if (digits.startsWith('62')) {
+    return digits;
+  }
+  return `62${digits}`;
+}
+
+/**
+ * Generates an official luxury 1-Click WhatsApp link targeting the buyer's phone number directly
+ * with a pre-filled luxury invoice greeting, item details, grand total, official invoice link,
+ * and live tracking link using automatic domain detection.
+ */
+export function buildBuyerInvoiceWhatsAppUrl(
+  order: CustomAdminOrder,
+  originOverride?: string
+): string {
+  const baseDomain = originOverride || getVorvanBaseDomain();
+  const invoiceUrl = buildSmartShareUrl(order, 'invoice', baseDomain);
+  const trackUrl = buildSmartShareUrl(order, 'track', baseDomain);
+  const grandTotal =
+    order.dealPriceIDR + (order.shippingCostIDR || 0);
+  const formattedTotal = formatIDRCurrency(grandTotal);
+
+  const normalizedPhone = normalizeIndonesianPhoneNumber(order.buyerPhone || '');
+
+  const message =
+    `Yth. ${order.buyerName},\n\n` +
+    `Terima kasih telah mempercayakan alokasi parfum niche & koleksi eksklusif Anda kepada VORVAN.\n\n` +
+    `Berikut rincian Tagihan Resmi Privat & Resi Pengiriman Anda:\n` +
+    `• Nomor Tagihan: #${order.invoiceId}\n` +
+    `• Flacon Parfum: ${order.house} — ${order.fragranceName} (${order.volume})\n` +
+    `• Total Tagihan: ${formattedTotal}\n` +
+    `• Ekspedisi: ${order.shippingMethod} (AWB: ${order.awbNumber})\n\n` +
+    `Silakan klik tautan resmi berikut untuk melihat dokumen tagihan, panduan pembayaran, dan jaminan keaslian:\n` +
+    `👉 Link Tagihan Resmi: ${invoiceUrl}\n\n` +
+    `Lacak posisi kargo berasuransi Anda secara langsung:\n` +
+    `👉 Link Lacak Pengiriman: ${trackUrl}\n\n` +
+    `Hormat kami,\n` +
+    `VORVAN Concierge Team — Andre Satria P\n` +
+    `Haute Parfumerie & Olfactory Vault`;
+
+  const phoneTarget = normalizedPhone || VORVAN_WHATSAPP_NUMBER;
+  return `https://wa.me/${phoneTarget}?text=${encodeURIComponent(message)}`;
 }
 
 export function buildInvoiceFromCustomOrder(
@@ -886,6 +1069,8 @@ export function buildInvoiceFromCustomOrder(
     retailPriceTotalIDR,
     discountPct,
     shippingLabel,
+    paymentProofUrl: order.paymentProofUrl,
+    paymentProofUploadedAt: order.paymentProofUploadedAt,
     notes: `Metode Pengiriman: ${order.shippingMethod} (Resi: ${order.awbNumber}). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`,
     items: [
       {
@@ -1143,11 +1328,24 @@ export function resolvePrivateInvoice(
 ): PrivateInvoice {
   const normalized = rawInvoiceId.trim().toUpperCase();
 
+  const attachProof = (inv: PrivateInvoice): PrivateInvoice => {
+    const proofs = loadPaymentProofsMap();
+    const stored = proofs[normalized] || proofs[inv.invoiceId.toUpperCase()];
+    if (stored && !inv.paymentProofUrl) {
+      return {
+        ...inv,
+        paymentProofUrl: stored.proofUrl,
+        paymentProofUploadedAt: stored.uploadedAt,
+      };
+    }
+    return inv;
+  };
+
   if (
     smartOrder &&
     (!normalized || smartOrder.invoiceId.toUpperCase() === normalized)
   ) {
-    return buildInvoiceFromCustomOrder(smartOrder);
+    return attachProof(buildInvoiceFromCustomOrder(smartOrder));
   }
 
   const ordersList = customOrders ?? loadCustomAdminOrders();
@@ -1157,7 +1355,7 @@ export function resolvePrivateInvoice(
       o.awbNumber.toUpperCase() === normalized
   );
   if (matchedCustom) {
-    return buildInvoiceFromCustomOrder(matchedCustom);
+    return attachProof(buildInvoiceFromCustomOrder(matchedCustom));
   }
 
   if (!normalized || PRIVATE_INVOICES_SEED[normalized]) {
@@ -1181,7 +1379,7 @@ export function resolvePrivateInvoice(
         ? Math.round(((retailSum - subtotal) / retailSum) * 100)
         : 28;
     const detectedZone = autoDetectShippingZoneByCity(seed.buyerCity);
-    return {
+    return attachProof({
       ...seed,
       retailPriceTotalIDR: seed.retailPriceTotalIDR ?? retailSum,
       discountPct: seed.discountPct ?? discPct,
@@ -1189,7 +1387,7 @@ export function resolvePrivateInvoice(
         seed.shippingLabel ||
         detectedZone?.label ||
         'Pengiriman Berasuransi & Double-Wall Thermal Box',
-    };
+    });
   }
 
   const hash = Array.from(normalized).reduce(
@@ -1207,7 +1405,7 @@ export function resolvePrivateInvoice(
     sampleSku?.disc ||
     Math.round(((retailPrice - basePrice) / retailPrice) * 100);
 
-  return {
+  return attachProof({
     invoiceId: normalized,
     createdAt: '26 Okt 2026 · 15:00 WIB',
     expiresAt: '27 Okt 2026 · 15:00 WIB',
@@ -1235,7 +1433,7 @@ export function resolvePrivateInvoice(
         unitPriceIDR: basePrice,
       },
     ],
-  };
+  });
 }
 
 /**
@@ -1403,6 +1601,7 @@ export function buildVerifiedLegalWhatsAppMessage(params: {
   grandTotal: string;
   paymentMethodLabel?: string;
   agreedTimestamp: string;
+  paymentProofUploadedAt?: string;
 }): string {
   const docNo = params.docNo.trim() || '-';
   const clientName = params.clientName.trim() || '-';
@@ -1414,6 +1613,9 @@ export function buildVerifiedLegalWhatsAppMessage(params: {
   const unitLine = params.perfumeDesc?.trim()
     ? `• Unit Kurasi: ${params.perfumeDesc.trim()}\n`
     : '';
+  const proofLine = params.paymentProofUploadedAt?.trim()
+    ? `• Bukti Transfer: [TERUPLOAD & TEREKAM DI VAULT ADMIN (${params.paymentProofUploadedAt.trim()})]\n`
+    : '';
 
   return (
     `Halo VORVAN Official Concierge — Andre Satria P, saya ingin mengonfirmasi pembayaran untuk Private Invoice berikut:\n\n` +
@@ -1421,9 +1623,11 @@ export function buildVerifiedLegalWhatsAppMessage(params: {
     `• Nama Klien: ${clientName}\n` +
     unitLine +
     `• Total Tagihan: ${grandTotal}\n` +
-    `• Metode Pembayaran: ${paymentMethodLabel}\n\n` +
+    `• Metode Pembayaran: ${paymentMethodLabel}\n` +
+    proofLine +
+    `\n` +
     `✅ [Persetujuan Layanan Elektronik Tercatat pada ${agreedTimestamp}: Saya telah membaca dan menyetujui Ketentuan Layanan, Garansi Unboxing & Sprayer, Kebijakan Final Sale, serta Karakteristik Subjektif Aroma VORVAN].\n\n` +
-    `Berikut saya lampirkan bukti pembayarannya. Terima kasih.`
+    `Foto bukti transfer telah terunggah pada sistem invoice resmi. Mohon verifikasi & proses pengiriman flacon parfum saya. Terima kasih.`
   );
 }
 
@@ -1435,6 +1639,7 @@ export function buildVerifiedLegalWhatsAppUrl(
     grandTotal: string;
     paymentMethodLabel?: string;
     agreedTimestamp: string;
+    paymentProofUploadedAt?: string;
   },
   waNumber: string = VORVAN_WHATSAPP_NUMBER
 ): string {

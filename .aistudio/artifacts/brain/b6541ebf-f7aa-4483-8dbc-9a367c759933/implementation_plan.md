@@ -1,84 +1,35 @@
-# VORVAN — Private Selection Tray (Multi-Fragrance WhatsApp Bundle Inquiry)
+# Sistem 3 Tahap Kunci (3-Stage Gate) & Upload Bukti Bayar Otomatis VORVAN
 
-Menambahkan fitur **Private Selection Tray (Baki Kurasi Privat)** pada butik parfum mewah **VORVAN** agar kolektor dapat memilih beberapa botol parfum sekaligus (lintas *brand*, gender, dan ukuran volume `ml`) lalu mengirimkan satu pesan **Penawaran Paket (Bundle Quotation)** terstruktur ke WhatsApp Concierge VORVAN.
+## Status: SELESAI & TERVERIFIKASI PENUH
 
-## User Review & Critical Decisions
+### 1. Tiga Tahap Kunci (3-Stage Gate) di Halaman Invoice Pembeli (`/pay/...`)
+1. **Tahap 1 (Sebelum Checkbox Klausul Dicentang):**
+   - Daftar Rekening (Mandiri, BNI, BRI), QRIS, COD, International Payment, Kotak Upload Bukti Bayar, serta Tombol Konfirmasi WhatsApp & Telegram berada dalam kondisi **TERKUNCI**.
+   - Menampilkan banner gembok elegan instruksi persetujuan klausul.
+2. **Tahap 2 (Setelah Checkbox Klausul Dicentang, TAPI Belum Upload Bukti Bayar):**
+   - Membuka Daftar Rekening Bank, QRIS, COD, & International Payment serta modul **"📤 UPLOAD BUKTI PEMBAYARAN (Wajib Foto/Screenshot Transfer)"**.
+   - **TETAP TERKUNCI:** Tombol Konfirmasi WhatsApp dan Telegram tetap abu-abu (`disabled`) dengan teks:
+     - `🔒 Upload Bukti Transfer Untuk Membuka Konfirmasi WA`
+     - `🔒 Upload Bukti Transfer Untuk Membuka Konfirmasi Telegram`
+3. **Tahap 3 (Setelah Pembeli Mengunggah Foto Bukti Bayar):**
+   - Menampilkan thumbnail preview foto bukti transfer beserta waktu unggah (WIB).
+   - Gambar dikompresi otomatis via HTML5 `<canvas>` (maks lebar 600px, JPEG 0.7) menjadi Base64 ringkas (< 50 KB).
+   - Otomatis terekam ke data invoice Web Admin (`vorvan_payment_proofs_v1`, `vorvan_custom_admin_orders_v1`, Cloud Vault Real-Time Packet `VORVAN_PAYMENT_PROOF`, dan Webhook Google Apps Script).
+   - **MEMBUKA** tombol Konfirmasi WhatsApp dan Telegram menjadi tombol emas aktif bersinar dengan teks lampiran bukti bayar.
+   - Dilengkapi modal lightbox untuk memeriksa foto bukti bayar beresolusi penuh.
 
-> [!IMPORTANT]
-> Berdasarkan diskusi pada tahap klarifikasi, fokus pengembangan ini adalah menghadirkan **Private Selection Tray** tanpa mengubah tata letak atau aturan bisnis yang sudah berjalan (*Price on Request*, *Email Gateway*, *Private Invoice*, *Lacak Resi*, dan *Multi-Bahasa*).
+### 2. Fitur Bukti Transfer di Secret Admin Dashboard
+- **Tab 3 ("Database & Kode Aktif"):**
+   - Kolom khusus **"Bukti Transfer"** pada tabel pesanan invoice.
+   - Thumbnail foto bukti bayar yang dapat diklik.
+   - Badge status: `📥 Terupload` beserta jam unggah (WIB).
+   - Tombol **"👁️ Lihat Bukti Bayar"** untuk membuka modal lightbox layar penuh.
+   - Tombol 1-Klik **"✅ Verifikasi Lunas (PAID)"** untuk langsung menandai pesanan lunas terverifikasi.
+- **Tab 2 ("Pengaturan"):**
+   - Toggle switch **"Mode Otomatis Lunas (Auto-PAID) Saat Bukti Bayar Diunggah"** (`autoPaidOnProofUpload`).
+   - Jika diaktifkan, status pesanan otomatis berganti ke `PAID` saat pembeli selesai mengunggah file.
 
-- **Confirmed Decision 1 (Private Tray Multi-Parfum via WhatsApp)**: Setiap kartu parfum dan modal *Olfactory Dossier* akan dilengkapi tombol untuk menambahkan/menghapus parfum beserta volume pilihannya (`50ml`, `70ml`, `100ml`, dll.) ke dalam **Private Tray**.
-- **Confirmed Decision 2 (Slide-Over Luxury Drawer & Floating Tray Bar)**: Saat minimal 1 parfum berada di dalam *Private Tray*, muncul bar melayang (*Floating Vault Tray Bar*) yang ramping dan elegan untuk membuka *Slide-Over Drawer* berisi daftar parfum pilihan, pengatur jumlah unit (*quantity stepper*), catatan khusus kolektor, serta tombol utama **"Minta Penawaran Paket via WhatsApp"** (terintegrasi dengan *Passwordless Email Gateway*).
-
----
-
-## 1. Overview & Core Concept
-
-- **What It Does**: Memungkinkan pengunjung mengumpulkan beberapa parfum dari **11 Rumah Parfum**, **Apex Prestige**, maupun **Urban Signatures** ke dalam satu baki kurasi pribadi (*Private Selection Tray*), mengatur jumlah botol atau ukuran `ml`, lalu mengirim permintaan kuotasi harga kolektif ke WhatsApp Concierge VORVAN dalam satu klik.
-- **Target Audience / Persona**: Kolektor parfum *niche/designer* yang ingin membandingkan 2–5 parfum sekaligus atau membeli beberapa botol untuk mendapatkan *privilege* harga paket (*bundle valuation*).
-- **Key Value**: Menghilangkan friksi harus bolak-balik mengirim pesan WhatsApp satu per satu untuk setiap parfum, sekaligus meningkatkan nilai transaksi rata-rata (*Average Order Value*) bagi VORVAN.
-
----
-
-## 2. User Experience & Visual Design
-
-- **Key User Flows**:
-  1. **Menambahkan ke Private Tray**: Pada setiap kartu parfum (di sebelah atau di atas area kuotasi) serta di dalam modal *Olfactory Dossier*, pengguna dapat menekan tombol **`+ Simpan ke Private Tray`** (berubah menjadi **`✓ Dalam Private Tray`** dengan aksen *Champagne Gold* saat terpilih).
-  2. **Floating Private Tray Trigger**: Ketika *Private Tray* berisi $\ge 1$ parfum, muncul indikator elegan yang ringkas (menampilkan jumlah flacon terpilih) untuk membuka laci kurasi (*Slide-Over Drawer*).
-  3. **Mengelola Daftar di Slide-Over Drawer**: Di dalam laci **Private Selection Tray**, pengguna melihat foto mini botol, nama rumah parfum, nama varian, konsentrasi, ukuran volume (`ml`), tombol tambah/kurang kuantitas (`-` / `+`), tombol hapus item, serta kolom opsional *Catatan Kurasi / Permintaan Khusus*.
-  4. **Kirim Penawaran Paket ke WhatsApp**: Saat pengguna menekan **"Tanya Penawaran Paket via WhatsApp"**, sistem memeriksa apakah email sudah terdaftar di *Email Gateway*. Jika belum, modal *Email Gateway* muncul terlebih dahulu lalu otomatis meneruskan seluruh daftar parfum ke WhatsApp Concierge VORVAN dengan format daftar bernomor yang rapi.
-
-- **Visual Identity & Theme**:
-  - *Aesthetic Direction*: Dark Luxury Minimalist / Haute Parfumerie Vault Drawer.
-  - *Color Palette & Mood*: Latar belakang `#0B0A0E` / `#121118` dengan bingkai tipis *Champagne Semi-Gold* (`#D4AF37` / `#E5C87E`), teks putih gading (`#FAF8F5`), dan tombol utama `.btn-luxury-gold`.
-  - *Typography & Hierarchy*: Judul menggunakan `Playfair Display` & aksen kaligrafi `Great Vibes`, label kontrol menggunakan `Cinzel` (`whitespace-nowrap`), serta angka kuantitas/volume menggunakan `JetBrains Mono` (`tabular-nums`).
-  - *Component Styling & Layout*: Kartu parfum tetap mempertahankan tinggi seragam (`h-full flex flex-col justify-between`) dan bingkai bawah/samping yang sejajar presisi tanpa tumpang tindih.
-
-- **Interactive Feedback & Motion**:
-  - Transisi buka/tutup *Slide-Over Drawer* yang mulus (`cubic-bezier(0.16, 1, 0.3, 1)`).
-  - Indikator status tombol pada kartu parfum langsung berubah secara instan saat item ditambahkan atau dikeluarkan dari *Private Tray*.
-
----
-
-## 3. Key Product Decisions & Trade-Offs
-
-- **Decision 1: Integrasi dengan Passwordless Email Gateway yang Sudah Ada**
-  - *Chosen Approach*: Menggunakan state `registeredEmail` yang sama dengan tombol *Tanya Penawaran* tunggal. Jika pengunjung belum memasukkan email, klik *Checkout Penawaran Paket* di *Private Tray* akan membuka *Email Gateway* terlebih dahulu, lalu langsung mengarahkan ke WhatsApp dengan daftar seluruh parfum di *Tray*.
-  - *Why*: Menjaga aturan bisnis utama VORVAN agar setiap prospek tetap tercatat di Log Admin Concierge sebelum masuk ke WhatsApp.
-
-- **Decision 2: Persistensi Private Tray di Penyimpanan Lokal (`localStorage`) & Dukungan 5 Bahasa**
-  - *Chosen Approach*: Menyimpan isi *Private Tray* ke `localStorage` (`vorvan_private_tray_v1`) dan menambahkan kamus terjemahan *Private Tray* ke dalam 5 bahasa (`ID`, `EN`, `FR`, `AR`, `ZH`).
-  - *Why*: Pilihan parfum pengunjung tidak hilang saat mereka berpindah dari halaman *Showroom* ke *Lacak Resi* atau *Private Invoice*, dan seluruh antarmuka *Tray* ikut berubah bahasa saat *Language Switcher* diubah.
-
----
-
-## 4. Technical Architecture & Data Strategy *(Technical Reference)*
-
-- **Architecture & Component Diagram**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       VORVAN Main Application                           │
-│  (State: privateTrayItems, isTrayDrawerOpen, registeredEmail, locale)   │
-└───────────────┬─────────────────────────────────────────┬───────────────┘
-                │                                         │
-                ▼                                         ▼
-┌───────────────────────────────────┐     ┌───────────────────────────────┐
-│   FragranceCard & DossierModal    │     │   PrivateTrayDrawer & Bar     │
-│  - Toggle Add/Remove (id + ml)    │     │  - Itemized Flacon List       │
-│  - Flush Equal-Height Card Frame  │     │  - Quantity Steppers (- / +)  │
-│  - Direct Single WA Inquiry       │     │  - Bespoke Client Note Input  │
-└───────────────┬───────────────────┘     └───────────────┬───────────────┘
-                │                                         │
-                └───────────────────┬─────────────────────┘
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│               WhatsApp Bundle URL Builder & Email Gateway               │
-│  - buildWhatsAppTrayInquiryUrl(items, clientNote, registeredEmail)      │
-│  - Formats multi-fragrance numbered list + volume + quantity for WA     │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-- **Data Model & State**:
-  - `PrivateTrayItem`: Menyimpan `fragrance: FragranceItem`, `volume: string`, dan `quantity: number` (diidentifikasi secara unik oleh kombinasi `${fragrance.id}__${volume}`).
-  - Fungsi murni `buildWhatsAppTrayInquiryUrl` untuk memformat daftar parfum, ukuran `ml`, kuantitas botol, email klien, dan catatan tambahan menjadi tautan WhatsApp resmi VORVAN beserta pengujian unit (*unit test*).
+### 3. Integritas & Pengujian
+- 18/18 Unit Tests lulus sukses (`npx tsx --test src/utils/businessRules.test.ts`).
+- `compile_applet` & `tsc --noEmit` sukses 100% tanpa error.
+- Pengiriman email FormSubmit (`vorvanlifestyle@gmail.com`), sinkronisasi Key-Value Cloud bersama, dan Tab 4 Concierge Guide tetap terjaga utuh.

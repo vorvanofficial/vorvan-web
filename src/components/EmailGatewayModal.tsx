@@ -1,14 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Camera,
   Check,
   CheckCircle2,
   Copy,
   Database,
+  ExternalLink,
+  Eye,
   KeyRound,
   Link2,
   Lock,
   Mail,
+  MessageSquare,
   PlusCircle,
+  Send,
   Settings,
   ShieldAlert,
   Sparkles,
@@ -31,16 +36,20 @@ import {
 } from '../types/fragrance';
 import {
   autoDetectShippingZoneByCity,
+  buildBuyerInvoiceWhatsAppUrl,
   buildConciergeRecommendationWaText,
   buildSmartShareUrl,
   computeAutoShippingStage,
   filterConciergeGuide81,
   filterVorvanCheatSheet,
   formatIDRCurrency,
+  getVorvanBaseDomain,
+  normalizeIndonesianPhoneNumber,
   resolveCourierMetadata,
   resolveVorvanSkuPricing,
   validateConciergeEmail,
 } from '../utils/businessRules';
+import { sendBuyerInvoiceEmailWebhook } from '../utils/cloudSync';
 import {
   CONCIERGE_MOMENT_BUTTONS,
   ConciergeGenderFilterKey,
@@ -250,6 +259,12 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   // Tab 1: Create Invoice & Resi state
   const [buyerName, setBuyerName] = useState<string>('');
   const [buyerCity, setBuyerCity] = useState<string>('');
+  const [buyerEmail, setBuyerEmail] = useState<string>('');
+  const [buyerPhone, setBuyerPhone] = useState<string>('');
+  const [autoEmailStatus, setAutoEmailStatus] = useState<
+    'idle' | 'sending' | 'sent' | 'failed'
+  >('idle');
+  const [autoEmailRecipient, setAutoEmailRecipient] = useState<string>('');
   const [selectedFragranceId, setSelectedFragranceId] = useState<string>(
     FRAGRANCE_CATALOG[0]?.id || 'lv-afternoon-swim'
   );
@@ -284,6 +299,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     useState<CustomAdminOrder | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [selectedProofOrder, setSelectedProofOrder] =
+    useState<CustomAdminOrder | null>(null);
 
   // Tab 2: Settings form state
   const [formSettings, setFormSettings] = useState<VorvanSiteSettings>(settings);
@@ -455,6 +472,9 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       minute: '2-digit',
     });
 
+    const cleanBuyerEmail = buyerEmail.trim();
+    const cleanBuyerPhone = buyerPhone.trim();
+
     const newOrder: CustomAdminOrder = {
       invoiceId,
       trackingId: cleanAwb,
@@ -462,6 +482,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       createdAtTimestampMs: now.getTime(),
       buyerName: buyerName.trim(),
       buyerCity: buyerCity.trim(),
+      buyerEmail: cleanBuyerEmail || undefined,
+      buyerPhone: cleanBuyerPhone || undefined,
       house: houseName,
       fragranceName: perfumeName,
       concentration: conc,
@@ -479,6 +501,47 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
 
     onCreateCustomOrder(newOrder);
     setCreatedOrderResult(newOrder);
+
+    // Auto-dispatch email directly to buyer's inbox via official Google Apps Script webhook
+    if (cleanBuyerEmail) {
+      setAutoEmailStatus('sending');
+      setAutoEmailRecipient(cleanBuyerEmail);
+      const grandTotalNum = numericPrice + numericShipCost;
+      const formattedGrandTotal = formatIDRCurrency(grandTotalNum);
+      const baseDomain =
+        typeof window !== 'undefined' &&
+        (window.location.hostname.includes('aistudio') ||
+          window.location.hostname.includes('googleusercontent') ||
+          window.location.hostname === 'localhost')
+          ? 'https://vorvan-official.vercel.app'
+          : typeof window !== 'undefined'
+          ? window.location.origin
+          : 'https://vorvan-official.vercel.app';
+
+      const generatedShareableInvoiceUrl = buildSmartShareUrl(
+        newOrder,
+        'invoice',
+        baseDomain
+      );
+
+      sendBuyerInvoiceEmailWebhook({
+        buyerEmail: cleanBuyerEmail,
+        buyerName: buyerName.trim(),
+        invNo: invoiceId,
+        itemName: `${perfumeName} (${volume.trim() || '100ml'})`,
+        totalPrice: formattedGrandTotal,
+        invoiceUrl: generatedShareableInvoiceUrl,
+      })
+        .then((ok) => {
+          setAutoEmailStatus(ok ? 'sent' : 'failed');
+        })
+        .catch(() => {
+          setAutoEmailStatus('failed');
+        });
+    } else {
+      setAutoEmailStatus('idle');
+      setAutoEmailRecipient('');
+    }
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -710,6 +773,55 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         placeholder="Contoh: Kebayoran Baru, Jakarta Selatan"
                         className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
                       />
+                    </div>
+                  </div>
+
+                  {/* 2 INPUT BARU: EMAIL PEMBELI (AUTO-KIRIM) & NO WA PEMBELI (1-KLIK WA) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="admin-buyer-email"
+                        className="block text-xs text-[#E5C87E] font-medium mb-1"
+                      >
+                        Email Pembeli (Otomatis Kirim Invoice)
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          id="admin-buyer-email"
+                          type="email"
+                          value={buyerEmail}
+                          onChange={(e) => setBuyerEmail(e.target.value)}
+                          placeholder="klien@gmail.com"
+                          className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#14131A] border border-[#D4AF37]/45 focus:border-[#E5C87E] text-sm text-white outline-none"
+                        />
+                      </div>
+                      <span className="text-[10px] text-zinc-400 mt-1 block">
+                        ⚡ Otomatis tembak email invoice ke pembeli via Google Apps Script saat diterbitkan.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="admin-buyer-phone"
+                        className="block text-xs text-[#E5C87E] font-medium mb-1"
+                      >
+                        No. WhatsApp Pembeli (Opsional - 1 Klik WA)
+                      </label>
+                      <div className="relative">
+                        <MessageSquare className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          id="admin-buyer-phone"
+                          type="tel"
+                          value={buyerPhone}
+                          onChange={(e) => setBuyerPhone(e.target.value)}
+                          placeholder="0812..."
+                          className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-white outline-none"
+                        />
+                      </div>
+                      <span className="text-[10px] text-zinc-400 mt-1 block">
+                        💬 Aktifkan tombol kirim 1-klik WhatsApp langsung ke chat pembeli tanpa salin manual.
+                      </span>
                     </div>
                   </div>
 
@@ -1073,6 +1185,22 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             {createdOrderResult.buyerName}
                           </span>
                         </div>
+                        {createdOrderResult.buyerEmail && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-zinc-400">Email Pembeli:</span>
+                            <span className="font-mono-tabular text-emerald-400 font-medium">
+                              {createdOrderResult.buyerEmail}
+                            </span>
+                          </div>
+                        )}
+                        {createdOrderResult.buyerPhone && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-zinc-400">WhatsApp Pembeli:</span>
+                            <span className="font-mono-tabular text-emerald-400 font-medium">
+                              {createdOrderResult.buyerPhone}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-zinc-400">Parfum:</span>
                           <span className="text-[#E5C87E] font-medium text-right">
@@ -1123,7 +1251,60 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         </div>
                       </div>
 
+                      {/* STATUS PENGIRIMAN EMAIL OTOMATIS KE PEMBELI */}
+                      {autoEmailRecipient && (
+                        <div
+                          className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                            autoEmailStatus === 'sending'
+                              ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
+                              : autoEmailStatus === 'sent'
+                              ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-300'
+                              : autoEmailStatus === 'failed'
+                              ? 'bg-rose-950/40 border-rose-500/50 text-rose-300'
+                              : 'bg-zinc-900 border-zinc-700 text-zinc-300'
+                          }`}
+                        >
+                          <Mail className="w-4 h-4 shrink-0 mt-0.5 text-[#E5C87E]" />
+                          <div className="min-w-0">
+                            <p className="font-semibold">
+                              {autoEmailStatus === 'sending' &&
+                                `Mengirim invoice otomatis ke ${autoEmailRecipient}...`}
+                              {autoEmailStatus === 'sent' &&
+                                `✅ Email Invoice Berhasil Terkirim ke ${autoEmailRecipient}!`}
+                              {autoEmailStatus === 'failed' &&
+                                `⚠️ Kendala jaringan saat mengirim ke ${autoEmailRecipient}.`}
+                            </p>
+                            <p className="text-[10px] opacity-80 mt-0.5">
+                              {autoEmailStatus === 'sent'
+                                ? 'Pembeli menerima rincian invoice & link https://vorvan-official.vercel.app langsung di email.'
+                                : 'Google Apps Script Webhook VORVAN.'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="space-y-2.5 pt-2">
+                        {/* TOMBOL 1-KLIK WHATSAPP KE PEMBELI */}
+                        <a
+                          href={buildBuyerInvoiceWhatsAppUrl(
+                            createdOrderResult,
+                            getVorvanBaseDomain()
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid="admin-1click-wa-btn"
+                          className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-brand text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/50 transition-all border border-emerald-400/40"
+                        >
+                          <MessageSquare className="w-4 h-4 shrink-0" />
+                          <span className="truncate">
+                            {createdOrderResult.buyerPhone
+                              ? `Kirim via WhatsApp (1-Klik ke ${normalizeIndonesianPhoneNumber(
+                                  createdOrderResult.buyerPhone
+                                )})`
+                              : 'Kirim via WhatsApp (1-Klik ke Pembeli)'}
+                          </span>
+                        </a>
+
                         <p className="font-brand text-[10px] uppercase tracking-[0.18em] text-[#E5C87E]">
                           SMART SHAREABLE URL (BISA DIBUKA DI HP PEMBELI MANAPUN):
                         </p>
@@ -1132,7 +1313,11 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           type="button"
                           onClick={() =>
                             handleCopyText(
-                              buildSmartShareUrl(createdOrderResult, 'invoice'),
+                              buildSmartShareUrl(
+                                createdOrderResult,
+                                'invoice',
+                                getVorvanBaseDomain()
+                              ),
                               'smart-inv'
                             )
                           }
@@ -1155,7 +1340,11 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           type="button"
                           onClick={() =>
                             handleCopyText(
-                              buildSmartShareUrl(createdOrderResult, 'track'),
+                              buildSmartShareUrl(
+                                createdOrderResult,
+                                'track',
+                                getVorvanBaseDomain()
+                              ),
                               'smart-trk'
                             )
                           }
@@ -1618,6 +1807,34 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 </div>
               </div>
 
+              {/* Mode Otomatis Lunas (Auto-PAID) Saat Bukti Bayar Diupload */}
+              <div className="p-4 rounded-xl bg-[#14131A] border border-[#D4AF37]/35 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <span className="font-brand text-xs font-bold uppercase tracking-wider text-[#F5E6B8] flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-[#E5C87E]" />
+                    Mode Otomatis Lunas (Auto-PAID) Saat Bukti Bayar Diunggah
+                  </span>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    Jika aktif, status invoice di Web Admin otomatis berubah menjadi <strong className="text-emerald-400">PAID (Lunas)</strong> seketika setelah pembeli berhasil mengunggah foto/screenshot bukti transfer di halaman invoice.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formSettings.autoPaidOnProofUpload)}
+                    onChange={(e) =>
+                      setFormSettings({
+                        ...formSettings,
+                        autoPaidOnProofUpload: e.target.checked,
+                      })
+                    }
+                    data-testid="admin-autopaid-toggle"
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D4AF37]"></div>
+                </label>
+              </div>
+
               <button
                 type="submit"
                 className="px-6 py-3.5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.18em] cursor-pointer"
@@ -1735,6 +1952,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           <th className="py-2.5 px-3">Invoice / Resi AWB</th>
                           <th className="py-2.5 px-3">Pembeli</th>
                           <th className="py-2.5 px-3">Parfum &amp; Nilai</th>
+                          <th className="py-2.5 px-3">Bukti Transfer</th>
                           <th className="py-2.5 px-3">Kurir &amp; Status Otomatis</th>
                           <th className="py-2.5 px-3">Aksi &amp; Smart Link</th>
                         </tr>
@@ -1781,6 +1999,72 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                     {ord.status}
                                   </button>
                                 </div>
+                              </td>
+                              <td className="py-3 px-3">
+                                {ord.paymentProofUrl ? (
+                                  <div className="space-y-1.5 min-w-[140px]">
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedProofOrder(ord)}
+                                        className="relative w-10 h-10 rounded-lg overflow-hidden border border-[#D4AF37]/50 group shrink-0 cursor-pointer"
+                                        title="Klik untuk melihat bukti transfer penuh"
+                                      >
+                                        <img
+                                          src={ord.paymentProofUrl}
+                                          alt={`Bukti Bayar ${ord.invoiceId}`}
+                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                          <Eye className="w-3.5 h-3.5 text-white" />
+                                        </div>
+                                      </button>
+                                      <div className="min-w-0">
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-500/50 text-[10px] font-semibold text-emerald-300 whitespace-nowrap">
+                                          <CheckCircle2 className="w-3 h-3" />
+                                          <span>Terupload</span>
+                                        </span>
+                                        {ord.paymentProofUploadedAt && (
+                                          <div className="text-[10px] text-zinc-400 font-mono-tabular truncate">
+                                            {ord.paymentProofUploadedAt}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedProofOrder(ord)}
+                                        className="text-[11px] text-[#E5C87E] hover:text-white underline underline-offset-2 flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <Eye className="w-3 h-3" />
+                                        <span>Lihat Bukti Bayar</span>
+                                      </button>
+
+                                      {ord.status !== 'PAID' && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            onUpdateCustomOrderStatus(
+                                              ord.invoiceId,
+                                              'PAID'
+                                            )
+                                          }
+                                          className="px-2 py-0.5 rounded bg-emerald-900/70 hover:bg-emerald-800 border border-emerald-500/60 text-[10px] font-bold uppercase tracking-wider text-emerald-200 cursor-pointer self-start"
+                                          title="Tandai pembayaran telah diverifikasi dan lunas"
+                                        >
+                                          ✅ Verifikasi Lunas (PAID)
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-zinc-500 italic text-[11px] flex items-center gap-1">
+                                    <Lock className="w-3 h-3 text-zinc-600" />
+                                    <span>Belum Upload</span>
+                                  </div>
+                                )}
                               </td>
                               <td className="py-3 px-3">
                                 <div className="font-semibold text-[#F5E6B8]">
@@ -2160,6 +2444,90 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* LIGHTBOX MODAL: FULL PREVIEW BUKTI PEMBAYARAN */}
+      {selectedProofOrder && selectedProofOrder.paymentProofUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setSelectedProofOrder(null)}
+          data-testid="admin-proof-lightbox"
+        >
+          <div
+            className="relative max-w-2xl w-full bg-[#121118] border border-[#D4AF37]/50 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 animate-fade-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-[#E5C87E]" />
+                <h4 className="font-brand text-xs font-bold uppercase tracking-wider text-white">
+                  Foto Bukti Pembayaran #{selectedProofOrder.invoiceId} — {selectedProofOrder.buyerName}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedProofOrder(null)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto flex items-center justify-center rounded-xl bg-[#09080E] p-2 border border-zinc-800">
+              <img
+                src={selectedProofOrder.paymentProofUrl}
+                alt={`Bukti Transfer ${selectedProofOrder.invoiceId}`}
+                className="max-h-[65vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-300 pt-1">
+              <div className="space-y-0.5">
+                <p>
+                  Total Tagihan:{' '}
+                  <strong className="text-[#F5E6B8]">
+                    {formatIDRCurrency(
+                      selectedProofOrder.dealPriceIDR +
+                        (selectedProofOrder.shippingCostIDR || 0)
+                    )}
+                  </strong>
+                </p>
+                {selectedProofOrder.paymentProofUploadedAt && (
+                  <p className="text-zinc-400 text-[11px]">
+                    Diunggah: {selectedProofOrder.paymentProofUploadedAt}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {selectedProofOrder.status !== 'PAID' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUpdateCustomOrderStatus(
+                        selectedProofOrder.invoiceId,
+                        'PAID'
+                      );
+                      setSelectedProofOrder((prev) =>
+                        prev ? { ...prev, status: 'PAID' } : null
+                      );
+                    }}
+                    className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 border border-emerald-400 text-white font-brand text-xs font-bold uppercase tracking-wider cursor-pointer"
+                  >
+                    ✅ Verifikasi Lunas (PAID)
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedProofOrder(null)}
+                  className="px-4 py-2 rounded-lg bg-[#1C1A27] hover:bg-[#252233] border border-[#D4AF37]/40 text-[#F5E6B8] font-brand text-xs font-semibold uppercase tracking-wider cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

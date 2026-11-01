@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for adding the VORVAN Private Selection Tray (multi-fragrance bundle WhatsApp inquiry drawer, card/dossier tray toggles, persistent tray badge, and multi-language translations) while preserving all existing luxury boutique features.",
-  "updatedAt":  "2026-10-26T13:43:06.485430818Z",
+  "summary":  "Sistem 3 Tahap Kunci (3-Stage Gate) Halaman Invoice & Upload Bukti Pembayaran Otomatis ke Web Admin VORVAN:\n1. Tahap 1: Sebelum centang klausul -> Daftar Rekening, QRIS, Upload Bukti, dan Tombol Konfirmasi WA/TG terkunci rapi.\n2. Tahap 2: Setelah centang klausul tapi belum upload bukti -> Tab Rekening & Kotak Upload Bukti terbuka, namun Tombol Konfirmasi WA & Telegram TETAP TERKUNCI (disabled) dengan teks '🔒 Upload Bukti Transfer Untuk Membuka Konfirmasi WA' dan '🔒 Upload Bukti Transfer Untuk Membuka Konfirmasi Telegram'.\n3. Tahap 3: Setelah foto bukti transfer diunggah -> Preview tampil, kompresi HTML5 canvas (maks 600px, JPEG 0.7), tersimpan ke Web Admin (localStorage & Cloud Vault & Webhook), dan tombol Konfirmasi WhatsApp/Telegram terbuka aktif.\n4. Web Admin Dashboard: Indikator bukti bayar & timestamp di Tab 3, tombol Lihat Bukti Bayar (lightbox), tombol 1-klik 'Verifikasi Lunas (PAID)', serta toggle Auto-PAID di Tab 2 Settings.",
+  "updatedAt":  "2026-11-01T20:42:07.375502171Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

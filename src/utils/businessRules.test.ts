@@ -716,3 +716,273 @@ test('FormSubmit AJAX Gmail delivery and Cross-Device/Incognito Cloud Sync helpe
   assert.equal(mergedOrders[0].invoiceId, 'INV-VRV-9991');
 });
 
+test('Tab 1 Admin: Buyer Email, Buyer Phone, 1-Click WhatsApp URL, and Email Webhook work seamlessly', async () => {
+  const {
+    encodeSmartOrderParam,
+    decodeSmartOrderParam,
+    normalizeIndonesianPhoneNumber,
+    buildBuyerInvoiceWhatsAppUrl,
+  } = await import('./businessRules.ts');
+  const { VORVAN_EMAIL_WEBHOOK, sendBuyerInvoiceEmailWebhook } = await import(
+    './cloudSync.ts'
+  );
+
+  // 1. Phone Normalizer
+  assert.equal(normalizeIndonesianPhoneNumber('081234567890'), '6281234567890');
+  assert.equal(normalizeIndonesianPhoneNumber('6281234567890'), '6281234567890');
+  assert.equal(normalizeIndonesianPhoneNumber('+62 812-3456-7890'), '6281234567890');
+  assert.equal(normalizeIndonesianPhoneNumber(''), '');
+
+  // 2. CustomAdminOrder with buyerEmail and buyerPhone
+  const orderWithContact = {
+    invoiceId: 'INV-VRV-9011',
+    trackingId: 'VRV-RESI-9011',
+    createdAt: '01 Nov 2026 · 14:00 WIB',
+    buyerName: 'Bpk. Hendra Wijaya',
+    buyerCity: 'Kebayoran Baru, Jakarta Selatan',
+    buyerEmail: 'hendra.wijaya@gmail.com',
+    buyerPhone: '081298765432',
+    house: 'Louis Vuitton',
+    fragranceName: 'Afternoon Swim',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    batchCode: 'VRV-9011',
+    dealPriceIDR: 4550000,
+    retailPriceIDR: 6500000,
+    discountPct: 30,
+    shippingCostIDR: 25000,
+    shippingLabel: 'Jawa & Jabodetabek',
+    shippingMethod: 'JNE' as const,
+    awbNumber: 'JNE881920194',
+    status: 'PENDING_PAYMENT' as const,
+  };
+
+  const token = encodeSmartOrderParam(orderWithContact);
+  const decoded = decodeSmartOrderParam(token);
+  assert.ok(decoded);
+  assert.equal(decoded.buyerName, 'Bpk. Hendra Wijaya');
+  assert.equal(decoded.buyerEmail, 'hendra.wijaya@gmail.com');
+  assert.equal(decoded.buyerPhone, '081298765432');
+  assert.equal(decoded.invoiceId, 'INV-VRV-9011');
+  assert.equal(decoded.dealPriceIDR, 4550000);
+
+  // 3. 1-Click WhatsApp URL Generation targeting buyer phone directly
+  const waUrl = buildBuyerInvoiceWhatsAppUrl(orderWithContact, 'https://vorvan-official.vercel.app');
+  assert.ok(waUrl.startsWith('https://wa.me/6281298765432?text='));
+  const decodedMsg = decodeURIComponent(waUrl);
+  assert.ok(decodedMsg.includes('Yth. Bpk. Hendra Wijaya'));
+  assert.ok(decodedMsg.includes('#INV-VRV-9011'));
+  assert.ok(decodedMsg.includes('Afternoon Swim'));
+  assert.ok(decodedMsg.includes('Rp 4.575.000'));
+  assert.ok(decodedMsg.includes('https://vorvan-official.vercel.app/pay/INV-VRV-9011?v='));
+  assert.ok(decodedMsg.includes('https://vorvan-official.vercel.app/track/JNE881920194?v='));
+
+  // 4. Official Google Apps Script Webhook
+  assert.equal(
+    VORVAN_EMAIL_WEBHOOK,
+    'https://script.google.com/macros/s/AKfycbwZnH1EY8q-hV0o-E-Gz0DsbGQAOKs7v4VqwOiSYvEIjKykV_80TCzroPM95yVMEpwlCw/exec'
+  );
+
+  // Test webhook invoker with mock fetch
+  let interceptedUrl = '';
+  let interceptedMode = '';
+  let interceptedBody: Record<string, string> = {};
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    interceptedUrl = String(input);
+    interceptedMode = init?.mode || '';
+    if (typeof init?.body === 'string') {
+      interceptedBody = JSON.parse(init.body);
+    }
+    return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const success = await sendBuyerInvoiceEmailWebhook({
+      buyerEmail: 'hendra.wijaya@gmail.com',
+      buyerName: 'Bpk. Hendra Wijaya',
+      invNo: 'INV-VRV-9011',
+      itemName: 'Afternoon Swim (100ml)',
+      totalPrice: 'Rp 4.575.000',
+      invoiceUrl: 'https://vorvan-official.vercel.app/pay/INV-VRV-9011?v=' + token,
+    });
+    assert.equal(success, true);
+    assert.equal(interceptedUrl, VORVAN_EMAIL_WEBHOOK);
+    assert.equal(interceptedMode, 'no-cors');
+    assert.equal(interceptedBody.buyerEmail, 'hendra.wijaya@gmail.com');
+    assert.equal(interceptedBody.buyerName, 'Bpk. Hendra Wijaya');
+    assert.equal(interceptedBody.invNo, 'INV-VRV-9011');
+    assert.equal(interceptedBody.itemName, 'Afternoon Swim (100ml)');
+    assert.equal(interceptedBody.totalPrice, 'Rp 4.575.000');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('3-Stage Gate Payment Proof: Proof storage, WhatsApp confirmation format, and webhook trigger', async () => {
+  const {
+    savePaymentProofRecord,
+    loadPaymentProofsMap,
+    buildVerifiedLegalWhatsAppMessage,
+    buildVerifiedLegalWhatsAppUrl,
+    resolvePrivateInvoice,
+  } = await import('./businessRules.ts');
+  const { sendPaymentProofWebhook, VORVAN_EMAIL_WEBHOOK } = await import('./cloudSync.ts');
+
+  // 1. Proof Storage in Local Map
+  savePaymentProofRecord('INV-VRV-TEST88', 'data:image/jpeg;base64,/9j/testsample...', '01 Nov 2026 · 14:35 WIB');
+  const proofsMap = loadPaymentProofsMap();
+  assert.equal(proofsMap['INV-VRV-TEST88'].proofUrl, 'data:image/jpeg;base64,/9j/testsample...');
+  assert.equal(proofsMap['INV-VRV-TEST88'].uploadedAt, '01 Nov 2026 · 14:35 WIB');
+
+  // 2. Resolve Private Invoice attaches proof if in storage
+  const inv = resolvePrivateInvoice('INV-VRV-TEST88');
+  assert.equal(inv.paymentProofUrl, 'data:image/jpeg;base64,/9j/testsample...');
+  assert.equal(inv.paymentProofUploadedAt, '01 Nov 2026 · 14:35 WIB');
+
+  // 3. WhatsApp Message incorporates payment proof uploaded timestamp
+  const waMsg = buildVerifiedLegalWhatsAppMessage({
+    docNo: 'INV-VRV-TEST88',
+    clientName: 'Bpk. Hendra Wijaya',
+    perfumeDesc: 'Louis Vuitton — Afternoon Swim (100ml)',
+    grandTotal: 'Rp 4.550.000',
+    paymentMethodLabel: 'Transfer Bank Mandiri',
+    agreedTimestamp: '01 Nov 2026 · 14:30 WIB',
+    paymentProofUploadedAt: '01 Nov 2026 · 14:35 WIB',
+  });
+
+  assert.ok(waMsg.includes('TERUPLOAD & TEREKAM DI VAULT ADMIN (01 Nov 2026 · 14:35 WIB)'));
+  assert.ok(waMsg.includes('Foto bukti transfer telah terunggah'));
+
+  const waUrl = buildVerifiedLegalWhatsAppUrl(
+    {
+      docNo: 'INV-VRV-TEST88',
+      clientName: 'Bpk. Hendra Wijaya',
+      perfumeDesc: 'Louis Vuitton — Afternoon Swim (100ml)',
+      grandTotal: 'Rp 4.550.000',
+      paymentMethodLabel: 'Transfer Bank Mandiri',
+      agreedTimestamp: '01 Nov 2026 · 14:30 WIB',
+      paymentProofUploadedAt: '01 Nov 2026 · 14:35 WIB',
+    },
+    '628133866590'
+  );
+  assert.ok(waUrl.startsWith('https://wa.me/628133866590?text='));
+  assert.ok(decodeURIComponent(waUrl).includes('TERUPLOAD & TEREKAM DI VAULT ADMIN'));
+
+  // 4. Test Payment Proof Webhook with mock fetch
+  let interceptedUrl = '';
+  let interceptedBody: Record<string, unknown> = {};
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    interceptedUrl = String(input);
+    if (typeof init?.body === 'string') {
+      interceptedBody = JSON.parse(init.body);
+    }
+    return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const success = await sendPaymentProofWebhook({
+      invNo: 'INV-VRV-TEST88',
+      buyerName: 'Bpk. Hendra Wijaya',
+      itemName: 'Afternoon Swim (100ml)',
+      totalPrice: 'Rp 4.550.000',
+      uploadedAt: '01 Nov 2026 · 14:35 WIB',
+      autoMarkPaid: true,
+      hasProofImage: true,
+    });
+    assert.equal(success, true);
+    assert.equal(interceptedUrl, VORVAN_EMAIL_WEBHOOK);
+    assert.equal(interceptedBody.action, 'PAYMENT_PROOF_UPLOADED');
+    assert.equal(interceptedBody.invNo, 'INV-VRV-TEST88');
+    assert.equal(interceptedBody.status, 'PAID');
+    assert.equal(interceptedBody.hasProofImage, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('getVorvanBaseDomain dynamically detects preview vs custom domain (.com / .id)', async () => {
+  const { getVorvanBaseDomain, buildSmartShareUrl, buildBuyerInvoiceWhatsAppUrl } =
+    await import('./businessRules.ts');
+
+  // 1. SSR / fallback behavior
+  assert.equal(getVorvanBaseDomain(), 'https://vorvan-official.vercel.app');
+
+  // 2. Mocking AI Studio environment
+  const originalWindow = globalThis.window;
+  try {
+    // Test AI Studio hostname
+    globalThis.window = {
+      location: {
+        hostname: 'ais-dev-xcmczlfphkvyyzk747zp6h-17818997828.aistudio.google.com',
+        origin: 'https://ais-dev-xcmczlfphkvyyzk747zp6h-17818997828.aistudio.google.com',
+      },
+    } as unknown as Window & typeof globalThis;
+    assert.equal(getVorvanBaseDomain(), 'https://vorvan-official.vercel.app');
+
+    // Test localhost
+    globalThis.window = {
+      location: {
+        hostname: 'localhost',
+        origin: 'http://localhost:3000',
+      },
+    } as unknown as Window & typeof globalThis;
+    assert.equal(getVorvanBaseDomain(), 'https://vorvan-official.vercel.app');
+
+    // Test googleusercontent
+    globalThis.window = {
+      location: {
+        hostname: 'web-123456.googleusercontent.com',
+        origin: 'https://web-123456.googleusercontent.com',
+      },
+    } as unknown as Window & typeof globalThis;
+    assert.equal(getVorvanBaseDomain(), 'https://vorvan-official.vercel.app');
+
+    // Test custom domain (.com / .id)
+    globalThis.window = {
+      location: {
+        hostname: 'vorvan.id',
+        origin: 'https://vorvan.id',
+      },
+    } as unknown as Window & typeof globalThis;
+    assert.equal(getVorvanBaseDomain(), 'https://vorvan.id');
+
+    // Test custom domain .com
+    globalThis.window = {
+      location: {
+        hostname: 'www.vorvan-perfume.com',
+        origin: 'https://www.vorvan-perfume.com',
+      },
+    } as unknown as Window & typeof globalThis;
+    assert.equal(getVorvanBaseDomain(), 'https://www.vorvan-perfume.com');
+
+    const sampleOrder = {
+      invoiceId: 'INV-VRV-DOMAIN',
+      trackingId: 'VRV-RESI-DOMAIN',
+      createdAt: '01 Nov 2026',
+      buyerName: 'Bpk. Andre',
+      buyerCity: 'Jakarta',
+      house: 'Louis Vuitton',
+      fragranceName: 'Afternoon Swim',
+      concentration: 'EDP',
+      volume: '100ml',
+      batchCode: 'LV-01',
+      dealPriceIDR: 4550000,
+      shippingMethod: 'JNE' as const,
+      awbNumber: 'JNE991',
+      status: 'PENDING_PAYMENT' as const,
+    };
+
+    const invUrl = buildSmartShareUrl(sampleOrder, 'invoice');
+    assert.ok(invUrl.startsWith('https://www.vorvan-perfume.com/pay/INV-VRV-DOMAIN?v='));
+
+    const waUrl = buildBuyerInvoiceWhatsAppUrl(sampleOrder);
+    assert.ok(decodeURIComponent(waUrl).includes('https://www.vorvan-perfume.com/pay/INV-VRV-DOMAIN?v='));
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+
+

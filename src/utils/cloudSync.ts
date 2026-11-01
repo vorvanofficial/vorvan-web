@@ -3,6 +3,9 @@ import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
 export const FORMSUBMIT_GMAIL_ENDPOINT =
   'https://formsubmit.co/ajax/vorvanlifestyle@gmail.com';
 
+export const VORVAN_EMAIL_WEBHOOK =
+  'https://script.google.com/macros/s/AKfycbwZnH1EY8q-hV0o-E-Gz0DsbGQAOKs7v4VqwOiSYvEIjKykV_80TCzroPM95yVMEpwlCw/exec';
+
 export const VORVAN_KVDB_SHARED_URL =
   'https://kvdb.io/6Wa9pL2mX8nQ4vR7tY3kJc/vorvan_leads_shared';
 
@@ -32,6 +35,14 @@ export type CloudVaultPacket =
   | {
       kind: 'VORVAN_ORDER_DELETE';
       invoiceId: string;
+      ts: number;
+    }
+  | {
+      kind: 'VORVAN_PAYMENT_PROOF';
+      invoiceId: string;
+      paymentProofUrl: string;
+      uploadedAt: string;
+      autoMarkPaid?: boolean;
       ts: number;
     };
 
@@ -113,6 +124,82 @@ export async function sendAdminOrderBackupToGmail(
     });
     return response.ok;
   } catch {
+    return false;
+  }
+}
+
+/**
+ * Fires an automatic HTTP POST to the official VORVAN Google Apps Script webhook
+ * to immediately dispatch the luxury invoice email directly to the buyer's inbox.
+ */
+export async function sendBuyerInvoiceEmailWebhook(params: {
+  buyerEmail: string;
+  buyerName: string;
+  invNo: string;
+  itemName: string;
+  totalPrice: string;
+  invoiceUrl: string;
+}): Promise<boolean> {
+  const buyerEmail = params.buyerEmail.trim();
+  if (!buyerEmail) return false;
+
+  try {
+    await fetch(VORVAN_EMAIL_WEBHOOK, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({
+        buyerEmail,
+        buyerName: params.buyerName.trim(),
+        invNo: params.invNo.trim(),
+        itemName: params.itemName.trim(),
+        totalPrice: params.totalPrice.trim(),
+        invoiceUrl: params.invoiceUrl.trim(),
+      }),
+    });
+    return true;
+  } catch (err) {
+    console.warn('sendBuyerInvoiceEmailWebhook failed:', err);
+    return false;
+  }
+}
+
+/**
+ * Fires an automated notification to the Google Apps Script webhook
+ * when a buyer uploads their payment transfer proof.
+ */
+export async function sendPaymentProofWebhook(params: {
+  invNo: string;
+  buyerName: string;
+  itemName?: string;
+  totalPrice?: string;
+  uploadedAt: string;
+  autoMarkPaid?: boolean;
+  hasProofImage: boolean;
+}): Promise<boolean> {
+  try {
+    await fetch(VORVAN_EMAIL_WEBHOOK, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({
+        action: 'PAYMENT_PROOF_UPLOADED',
+        invNo: params.invNo.trim(),
+        buyerName: params.buyerName.trim(),
+        itemName: params.itemName || 'Parfum Niche VORVAN',
+        totalPrice: params.totalPrice || '',
+        uploadedAt: params.uploadedAt,
+        status: params.autoMarkPaid ? 'PAID' : 'PENDING_VERIFICATION',
+        hasProofImage: params.hasProofImage,
+      }),
+    });
+    return true;
+  } catch (err) {
+    console.warn('sendPaymentProofWebhook failed:', err);
     return false;
   }
 }
@@ -358,6 +445,20 @@ export async function pullCloudVaultState(): Promise<{
             const invKey = packet.invoiceId.trim().toUpperCase();
             deletedInvoiceIds.add(invKey);
             ordersById.delete(invKey);
+          } else if (
+            packet.kind === 'VORVAN_PAYMENT_PROOF' &&
+            packet.invoiceId
+          ) {
+            const invKey = packet.invoiceId.trim().toUpperCase();
+            const existing = ordersById.get(invKey);
+            if (existing) {
+              ordersById.set(invKey, {
+                ...existing,
+                paymentProofUrl: packet.paymentProofUrl,
+                paymentProofUploadedAt: packet.uploadedAt,
+                status: packet.autoMarkPaid ? 'PAID' : existing.status,
+              });
+            }
           }
         } catch {
           // Ignore malformed lines
@@ -427,7 +528,22 @@ export function mergeCustomAdminOrders(
     if (!ord?.invoiceId) continue;
     const key = ord.invoiceId.trim().toUpperCase();
     if (!deletedInvoiceIds.has(key)) {
-      byInvoiceId.set(key, ord);
+      const local = byInvoiceId.get(key);
+      if (local) {
+        byInvoiceId.set(key, {
+          ...local,
+          ...ord,
+          paymentProofUrl: ord.paymentProofUrl || local.paymentProofUrl,
+          paymentProofUploadedAt:
+            ord.paymentProofUploadedAt || local.paymentProofUploadedAt,
+          status:
+            ord.status === 'PAID' || local.status === 'PAID'
+              ? 'PAID'
+              : ord.status,
+        });
+      } else {
+        byInvoiceId.set(key, ord);
+      }
     }
   }
 

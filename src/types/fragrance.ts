@@ -138,6 +138,8 @@ export interface PrivateInvoice {
   shippingLabel?: string;
   items: PrivateInvoiceItem[];
   notes: string;
+  paymentProofUrl?: string;
+  paymentProofUploadedAt?: string;
 }
 
 export interface TrackingMilestone {
@@ -214,6 +216,7 @@ export interface VorvanSiteSettings {
   briSwift: string;
   paypalQrUrl: string;
   binderbyteApiKey?: string;
+  autoPaidOnProofUpload?: boolean;
 }
 
 export type ShippingMethodType =
@@ -269,6 +272,10 @@ export interface CustomAdminOrder {
   awbNumber: string;
   shippingStage?: 1 | 2 | 3 | 4;
   status: 'PENDING_PAYMENT' | 'PAID';
+  buyerEmail?: string;
+  buyerPhone?: string;
+  paymentProofUrl?: string;
+  paymentProofUploadedAt?: string;
 }
 
 

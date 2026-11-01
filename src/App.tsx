@@ -714,6 +714,27 @@ export default function App() {
     });
   };
 
+  const handleUploadPaymentProof = (
+    invoiceId: string,
+    proofBase64: string,
+    uploadedAt: string
+  ) => {
+    const isAutoPaid = Boolean(siteSettings.autoPaidOnProofUpload);
+    const updated = customOrders.map((o) =>
+      o.invoiceId.toUpperCase() === invoiceId.toUpperCase()
+        ? {
+            ...o,
+            paymentProofUrl: proofBase64,
+            paymentProofUploadedAt: uploadedAt,
+            status: isAutoPaid ? ('PAID' as const) : o.status,
+          }
+        : o
+    );
+    setCustomOrders(updated);
+    saveCustomAdminOrders(updated);
+    void saveSharedCloudLeadsAndOrders(emailLeads, updated);
+  };
+
   const handleDeleteCustomOrder = (invoiceId: string) => {
     const updated = customOrders.filter((o) => o.invoiceId !== invoiceId);
     setCustomOrders(updated);
@@ -1003,6 +1024,7 @@ export default function App() {
             onOpenOrderTracking={(resi) =>
               navigateToTrack(resi, route.smartOrder)
             }
+            onUploadPaymentProof={handleUploadPaymentProof}
           />
         )}
 

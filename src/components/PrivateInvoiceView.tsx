@@ -3,18 +3,24 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Building2,
+  Camera,
   Check,
   CheckCircle2,
   Clock,
   Copy,
+  Eye,
   FileText,
   Globe,
+  Image as ImageIcon,
   Lock,
   MessageCircle,
   QrCode,
+  RefreshCw,
   Send,
   ShieldCheck,
   Truck,
+  UploadCloud,
+  X,
 } from 'lucide-react';
 import {
   CustomAdminOrder,
@@ -25,11 +31,17 @@ import {
   buildVerifiedLegalWhatsAppMessage,
   buildVerifiedLegalWhatsAppUrl,
   calculateInvoiceTotals,
+  compressPaymentProofImage,
   formatIDRCurrency,
   formatLegalTimestampWIB,
+  loadCustomAdminOrders,
+  loadPaymentProofsMap,
   loadVorvanSettings,
   resolvePrivateInvoice,
+  saveCustomAdminOrders,
+  savePaymentProofRecord,
 } from '../utils/businessRules';
+import { pushCloudVaultPacket, sendPaymentProofWebhook } from '../utils/cloudSync';
 
 interface AuthorizedPaymentChannel {
   id:
@@ -437,6 +449,11 @@ interface PrivateInvoiceViewProps {
   onBackToCatalog: () => void;
   onSelectInvoiceId: (id: string) => void;
   onOpenOrderTracking: (trackingOrInvoiceId: string) => void;
+  onUploadPaymentProof?: (
+    invoiceId: string,
+    proofBase64: string,
+    uploadedAt: string
+  ) => void;
 }
 
 export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
@@ -447,6 +464,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   onBackToCatalog,
   onSelectInvoiceId,
   onOpenOrderTracking,
+  onUploadPaymentProof,
 }) => {
   const activeSettings = settings || loadVorvanSettings();
 
@@ -463,6 +481,13 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const [isLegalDetailOpen, setIsLegalDetailOpen] = useState<boolean>(false);
   const [isLegalAgreed, setIsLegalAgreed] = useState<boolean>(false);
   const [legalAgreedTimestamp, setLegalAgreedTimestamp] = useState<string>('');
+
+  // Tahap 2 & 3: Upload Bukti Pembayaran state
+  const [paymentProofUrl, setPaymentProofUrl] = useState<string>('');
+  const [paymentProofUploadedAt, setPaymentProofUploadedAt] = useState<string>('');
+  const [isCompressingProof, setIsCompressingProof] = useState<boolean>(false);
+  const [proofError, setProofError] = useState<string | null>(null);
+  const [isProofModalOpen, setIsProofModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (invoiceId?.trim() || smartOrder) {
@@ -491,6 +516,29 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     customOrders,
     smartOrder
   );
+
+  // Synchronize payment proof if previously stored or attached to invoice
+  useEffect(() => {
+    const proofsMap = loadPaymentProofsMap();
+    const stored =
+      proofsMap[effectiveCode.toUpperCase()] ||
+      proofsMap[baseInvoice.invoiceId.toUpperCase()];
+    if (stored?.proofUrl) {
+      setPaymentProofUrl(stored.proofUrl);
+      setPaymentProofUploadedAt(stored.uploadedAt);
+    } else if (baseInvoice.paymentProofUrl) {
+      setPaymentProofUrl(baseInvoice.paymentProofUrl);
+      setPaymentProofUploadedAt(baseInvoice.paymentProofUploadedAt || '');
+    } else {
+      setPaymentProofUrl('');
+      setPaymentProofUploadedAt('');
+    }
+  }, [
+    effectiveCode,
+    baseInvoice.invoiceId,
+    baseInvoice.paymentProofUrl,
+    baseInvoice.paymentProofUploadedAt,
+  ]);
 
   const totals = calculateInvoiceTotals(baseInvoice);
 
@@ -548,6 +596,72 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const effectiveTimestamp =
     legalAgreedTimestamp || formatLegalTimestampWIB(new Date());
 
+  // Handle HTML5 Canvas image compression & automatic recording to Web Admin
+  const handleProofFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProofError(null);
+    setIsCompressingProof(true);
+
+    try {
+      const compressed = await compressPaymentProofImage(file, 600, 0.7);
+      const nowWIB = formatLegalTimestampWIB(new Date());
+      setPaymentProofUrl(compressed);
+      setPaymentProofUploadedAt(nowWIB);
+
+      // 1. Save locally to payment proof records map
+      savePaymentProofRecord(baseInvoice.invoiceId, compressed, nowWIB);
+
+      // 2. Also update locally stored custom orders if present
+      const localOrders = loadCustomAdminOrders();
+      const isAutoPaid = Boolean(activeSettings.autoPaidOnProofUpload);
+      const updatedOrders = localOrders.map((o) =>
+        o.invoiceId.toUpperCase() === baseInvoice.invoiceId.toUpperCase()
+          ? {
+              ...o,
+              paymentProofUrl: compressed,
+              paymentProofUploadedAt: nowWIB,
+              status: isAutoPaid ? ('PAID' as const) : o.status,
+            }
+          : o
+      );
+      saveCustomAdminOrders(updatedOrders);
+
+      // 3. Inform parent App component
+      onUploadPaymentProof?.(baseInvoice.invoiceId, compressed, nowWIB);
+
+      // 4. Send Cloud Vault Real-Time packet
+      void pushCloudVaultPacket({
+        kind: 'VORVAN_PAYMENT_PROOF',
+        invoiceId: baseInvoice.invoiceId,
+        paymentProofUrl: compressed,
+        uploadedAt: nowWIB,
+        autoMarkPaid: isAutoPaid,
+        ts: Date.now(),
+      });
+
+      // 5. Fire Google Apps Script Webhook
+      void sendPaymentProofWebhook({
+        invNo: baseInvoice.invoiceId,
+        buyerName: baseInvoice.buyerName,
+        itemName: perfumeSummaryDesc,
+        totalPrice: formatIDRCurrency(totals.grandTotalIDR),
+        uploadedAt: nowWIB,
+        autoMarkPaid: isAutoPaid,
+        hasProofImage: true,
+      });
+    } catch (err) {
+      setProofError(
+        err instanceof Error
+          ? err.message
+          : 'Gagal memproses file gambar bukti bayar.'
+      );
+    } finally {
+      setIsCompressingProof(false);
+      e.target.value = '';
+    }
+  };
+
   const confirmationMessage = buildVerifiedLegalWhatsAppMessage({
     docNo: baseInvoice.invoiceId,
     clientName: baseInvoice.buyerName,
@@ -555,6 +669,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     grandTotal: formatIDRCurrency(totals.grandTotalIDR),
     paymentMethodLabel,
     agreedTimestamp: effectiveTimestamp,
+    paymentProofUploadedAt: paymentProofUploadedAt || undefined,
   });
 
   const whatsappConfirmUrl = buildVerifiedLegalWhatsAppUrl(
@@ -565,6 +680,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
       grandTotal: formatIDRCurrency(totals.grandTotalIDR),
       paymentMethodLabel,
       agreedTimestamp: effectiveTimestamp,
+      paymentProofUploadedAt: paymentProofUploadedAt || undefined,
     },
     normalizedWa
   );
@@ -572,7 +688,13 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     confirmationMessage
   )}`;
 
+  // 3-STAGE GATE LOCK CONDITIONS:
+  // Tahap 1: isPaymentUnlocked = false (Klausul belum dicentang -> Semua terkunci)
+  // Tahap 2: isPaymentUnlocked = true, hasProof = false (Klausul dicentang, tapi bukti belum diupload -> Tab rekening & kotak upload terbuka, tombol konfirmasi TERKUNCI)
+  // Tahap 3: isConfirmationUnlocked = true (Bukti terupload / status PAID -> Tombol konfirmasi AKTIF)
   const isPaymentUnlocked = baseInvoice.status === 'PAID' || isLegalAgreed;
+  const hasProof = Boolean(paymentProofUrl) || baseInvoice.status === 'PAID';
+  const isConfirmationUnlocked = isPaymentUnlocked && hasProof;
 
   return (
     <section
@@ -1542,6 +1664,136 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </>
             )}
 
+            {/* TAHAP 2 & 3: KOTAK UPLOAD BUKTI PEMBAYARAN (WAJIB FOTO/SCREENSHOT TRANSFER) */}
+            {isPaymentUnlocked && (
+              <div
+                className="p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-[#181622] via-[#121118] to-[#0D0C13] border border-[#D4AF37]/50 shadow-xl space-y-4 animate-fade-up"
+                data-testid="payment-proof-upload-box"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#D4AF37]/20 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-[#221F2D] border border-[#D4AF37]/40 flex items-center justify-center text-[#E5C87E]">
+                      <Camera className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-brand text-[10px] uppercase tracking-[0.2em] text-[#E5C87E] font-semibold">
+                        TAHAP VERIFIKASI WAJIB · VORVAN VAULT
+                      </p>
+                      <h4 className="font-serif-luxury text-lg sm:text-xl font-semibold text-white">
+                        📤 Upload Bukti Pembayaran (Wajib Foto/Screenshot Transfer)
+                      </h4>
+                    </div>
+                  </div>
+
+                  {hasProof && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 text-[11px] font-bold uppercase tracking-wider self-start sm:self-auto">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Bukti Terverifikasi</span>
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                  Untuk membuka tombol <strong>Konfirmasi WhatsApp &amp; Telegram</strong> di bawah ini, silakan unggah foto struk ATM, bukti transfer m-banking, atau mutasi pembayaran Anda. File otomatis dikompresi ringan &amp; tersimpan langsung ke sistem Web Admin VORVAN.
+                </p>
+
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <label
+                      htmlFor="proof-upload-input"
+                      className={`flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl border border-dashed transition-all cursor-pointer ${
+                        isCompressingProof
+                          ? 'bg-zinc-900 border-zinc-700 text-zinc-500 cursor-wait'
+                          : hasProof
+                          ? 'bg-[#151E18] border-emerald-500/40 hover:border-emerald-400 text-emerald-300'
+                          : 'bg-[#111017] border-[#D4AF37]/50 hover:border-[#F5E6B8] hover:bg-[#1A1824] text-[#F5E6B8]'
+                      }`}
+                    >
+                      <input
+                        id="proof-upload-input"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isCompressingProof}
+                        onChange={handleProofFileChange}
+                        data-testid="payment-proof-file-input"
+                      />
+                      {isCompressingProof ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-[#E5C87E]" />
+                          <span className="text-xs font-semibold">Mengompres &amp; Menyimpan Bukti Transfer...</span>
+                        </>
+                      ) : hasProof ? (
+                        <>
+                          <UploadCloud className="w-4 h-4 text-emerald-400" />
+                          <span className="text-xs font-semibold">Ganti / Unggah Ulang Bukti Transfer Baru</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-4 h-4 text-[#E5C87E]" />
+                          <span className="text-xs font-semibold uppercase font-brand tracking-wider">
+                            Pilih Foto Struk / Screenshot Bukti Transfer
+                          </span>
+                        </>
+                      )}
+                    </label>
+
+                    {paymentProofUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setIsProofModalOpen(true)}
+                        className="px-4 py-3 rounded-xl bg-[#1C1A27] hover:bg-[#252233] border border-[#D4AF37]/40 text-[#F5E6B8] font-brand text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer shrink-0"
+                        data-testid="preview-proof-btn"
+                      >
+                        <Eye className="w-4 h-4 text-[#E5C87E]" />
+                        <span>Lihat Bukti Bayar</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {proofError && (
+                    <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-800/60 px-3 py-2 rounded-lg">
+                      {proofError}
+                    </p>
+                  )}
+
+                  {paymentProofUrl && (
+                    <div className="p-3 sm:p-4 rounded-xl bg-[#0F0E15] border border-emerald-500/30 flex items-center gap-3.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsProofModalOpen(true)}
+                        className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden border border-[#D4AF37]/40 group shrink-0 cursor-pointer"
+                        title="Klik untuk melihat ukuran penuh"
+                      >
+                        <img
+                          src={paymentProofUrl}
+                          alt="Thumbnail Bukti Bayar"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Eye className="w-4 h-4 text-white" />
+                        </div>
+                      </button>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Foto Bukti Transfer Siap Digunakan</span>
+                        </p>
+                        {paymentProofUploadedAt && (
+                          <p className="text-[11px] text-zinc-400 truncate">
+                            Waktu Unggah: <span className="text-[#E5C87E]">{paymentProofUploadedAt}</span>
+                          </p>
+                        )}
+                        <p className="text-[10px] text-emerald-400/90 font-medium">
+                          ✓ Tombol konfirmasi WhatsApp &amp; Telegram di bawah telah terbuka!
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* BOTTOM CONFIRMATION BUTTONS: 2 TOMBOL KONFIRMASI EMAS */}
             <div className="pt-6 border-t border-[#D4AF37]/30 space-y-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
@@ -1568,12 +1820,22 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                     <Lock className="w-4 h-4 shrink-0" />
                     <span>Konfirmasi Pembayaran via WhatsApp (Terkunci)</span>
                   </button>
+                ) : !hasProof ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="py-4 px-5 rounded-xl bg-zinc-900/90 text-zinc-400 border border-amber-600/40 font-brand text-xs font-bold uppercase tracking-[0.14em] flex items-center justify-center gap-2.5 cursor-not-allowed opacity-85"
+                    data-testid="confirm-payment-wa-btn"
+                  >
+                    <Lock className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span>🔒 Upload Bukti Transfer Untuk Membuka Konfirmasi WA</span>
+                  </button>
                 ) : (
                   <a
                     href={whatsappConfirmUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer"
+                    className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer transition-transform hover:scale-[1.01]"
                     data-testid="confirm-payment-wa-btn"
                   >
                     <MessageCircle className="w-4 h-4 shrink-0" />
@@ -1595,12 +1857,22 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                       (Terkunci)
                     </span>
                   </button>
+                ) : !hasProof ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="py-4 px-5 rounded-xl bg-zinc-900/90 text-zinc-400 border border-amber-600/40 font-brand text-xs font-bold uppercase tracking-[0.14em] flex items-center justify-center gap-2.5 cursor-not-allowed opacity-85"
+                    data-testid="confirm-payment-tg-btn"
+                  >
+                    <Lock className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span>🔒 Upload Bukti Transfer Untuk Membuka Konfirmasi Telegram</span>
+                  </button>
                 ) : (
                   <a
                     href={telegramConfirmUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer"
+                    className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer transition-transform hover:scale-[1.01]"
                     data-testid="confirm-payment-tg-btn"
                   >
                     <Send className="w-4 h-4 shrink-0" />
@@ -1611,6 +1883,57 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   </a>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Screen Proof Lightbox Modal */}
+      {isProofModalOpen && paymentProofUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setIsProofModalOpen(false)}
+          data-testid="proof-lightbox-modal"
+        >
+          <div
+            className="relative max-w-2xl w-full bg-[#121118] border border-[#D4AF37]/50 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 animate-fade-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-[#E5C87E]" />
+                <h4 className="font-brand text-xs font-bold uppercase tracking-wider text-white">
+                  Foto Bukti Pembayaran #{baseInvoice.invoiceId}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsProofModalOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto flex items-center justify-center rounded-xl bg-[#09080E] p-2 border border-zinc-800">
+              <img
+                src={paymentProofUrl}
+                alt={`Bukti Transfer ${baseInvoice.invoiceId}`}
+                className="max-h-[65vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-zinc-400 pt-1">
+              <span>
+                {paymentProofUploadedAt ? `Diunggah: ${paymentProofUploadedAt}` : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsProofModalOpen(false)}
+                className="px-4 py-2 rounded-lg bg-[#1C1A27] hover:bg-[#252233] border border-[#D4AF37]/40 text-[#F5E6B8] font-brand text-xs font-semibold uppercase tracking-wider cursor-pointer"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>

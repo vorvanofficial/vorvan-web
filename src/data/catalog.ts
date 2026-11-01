@@ -28,6 +28,7 @@ export const DEFAULT_VORVAN_SETTINGS: VorvanSiteSettings = {
   briSwift: 'BRINIDJA',
   paypalQrUrl: 'https://raw.githubusercontent.com/vorvanofficial/vorvan/main/paypal.jpg',
   binderbyteApiKey: '',
+  autoPaidOnProofUpload: false,
 };
 
 
