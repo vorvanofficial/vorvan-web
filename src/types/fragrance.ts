@@ -138,9 +138,9 @@ export interface PrivateInvoice {
   shippingLabel?: string;
   items: PrivateInvoiceItem[];
   notes: string;
-  paymentProof?: string;
-  paymentProofUrl?: string;
-  paymentProofUploadedAt?: string;
+  paymentProof?: string | null;
+  paymentProofUrl?: string | null;
+  paymentProofUploadedAt?: string | null;
 }
 
 export interface TrackingMilestone {
@@ -168,6 +168,8 @@ export interface TrackingRecord {
   createdAtTimestampMs?: number;
   courierOfficialUrl?: string;
   binderbyteCourierCode?: string;
+  isCodFaceToFace?: boolean;
+  isAwbPending?: boolean;
 }
 
 export interface PreOrderSubmission {
@@ -225,7 +227,9 @@ export type ShippingMethodType =
   | 'J&T Express'
   | 'SiCepat'
   | 'Paxel'
+  | 'Pos Indonesia'
   | 'Anteraja'
+  | 'COD / Tatap Muka'
   | 'COD Kurir Internal VORVAN'
   | 'Ekspedisi JNE'
   | 'Ekspedisi J&T'
@@ -275,9 +279,9 @@ export interface CustomAdminOrder {
   status: 'PENDING_PAYMENT' | 'PAID';
   buyerEmail?: string;
   buyerPhone?: string;
-  paymentProof?: string;
-  paymentProofUrl?: string;
-  paymentProofUploadedAt?: string;
+  paymentProof?: string | null;
+  paymentProofUrl?: string | null;
+  paymentProofUploadedAt?: string | null;
 }
 
 

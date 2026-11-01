@@ -121,11 +121,13 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
     ? resolveCourierMetadata(activeRecord.courierService, activeRecord.awbNumber)
     : null;
 
-  // Automatic Live API Fetch to Binderbyte when API Key + Courier + AWB are available
+  // Automatic Live API Fetch to Binderbyte ONLY when API Key + Expedition Courier + Valid AWB are available
   useEffect(() => {
     let cancelled = false;
     if (
       !activeRecord ||
+      activeRecord.isCodFaceToFace ||
+      activeRecord.isAwbPending ||
       !courierMeta ||
       !courierMeta.binderbyteCode ||
       !activeBinderbyteKey
@@ -165,6 +167,8 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   }, [
     activeRecord?.awbNumber,
     activeRecord?.courierService,
+    activeRecord?.isCodFaceToFace,
+    activeRecord?.isAwbPending,
     activeBinderbyteKey,
     courierMeta?.binderbyteCode,
   ]);
@@ -234,9 +238,8 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
           </h1>
           <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
             Masukkan Nomor Resi Asli (JNE / J&amp;T Express / SiCepat / Paxel /
-            Anteraja / COD Internal) atau Kode Private Invoice Anda untuk
-            memantau pergerakan paket secara otomatis dan terintegrasi langsung
-            dengan kurir ekspedisi.
+            Pos Indonesia / Anteraja) atau Kode Private Invoice Anda untuk
+            memantau status pengemasan dan pergerakan paket secara real-time.
           </p>
         </div>
 
@@ -305,8 +308,11 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2.5 text-xs">
                 <span className="font-mono-tabular font-bold text-[#F5E6B8] px-3 py-1 rounded-lg bg-[#0B0A0E] border border-[#D4AF37]/40">
-                  RESI ASLI ({courierMeta?.displayName || activeRecord.courierService}):{' '}
-                  {activeRecord.awbNumber}
+                  {activeRecord.isCodFaceToFace
+                    ? 'METODE PENYERAHAN: COD / TATAP MUKA LANGSUNG (TANPA RESI EKSPEDISI)'
+                    : activeRecord.isAwbPending
+                    ? `KURIR (${courierMeta?.displayName || activeRecord.courierService}): RESI BELUM TERSEDIA`
+                    : `RESI ASLI (${courierMeta?.displayName || activeRecord.courierService}): ${activeRecord.awbNumber}`}
                 </span>
                 <button
                   type="button"
@@ -335,10 +341,21 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
             </div>
 
             <div className="flex flex-col items-start lg:items-end gap-1.5">
-              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 text-xs font-bold uppercase tracking-[0.16em]">
+              <span
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold tracking-[0.06em] ${
+                  activeRecord.isCodFaceToFace
+                    ? 'bg-amber-950/75 border border-[#D4AF37]/70 text-[#F5E6B8]'
+                    : activeRecord.isAwbPending
+                    ? 'bg-amber-950/65 border border-amber-500/60 text-amber-300'
+                    : 'bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 uppercase tracking-[0.14em]'
+                }`}
+                data-testid="tracking-status-badge"
+              >
                 <Truck className="w-4 h-4 shrink-0" />
                 <span>
-                  {liveCourierData?.summary?.status
+                  {!activeRecord.isCodFaceToFace &&
+                  !activeRecord.isAwbPending &&
+                  liveCourierData?.summary?.status
                     ? `LIVE SERVER ${courierMeta?.displayName.toUpperCase()} — ${liveCourierData.summary.status}`
                     : activeRecord.statusLabel}
                 </span>
@@ -363,13 +380,27 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
 
             <div className="p-4 rounded-xl bg-[#14131B] border border-[#D4AF37]/30 space-y-1">
               <span className="text-[10px] uppercase tracking-[0.2em] text-[#D8BE82] block">
-                Jalur Pengiriman &amp; Nomor Resi Asli
+                Jalur Pengiriman &amp; Nomor Resi
               </span>
               <p className="text-[#F5E6B8] font-semibold text-sm">
-                {courierMeta?.displayName || activeRecord.courierService}
+                {activeRecord.isCodFaceToFace
+                  ? 'COD / Serah Terima Tatap Muka Langsung'
+                  : courierMeta?.displayName || activeRecord.courierService}
               </p>
               <p className="font-mono-tabular text-zinc-200">
-                No. Resi: <strong>{activeRecord.awbNumber}</strong>
+                {activeRecord.isCodFaceToFace ? (
+                  <strong className="text-[#E5C87E]">
+                    Tanpa Resi Ekspedisi (Tatap Muka)
+                  </strong>
+                ) : activeRecord.isAwbPending ? (
+                  <strong className="text-amber-300">
+                    ⏳ Menunggu Pembayaran / Sedang Dikemas (Resi Belum Tersedia)
+                  </strong>
+                ) : (
+                  <>
+                    No. Resi: <strong>{activeRecord.awbNumber}</strong>
+                  </>
+                )}
               </p>
             </div>
 
@@ -386,69 +417,117 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
             </div>
           </div>
 
-          {/* LIVE COURIER SATELLITE LINK PANEL */}
-          {courierMeta && (
+          {/* CASE 1: DEDICATED COD FACE-TO-FACE HAND-DELIVERY BANNER (NO EXPEDITION TRACKING) */}
+          {activeRecord.isCodFaceToFace && (
             <div className="px-6 sm:px-8 pt-6 sm:pt-8">
               <div
-                className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-[#14110C] via-[#1C170F] to-[#14110C] border border-[#D4AF37]/60 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-lg"
-                data-testid="live-courier-satellite-panel"
+                className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-[#1A140B] via-[#221A0E] to-[#1A140B] border border-[#D4AF37]/65 space-y-2 shadow-lg"
+                data-testid="cod-face-to-face-panel"
               >
-                <div className="space-y-1.5">
-                  <div className="inline-flex items-center gap-2 text-[11px] font-brand uppercase tracking-[0.2em] text-[#E5C87E] font-bold">
-                    <Radio className="w-4 h-4 text-emerald-400 animate-pulse shrink-0" />
-                    <span>LIVE COURIER SATELLITE LINK · {courierMeta.displayName}</span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed">
-                    Terhubung langsung dengan sistem pelacakan resmi{' '}
-                    <strong className="text-[#F5E6B8]">
-                      {courierMeta.displayName}
-                    </strong>
-                    . Klik tombol di samping untuk menyalin Nomor Resi Asli (
-                    <span className="font-mono-tabular text-[#E5C87E] font-semibold">
-                      {activeRecord.awbNumber}
-                    </span>
-                    ) secara otomatis dan membuka radar pelacakan real-time resmi.
-                  </p>
+                <div className="text-xs sm:text-sm font-bold text-[#F5E6B8]">
+                  🤝 COD / Serah Terima Tatap Muka Langsung (Tanpa Resi Ekspedisi)
                 </div>
-
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleCopyAwb(activeRecord.awbNumber)}
-                    className="px-4 py-3 rounded-xl bg-[#0B0A0E] hover:bg-[#171520] border border-[#D4AF37]/45 text-xs font-mono-tabular text-[#F5E6B8] flex items-center justify-center gap-2 cursor-pointer transition-colors"
-                    data-testid="copy-awb-satellite-btn"
-                  >
-                    {copiedAwb ? (
-                      <>
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>Resi Tersalin!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4 text-[#E5C87E] shrink-0" />
-                        <span>Salin No. Resi</span>
-                      </>
-                    )}
-                  </button>
-
-                  <a
-                    href={
-                      activeRecord.courierOfficialUrl ||
-                      courierMeta.officialTrackUrl
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => handleCopyAwb(activeRecord.awbNumber)}
-                    className="px-5 py-3 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-[11px] font-bold uppercase tracking-[0.15em] flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
-                    data-testid="open-courier-satellite-link"
-                  >
-                    <span>{courierMeta.portalLabel}</span>
-                    <ArrowUpRight className="w-4 h-4 shrink-0" />
-                  </a>
-                </div>
+                <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed">
+                  Pesanan ini dijadwalkan untuk penyerahan tatap muka langsung (Face-to-Face Hand-Delivery) bersama{' '}
+                  <strong className="text-[#F5E6B8]">
+                    {activeRecord.recipientName}
+                  </strong>{' '}
+                  di <strong className="text-white">{activeRecord.destination}</strong>, sehingga tidak menggunakan kurir paket ekspedisi (JNE/J&amp;T).
+                </p>
               </div>
             </div>
           )}
+
+          {/* CASE 2: EXPEDITION ORDER WITH PENDING AWB (BEFORE ADMIN INPUTS FOLLOW-UP RESI) */}
+          {!activeRecord.isCodFaceToFace && activeRecord.isAwbPending && (
+            <div className="px-6 sm:px-8 pt-6 sm:pt-8">
+              <div
+                className="p-5 sm:p-6 rounded-2xl bg-amber-950/35 border border-amber-500/50 space-y-2 shadow-lg"
+                data-testid="pending-awb-notice-panel"
+              >
+                <div className="text-xs sm:text-sm font-bold text-amber-300">
+                  ⏳ Menunggu Pembayaran / Sedang Dikemas (Resi Belum Tersedia)
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed">
+                  Nomor Resi ekspedisi{' '}
+                  <strong className="text-[#F5E6B8]">
+                    {courierMeta?.displayName || activeRecord.courierService}
+                  </strong>{' '}
+                  akan diinput oleh Admin Concierge VORVAN segera setelah pembayaran lunas terverifikasi dan paket diserahkan ke pihak ekspedisi. Begitu Nomor Resi tersedia, radar pelacakan kurir real-time akan langsung aktif otomatis di halaman ini.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* CASE 3: LIVE COURIER SATELLITE LINK PANEL (ONLY ACTIVE AFTER AWB IS INPUT FOR EXPEDITION ORDERS) */}
+          {!activeRecord.isCodFaceToFace &&
+            !activeRecord.isAwbPending &&
+            courierMeta && (
+              <div className="px-6 sm:px-8 pt-6 sm:pt-8">
+                <div
+                  className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-[#14110C] via-[#1C170F] to-[#14110C] border border-[#D4AF37]/60 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-lg"
+                  data-testid="live-courier-satellite-panel"
+                >
+                  <div className="space-y-1.5">
+                    <div className="inline-flex items-center gap-2 text-[11px] font-brand uppercase tracking-[0.2em] text-[#E5C87E] font-bold">
+                      <Radio className="w-4 h-4 text-emerald-400 animate-pulse shrink-0" />
+                      <span>
+                        LIVE COURIER SATELLITE LINK · {courierMeta.displayName}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed">
+                      Terhubung langsung dengan sistem pelacakan resmi{' '}
+                      <strong className="text-[#F5E6B8]">
+                        {courierMeta.displayName}
+                      </strong>
+                      . Klik tombol di samping untuk menyalin Nomor Resi Asli (
+                      <span className="font-mono-tabular text-[#E5C87E] font-semibold">
+                        {activeRecord.awbNumber}
+                      </span>
+                      ) secara otomatis dan membuka radar pelacakan real-time resmi.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyAwb(activeRecord.awbNumber)}
+                      className="w-full sm:w-auto px-4 py-3 rounded-xl bg-[#0B0A0E] hover:bg-[#171520] border border-[#D4AF37]/45 text-xs font-mono-tabular text-[#F5E6B8] flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                      data-testid="copy-awb-satellite-btn"
+                    >
+                      {copiedAwb ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>Resi Tersalin!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 text-[#E5C87E] shrink-0" />
+                          <span>Salin No. Resi</span>
+                        </>
+                      )}
+                    </button>
+
+                    <a
+                      href={
+                        activeRecord.courierOfficialUrl ||
+                        courierMeta.officialTrackUrl
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => handleCopyAwb(activeRecord.awbNumber)}
+                      className="w-full sm:w-auto px-4 py-3.5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.08em] sm:tracking-[0.13em] leading-snug text-center flex items-center justify-center gap-2 cursor-pointer whitespace-normal break-words"
+                      data-testid="open-courier-satellite-link"
+                    >
+                      <span className="leading-snug">
+                        {courierMeta.portalLabel}
+                      </span>
+                      <ArrowUpRight className="w-4 h-4 shrink-0" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
 
           {/* LIVE BINDERBYTE API REAL-TIME MANIFEST TABLE (IF API KEY IS CONFIGURED & DATA RETURNED) */}
           {liveLoading && (

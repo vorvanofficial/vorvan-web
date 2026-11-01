@@ -990,12 +990,14 @@ test('getVorvanBaseDomain dynamically detects preview vs custom domain (.com / .
   }
 });
 
-test('applyPaymentProofToOrders automatically updates status to PAID (LUNAS), stores paymentProof Base64, and advances shippingStage', async () => {
-  const { applyPaymentProofToOrders, resolvePrivateInvoice } = await import(
-    './businessRules.ts'
-  );
+test('applyPaymentProofToOrders strictly updates ONLY the exact matching invoiceId and never leaks paymentProof or PAID status to other customers', async () => {
+  const {
+    applyPaymentProofToOrders,
+    removePaymentProofRecord,
+    resolvePrivateInvoice,
+  } = await import('./businessRules.ts');
 
-  const pendingOrder = {
+  const firstCustomerOrder = {
     invoiceId: 'INV-VRV-8899',
     trackingId: 'JNE-8899',
     createdAt: '01 Nov 2026 · 14:00 WIB',
@@ -1013,46 +1015,217 @@ test('applyPaymentProofToOrders automatically updates status to PAID (LUNAS), st
     status: 'PENDING_PAYMENT' as const,
   };
 
+  const secondCustomerNewOrder = {
+    invoiceId: 'INV-VRV-9901',
+    trackingId: 'JNE-9901',
+    createdAt: '01 Nov 2026 · 15:00 WIB',
+    buyerName: 'Ibu Clarissa',
+    buyerCity: 'Jakarta',
+    house: 'Creed',
+    fragranceName: 'Aventus',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    batchCode: 'CRD-89',
+    dealPriceIDR: 4200000,
+    shippingMethod: 'JNE' as const,
+    awbNumber: 'JNE-9901',
+    shippingStage: 2 as const,
+    status: 'PENDING_PAYMENT' as const,
+    paymentProof: null,
+    paymentProofUrl: null,
+    paymentProofUploadedAt: null,
+  };
+
+  removePaymentProofRecord('INV-VRV-8899');
+  removePaymentProofRecord('INV-VRV-9901');
+  removePaymentProofRecord('INV-SAMPLE');
+
   const fakeBase64Proof = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/';
   const uploadedTime = '01 Nov 2026 · 14:05:12 WIB';
 
-  // 1. Exact ID match
+  // 1. Upload proof for firstCustomerOrder (INV-VRV-8899) while secondCustomerNewOrder (INV-VRV-9901) is also in the list
   const exactRes = applyPaymentProofToOrders(
-    [pendingOrder],
+    [secondCustomerNewOrder, firstCustomerOrder],
     'INV-VRV-8899',
     fakeBase64Proof,
     uploadedTime
   );
-  assert.equal(exactRes.matchedInvoiceIds[0], 'INV-VRV-8899');
-  assert.equal(exactRes.updatedOrders[0].status, 'PAID');
-  assert.equal(exactRes.updatedOrders[0].paymentProof, fakeBase64Proof);
-  assert.equal(exactRes.updatedOrders[0].paymentProofUrl, fakeBase64Proof);
-  assert.equal(exactRes.updatedOrders[0].paymentProofUploadedAt, uploadedTime);
-  assert.equal(exactRes.updatedOrders[0].shippingStage, 3);
+  assert.deepEqual(exactRes.matchedInvoiceIds, ['INV-VRV-8899']);
 
-  // 2. Fallback when testing on INV-SAMPLE with 1 active invoice in Admin
-  const fallbackRes = applyPaymentProofToOrders(
-    [pendingOrder],
+  const updatedSecond = exactRes.updatedOrders.find(
+    (o) => o.invoiceId === 'INV-VRV-9901'
+  )!;
+  const updatedFirst = exactRes.updatedOrders.find(
+    (o) => o.invoiceId === 'INV-VRV-8899'
+  )!;
+
+  // First customer is PAID with proof
+  assert.equal(updatedFirst.status, 'PAID');
+  assert.equal(updatedFirst.paymentProof, fakeBase64Proof);
+  assert.equal(updatedFirst.paymentProofUrl, fakeBase64Proof);
+  assert.equal(updatedFirst.paymentProofUploadedAt, uploadedTime);
+  assert.equal(updatedFirst.shippingStage, 3);
+
+  // Second customer MUST remain PENDING_PAYMENT with null proof (no cross-customer bleed!)
+  assert.equal(updatedSecond.status, 'PENDING_PAYMENT');
+  assert.equal(updatedSecond.paymentProof, null);
+  assert.equal(updatedSecond.paymentProofUrl, null);
+  assert.equal(updatedSecond.paymentProofUploadedAt, null);
+
+  // 2. Uploading on INV-SAMPLE must NEVER mark INV-VRV-9901 as PAID
+  const sampleRes = applyPaymentProofToOrders(
+    [secondCustomerNewOrder],
     'INV-SAMPLE',
     fakeBase64Proof,
     uploadedTime
   );
-  assert.equal(fallbackRes.matchedInvoiceIds[0], 'INV-VRV-8899');
-  assert.equal(fallbackRes.updatedOrders[0].status, 'PAID');
-  assert.equal(fallbackRes.updatedOrders[0].paymentProof, fakeBase64Proof);
-  assert.equal(fallbackRes.updatedOrders[0].shippingStage, 3);
+  assert.equal(sampleRes.matchedInvoiceIds.length, 0);
+  assert.equal(sampleRes.updatedOrders[0].status, 'PENDING_PAYMENT');
+  assert.equal(sampleRes.updatedOrders[0].paymentProof, null);
 
-  // 3. resolvePrivateInvoice prioritizes updated customOrders over stale smartOrder
-  const resolved = resolvePrivateInvoice(
-    'INV-VRV-8899',
-    fallbackRes.updatedOrders,
-    pendingOrder
+  // 3. resolvePrivateInvoice for secondCustomerNewOrder remains PENDING_PAYMENT with undefined proof
+  const resolvedNewCustomer = resolvePrivateInvoice(
+    'INV-VRV-9901',
+    exactRes.updatedOrders,
+    secondCustomerNewOrder
   );
-  assert.equal(resolved.status, 'PAID');
-  assert.equal(resolved.paymentProof, fakeBase64Proof);
-  assert.equal(resolved.paymentProofUrl, fakeBase64Proof);
+  assert.equal(resolvedNewCustomer.status, 'PENDING_PAYMENT');
+  assert.equal(resolvedNewCustomer.paymentProof, undefined);
+  assert.equal(resolvedNewCustomer.paymentProofUrl, undefined);
+
+  // 4. resolvePrivateInvoice for firstCustomerOrder is PAID with its proof
+  const resolvedFirstCustomer = resolvePrivateInvoice(
+    'INV-VRV-8899',
+    exactRes.updatedOrders,
+    firstCustomerOrder
+  );
+  assert.equal(resolvedFirstCustomer.status, 'PAID');
+  assert.equal(resolvedFirstCustomer.paymentProof, fakeBase64Proof);
+  assert.equal(resolvedFirstCustomer.paymentProofUrl, fakeBase64Proof);
+
+  // Cleanup test records
+  removePaymentProofRecord('INV-VRV-8899');
+  removePaymentProofRecord('INV-VRV-9901');
+  removePaymentProofRecord('INV-SAMPLE');
 });
 
+test('reindexVisitorLeads enforces sequential 3-digit IDs (LEAD-VRV-001..N) with zero duplicates, and Deferred AWB / COD Face-to-Face tracking statuses work accurately', async () => {
+  const {
+    reindexVisitorLeads,
+    markLeadEmailDeleted,
+    unmarkLeadEmailDeleted,
+    buildTrackingFromCustomOrder,
+    encodeSmartOrderParam,
+    decodeSmartOrderParam,
+    PENDING_AWB_STATUS_LABEL,
+    COD_FACE_TO_FACE_STATUS_LABEL,
+  } = await import('./businessRules.ts');
 
+  // 1. Mixed legacy IDs (001, 03, duplicate 03) -> strictly LEAD-VRV-001, LEAD-VRV-002, LEAD-VRV-003, LEAD-VRV-004
+  const messyLeads = [
+    {
+      id: 'LEAD-VRV-001',
+      email: 'alexander.w@private-wealth.id',
+      registeredAt: '27 Okt 2026 · 14:22 WIB',
+      triggeredByFragrance: 'MFK — BR540 (70ml)',
+      syncedToVorvanMail: true,
+    },
+    {
+      id: 'LEAD-VRV-002',
+      email: 'clarissa.tan@atelier-jakarta.com',
+      registeredAt: '27 Okt 2026 · 15:08 WIB',
+      triggeredByFragrance: 'LV — Ombre Nomade (100ml)',
+      syncedToVorvanMail: true,
+    },
+    {
+      id: 'LEAD-VRV-03',
+      email: 'dummy1@gmail.com',
+      registeredAt: '01 Nov 2026 · 10:00 WIB',
+      triggeredByFragrance: 'Akses Concierge Katalog',
+      syncedToVorvanMail: true,
+    },
+    {
+      id: 'LEAD-VRV-03',
+      email: 'dummy2@gmail.com',
+      registeredAt: '01 Nov 2026 · 10:05 WIB',
+      triggeredByFragrance: 'Akses Concierge Katalog',
+      syncedToVorvanMail: true,
+    },
+  ];
 
+  const indexed = reindexVisitorLeads(messyLeads);
+  assert.equal(indexed.length, 4);
+  assert.deepEqual(
+    indexed.map((l) => l.id),
+    ['LEAD-VRV-001', 'LEAD-VRV-002', 'LEAD-VRV-003', 'LEAD-VRV-004']
+  );
+
+  // Deleting dummy1@gmail.com re-indexes remaining leads cleanly to 001..003
+  markLeadEmailDeleted('dummy1@gmail.com');
+  const afterDelete = reindexVisitorLeads(messyLeads);
+  assert.equal(afterDelete.length, 3);
+  assert.deepEqual(
+    afterDelete.map((l) => l.id),
+    ['LEAD-VRV-001', 'LEAD-VRV-002', 'LEAD-VRV-003']
+  );
+  assert.equal(afterDelete[2].email, 'dummy2@gmail.com');
+  unmarkLeadEmailDeleted('dummy1@gmail.com');
+
+  // 2. Deferred AWB flow: New order created without AWB -> PENDING_AWB_STATUS_LABEL & isAwbPending: true
+  const newOrderWithoutResi = {
+    invoiceId: 'INV-VRV-7710',
+    trackingId: 'INV-VRV-7710',
+    createdAt: '01 Nov 2026 · 16:00 WIB',
+    buyerName: 'Bpk. Dimas',
+    buyerCity: 'Bandung, Jawa Barat',
+    house: 'Dior',
+    fragranceName: 'Sauvage Elixir',
+    concentration: 'Parfum',
+    volume: '60ml',
+    batchCode: 'DR-60A',
+    dealPriceIDR: 2650000,
+    shippingMethod: 'JNE' as const,
+    awbNumber: '',
+    status: 'PENDING_PAYMENT' as const,
+  };
+
+  const trackBeforeResi = buildTrackingFromCustomOrder(newOrderWithoutResi);
+  assert.equal(trackBeforeResi.isAwbPending, true);
+  assert.equal(trackBeforeResi.isCodFaceToFace, false);
+  assert.equal(trackBeforeResi.statusLabel, PENDING_AWB_STATUS_LABEL);
+
+  // Smart token preserves empty AWB (never fabricates fake VRV-RESI-XXXX)
+  const encodedPending = encodeSmartOrderParam(newOrderWithoutResi);
+  const decodedPending = decodeSmartOrderParam(encodedPending);
+  assert.ok(decodedPending);
+  assert.equal(decodedPending.awbNumber, '');
+
+  // After Admin inputs follow-up Resi via "✏️ Input / Edit Resi & Kurir" -> active expedition tracking
+  const orderAfterFollowUpResi = {
+    ...newOrderWithoutResi,
+    shippingMethod: 'Pos Indonesia' as const,
+    awbNumber: 'POS-9988112233',
+    trackingId: 'POS-9988112233',
+    status: 'PAID' as const,
+  };
+  const trackAfterResi = buildTrackingFromCustomOrder(orderAfterFollowUpResi);
+  assert.equal(trackAfterResi.isAwbPending, false);
+  assert.equal(trackAfterResi.isCodFaceToFace, false);
+  assert.equal(trackAfterResi.awbNumber, 'POS-9988112233');
+  assert.equal(trackAfterResi.binderbyteCourierCode, 'pos');
+
+  // 3. Dedicated COD Face-to-Face Hand-Delivery -> COD_FACE_TO_FACE_STATUS_LABEL & isCodFaceToFace: true
+  const codOrder = {
+    ...newOrderWithoutResi,
+    invoiceId: 'INV-VRV-7711',
+    shippingMethod: 'COD / Tatap Muka' as const,
+    awbNumber: '',
+    status: 'PAID' as const,
+  };
+  const trackCod = buildTrackingFromCustomOrder(codOrder);
+  assert.equal(trackCod.isCodFaceToFace, true);
+  assert.equal(trackCod.isAwbPending, false);
+  assert.equal(trackCod.statusLabel, COD_FACE_TO_FACE_STATUS_LABEL);
+  assert.equal(trackCod.binderbyteCourierCode, '');
+});
 

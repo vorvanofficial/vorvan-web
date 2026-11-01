@@ -39,13 +39,19 @@ import {
   buildBuyerInvoiceWhatsAppUrl,
   buildConciergeRecommendationWaText,
   buildSmartShareUrl,
+  COD_FACE_TO_FACE_STATUS_LABEL,
   computeAutoShippingStage,
   filterConciergeGuide81,
   filterVorvanCheatSheet,
   formatIDRCurrency,
   getVorvanBaseDomain,
+  hasValidCourierAwb,
+  isCodShippingMethod,
   loadPaymentProofsMap,
   normalizeIndonesianPhoneNumber,
+  PENDING_AWB_STATUS_LABEL,
+  reindexVisitorLeads,
+  removePaymentProofRecord,
   resolveCourierMetadata,
   resolveVorvanSkuPricing,
   validateConciergeEmail,
@@ -62,8 +68,9 @@ const ADMIN_COURIER_OPTIONS: ShippingMethodType[] = [
   'J&T Express',
   'SiCepat',
   'Paxel',
+  'Pos Indonesia',
   'Anteraja',
-  'COD Kurir Internal VORVAN',
+  'COD / Tatap Muka',
 ];
 
 const SHIPPING_ZONE_BUTTONS: {
@@ -218,7 +225,13 @@ interface AdminEmailRegistryModalProps {
     invoiceId: string,
     status: 'PENDING_PAYMENT' | 'PAID'
   ) => void;
+  onUpdateCustomOrderResi?: (
+    invoiceId: string,
+    shippingMethod: ShippingMethodType,
+    awbNumber: string
+  ) => void;
   onDeleteCustomOrder: (invoiceId: string) => void;
+  onDeleteLead?: (email: string) => void;
   onOpenInvoicePreview: (invoiceId: string, smartOrder?: CustomAdminOrder) => void;
   onOpenTrackingPreview: (query: string, smartOrder?: CustomAdminOrder) => void;
   onSyncCloud?: () => Promise<void> | void;
@@ -234,7 +247,9 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   onCreateCustomOrder,
   onUpdateCustomOrderStage,
   onUpdateCustomOrderStatus,
+  onUpdateCustomOrderResi,
   onDeleteCustomOrder,
+  onDeleteLead,
   onOpenInvoicePreview,
   onOpenTrackingPreview,
   onSyncCloud,
@@ -302,6 +317,13 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   const [createError, setCreateError] = useState<string | null>(null);
   const [selectedProofOrder, setSelectedProofOrder] =
     useState<CustomAdminOrder | null>(null);
+
+  // Modal state for "✏️ Input / Edit Resi & Kurir" (Follow-Up AWB after Buyer Pays)
+  const [editingResiOrder, setEditingResiOrder] =
+    useState<CustomAdminOrder | null>(null);
+  const [editCourierMethod, setEditCourierMethod] =
+    useState<ShippingMethodType>('JNE');
+  const [editAwbInput, setEditAwbInput] = useState<string>('');
 
   // Tab 2: Settings form state
   const [formSettings, setFormSettings] = useState<VorvanSiteSettings>(settings);
@@ -442,11 +464,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     setCreateError(null);
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
     const invoiceId = `INV-VRV-${randomDigits}`;
-    const cleanAwb =
-      awbNumber.trim() ||
-      (shippingMethod.includes('COD')
-        ? `COD-VRV-${randomDigits}`
-        : `VRV-RESI-${randomDigits}`);
+    const isCodOrder = isCodShippingMethod(shippingMethod);
+    const cleanAwb = isCodOrder ? '' : awbNumber.trim();
 
     const catalogItem = FRAGRANCE_CATALOG.find(
       (f) => f.id === selectedFragranceId
@@ -478,7 +497,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
 
     const newOrder: CustomAdminOrder = {
       invoiceId,
-      trackingId: cleanAwb,
+      trackingId: cleanAwb || invoiceId,
       createdAt: `${formattedDate} · ${formattedTime} WIB`,
       createdAtTimestampMs: now.getTime(),
       buyerName: buyerName.trim(),
@@ -497,9 +516,16 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       shippingLabel: cleanShipLabel,
       shippingMethod,
       awbNumber: cleanAwb,
-      status: paymentStatus,
+      shippingStage: isCodOrder ? 2 : cleanAwb ? 2 : 1,
+      status: 'PENDING_PAYMENT',
+      paymentProof: null,
+      paymentProofUrl: null,
+      paymentProofUploadedAt: null,
     };
 
+    removePaymentProofRecord(invoiceId);
+    setPaymentStatus('PENDING_PAYMENT');
+    setAwbNumber('');
     onCreateCustomOrder(newOrder);
     setCreatedOrderResult(newOrder);
 
@@ -1095,10 +1121,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                   <div className="p-4 rounded-xl bg-[#121118] border border-[#D4AF37]/30 space-y-3.5">
                     <div>
                       <label className="block text-xs text-[#E5C87E] font-semibold uppercase tracking-wider mb-2">
-                        Pilih Kurir Ekspedisi (1x Input Otomatis) *
+                        Pilih Kurir Ekspedisi atau COD Tatap Muka *
                       </label>
                       <div
-                        className="grid grid-cols-2 sm:grid-cols-3 gap-2"
+                        className="grid grid-cols-2 sm:grid-cols-4 gap-2"
                         role="group"
                         aria-label="Pilih Kurir Ekspedisi"
                       >
@@ -1108,7 +1134,12 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             <button
                               key={courierOpt}
                               type="button"
-                              onClick={() => setShippingMethod(courierOpt)}
+                              onClick={() => {
+                                setShippingMethod(courierOpt);
+                                if (isCodShippingMethod(courierOpt)) {
+                                  setAwbNumber('');
+                                }
+                              }}
                               data-testid={`courier-option-${courierOpt
                                 .toLowerCase()
                                 .replace(/[^a-z0-9]+/g, '-')}`}
@@ -1125,22 +1156,33 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs text-zinc-300 mb-1">
-                        Ketik Nomor Resi Asli dari Ekspedisi (AWB Number)
-                      </label>
-                      <input
-                        type="text"
-                        value={awbNumber}
-                        onChange={(e) => setAwbNumber(e.target.value)}
-                        placeholder="Contoh: JNE881920194 / JP99102831 (Kosongkan untuk auto-generate)"
-                        data-testid="admin-awb-input"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#0B0A0E] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-white outline-none"
-                      />
-                      <p className="mt-1.5 text-[11px] text-emerald-400/90 leading-relaxed">
-                        ✓ Begitu disimpan 1 kali, seluruh tahapan pelacakan (Lolos QC Vault → Manifest Kurir → Transit Hub Antar-Kota → Menuju Alamat Penerima) berjalan OTOMATIS &amp; terhubung ke satelit kurir tanpa perlu diedit manual.
-                      </p>
-                    </div>
+                    {isCodShippingMethod(shippingMethod) ? (
+                      <div className="p-3.5 rounded-xl bg-amber-950/35 border border-[#D4AF37]/50 text-xs text-[#F5E6B8] space-y-1">
+                        <div className="font-bold">
+                          {COD_FACE_TO_FACE_STATUS_LABEL}
+                        </div>
+                        <p className="text-[11px] text-zinc-300 leading-relaxed">
+                          Transaksi ini adalah pertemuan tatap muka langsung (Face-to-Face Hand-Delivery), bukan paket ekspedisi. Tidak memerlukan Nomor Resi ekspedisi.
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-xs text-zinc-300 mb-1">
+                          Nomor Resi Ekspedisi (Opsional — Diisi Menyusul)
+                        </label>
+                        <input
+                          type="text"
+                          value={awbNumber}
+                          onChange={(e) => setAwbNumber(e.target.value)}
+                          placeholder="Kosongkan dulu — Resi diisi menyusul setelah pembayaran lunas & barang dikirim"
+                          data-testid="admin-awb-input"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#0B0A0E] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-white outline-none"
+                        />
+                        <p className="mt-1.5 text-[11px] text-amber-300/90 leading-relaxed">
+                          ℹ️ Resi diisi menyusul setelah pembayaran lunas &amp; barang dikirim (bisa diinput kapan saja melalui tombol <strong>&quot;✏️ Input / Edit Resi &amp; Kurir&quot;</strong> di Tabel Admin).
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {createError && (
@@ -1174,10 +1216,17 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             {createdOrderResult.invoiceId}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-zinc-400">Nomor Resi:</span>
-                          <span className="font-mono-tabular font-semibold text-white">
-                            {createdOrderResult.awbNumber}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-zinc-400 shrink-0">Status Resi:</span>
+                          <span className="font-mono-tabular font-semibold text-white text-right">
+                            {isCodShippingMethod(
+                              createdOrderResult.shippingMethod,
+                              createdOrderResult.awbNumber
+                            )
+                              ? COD_FACE_TO_FACE_STATUS_LABEL
+                              : hasValidCourierAwb(createdOrderResult)
+                              ? createdOrderResult.awbNumber
+                              : PENDING_AWB_STATUS_LABEL}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
@@ -1962,10 +2011,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         {customOrders.map((ord) => {
                           const proofsMap = loadPaymentProofsMap();
                           const storedProof =
-                            proofsMap[ord.invoiceId.toUpperCase()] ||
-                            (customOrders.length === 1
-                              ? proofsMap['INV-SAMPLE']
-                              : undefined);
+                            proofsMap[ord.invoiceId.trim().toUpperCase()];
                           const resolvedProof =
                             ord.paymentProof ||
                             ord.paymentProofUrl ||
@@ -1994,13 +2040,30 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             effectiveOrder.shippingMethod,
                             effectiveOrder.awbNumber
                           );
+                          const isCod = isCodShippingMethod(
+                            effectiveOrder.shippingMethod,
+                            effectiveOrder.awbNumber
+                          );
+                          const hasAwb = hasValidCourierAwb(effectiveOrder);
                           return (
                             <tr key={ord.invoiceId}>
                               <td className="py-3 px-3 font-mono-tabular">
                                 <div className="font-bold text-[#F5E6B8]">
                                   {ord.invoiceId}
                                 </div>
-                                <div className="text-zinc-400">{ord.awbNumber}</div>
+                                {isCod ? (
+                                  <div className="text-[11px] text-amber-300 font-sans mt-0.5">
+                                    🤝 COD Tatap Muka (Tanpa Resi)
+                                  </div>
+                                ) : hasAwb ? (
+                                  <div className="text-emerald-300 mt-0.5">
+                                    Resi: {effectiveOrder.awbNumber}
+                                  </div>
+                                ) : (
+                                  <div className="text-amber-400/90 italic font-sans text-[11px] mt-0.5">
+                                    ⏳ Resi Belum Diinput
+                                  </div>
+                                )}
                               </td>
                               <td className="py-3 px-3">
                                 <div className="text-white font-medium">
@@ -2091,21 +2154,55 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                   </div>
                                 )}
                               </td>
-                              <td className="py-3 px-3">
+                              <td
+                                className="py-3 px-3 max-w-[230px]"
+                                data-testid={`admin-order-shipping-status-${ord.invoiceId}`}
+                              >
                                 <div className="font-semibold text-[#F5E6B8]">
                                   {courierMeta.displayName}
                                 </div>
-                                <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-mono-tabular text-emerald-300">
-                                  <span>● AUTO TAHAP {autoStage}/4</span>
-                                </div>
+                                {isCod ? (
+                                  <div className="mt-1 px-2.5 py-1 rounded-lg bg-amber-950/70 border border-[#D4AF37]/60 text-[10px] font-semibold text-[#F5E6B8] leading-snug">
+                                    {COD_FACE_TO_FACE_STATUS_LABEL}
+                                  </div>
+                                ) : !hasAwb ? (
+                                  <div className="mt-1 px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/50 text-[10px] font-semibold text-amber-300 leading-snug">
+                                    {PENDING_AWB_STATUS_LABEL}
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-mono-tabular text-emerald-300">
+                                    <span>
+                                      ● AUTO TAHAP {autoStage}/4 (RESI:{' '}
+                                      {effectiveOrder.awbNumber})
+                                    </span>
+                                  </div>
+                                )}
                               </td>
                               <td className="py-3 px-3">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <button
                                     type="button"
+                                    onClick={() => {
+                                      setEditingResiOrder(effectiveOrder);
+                                      setEditCourierMethod(
+                                        isCod
+                                          ? 'COD / Tatap Muka'
+                                          : effectiveOrder.shippingMethod
+                                      );
+                                      setEditAwbInput(
+                                        isCod ? '' : effectiveOrder.awbNumber || ''
+                                      );
+                                    }}
+                                    data-testid={`admin-edit-resi-btn-${ord.invoiceId}`}
+                                    className="px-2.5 py-1 rounded bg-emerald-950/85 text-emerald-300 border border-emerald-500/60 hover:bg-emerald-900/90 font-semibold cursor-pointer"
+                                  >
+                                    ✏️ Input / Edit Resi &amp; Kurir
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() =>
                                       handleCopyText(
-                                        buildSmartShareUrl(ord, 'invoice'),
+                                        buildSmartShareUrl(effectiveOrder, 'invoice'),
                                         `inv-${ord.invoiceId}`
                                       )
                                     }
@@ -2119,7 +2216,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                     type="button"
                                     onClick={() =>
                                       handleCopyText(
-                                        buildSmartShareUrl(ord, 'track'),
+                                        buildSmartShareUrl(effectiveOrder, 'track'),
                                         `trk-${ord.invoiceId}`
                                       )
                                     }
@@ -2153,11 +2250,11 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <h3 className="font-serif-luxury text-xl font-semibold text-white">
-                      Database Email Pengunjung Terdaftar ({leads.length}) — Sinkron ke{' '}
+                      Database Email Pengunjung Terdaftar ({reindexVisitorLeads(leads).length}) — Sinkron ke{' '}
                       <span className="text-[#E5C87E]">{settings.conciergeEmail}</span>
                     </h3>
                     <p className="text-[11px] text-emerald-400/90 mt-0.5">
-                      ✓ Terhubung ke FormSubmit AJAX (`vorvanlifestyle@gmail.com`) &amp; Cloud Sync Lintas Perangkat / Tab Samaran
+                      ✓ Urutan ID 3 Digit Otomatis (`LEAD-VRV-001`, `LEAD-VRV-002`, ...) · Terhubung ke FormSubmit AJAX (`vorvanlifestyle@gmail.com`) &amp; Cloud Sync
                     </p>
                   </div>
                   {onSyncCloud && (
@@ -2187,12 +2284,13 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         <th className="py-2.5 px-3">Waktu Registrasi</th>
                         <th className="py-2.5 px-3">Parfum yang Diminati</th>
                         <th className="py-2.5 px-3">Tujuan Sinkronisasi</th>
+                        <th className="py-2.5 px-3 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/70">
-                      {leads.map((lead) => (
-                        <tr key={lead.id}>
-                          <td className="py-2.5 px-3 font-mono-tabular text-zinc-300">
+                      {reindexVisitorLeads(leads).map((lead) => (
+                        <tr key={lead.email}>
+                          <td className="py-2.5 px-3 font-mono-tabular font-semibold text-[#F5E6B8]">
                             {lead.id}
                           </td>
                           <td className="py-2.5 px-3 text-white font-medium">
@@ -2209,6 +2307,17 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               {settings.conciergeEmail}
                             </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => onDeleteLead?.(lead.email)}
+                              data-testid={`admin-delete-lead-${lead.id}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 border border-rose-500/40 text-[11px] font-semibold text-rose-300 cursor-pointer transition-colors"
+                              title={`Hapus ${lead.email}`}
+                            >
+                              <span>🗑️ Hapus</span>
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -2506,7 +2615,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 <img
                   src={
                     selectedProofOrder.paymentProof ||
-                    selectedProofOrder.paymentProofUrl
+                    selectedProofOrder.paymentProofUrl ||
+                    undefined
                   }
                   alt={`Bukti Transfer ${selectedProofOrder.invoiceId}`}
                   className="max-h-[65vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
@@ -2547,6 +2657,146 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
             </div>
           </div>
         )}
+
+      {/* MODAL: ✏️ INPUT / EDIT RESI & KURIR SUSULAN SETELAH PEMBELI BAYAR */}
+      {editingResiOrder && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setEditingResiOrder(null)}
+          data-testid="admin-edit-resi-modal"
+        >
+          <div
+            className="relative max-w-lg w-full bg-[#121118] border border-[#D4AF37]/60 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5 animate-fade-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#D4AF37]/25 pb-3">
+              <div>
+                <span className="font-brand text-[10px] uppercase tracking-[0.2em] text-[#E5C87E] block">
+                  INPUT / EDIT RESI SUSULAN · #{editingResiOrder.invoiceId}
+                </span>
+                <h4 className="font-serif-luxury text-xl font-semibold text-white">
+                  {editingResiOrder.buyerName} ({editingResiOrder.buyerCity})
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingResiOrder(null)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[#E5C87E] mb-2">
+                  1. Pilih Kurir Ekspedisi atau COD Tatap Muka:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {ADMIN_COURIER_OPTIONS.map((courierOpt) => {
+                    const isSelected = editCourierMethod === courierOpt;
+                    return (
+                      <button
+                        key={courierOpt}
+                        type="button"
+                        onClick={() => {
+                          setEditCourierMethod(courierOpt);
+                          if (isCodShippingMethod(courierOpt)) {
+                            setEditAwbInput('');
+                          }
+                        }}
+                        data-testid={`edit-resi-courier-${courierOpt
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, '-')}`}
+                        className={`px-3 py-2 rounded-lg text-xs font-mono-tabular font-semibold transition-all cursor-pointer border text-center truncate ${
+                          isSelected
+                            ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] font-bold'
+                            : 'bg-[#0B0A0E] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/60'
+                        }`}
+                      >
+                        {courierOpt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {isCodShippingMethod(editCourierMethod) ? (
+                <div className="p-4 rounded-xl bg-amber-950/40 border border-[#D4AF37]/60 text-xs text-[#F5E6B8] space-y-1.5">
+                  <div className="font-bold">
+                    {COD_FACE_TO_FACE_STATUS_LABEL}
+                  </div>
+                  <p className="text-[11px] text-zinc-300 leading-relaxed">
+                    Transaksi ini menggunakan serah terima tatap muka langsung (Face-to-Face Hand-Delivery) dan tidak dihubungkan ke pelacakan resi ekspedisi.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    2. Ketik Nomor Resi Asli ({editCourierMethod}):
+                  </label>
+                  <input
+                    type="text"
+                    value={editAwbInput}
+                    onChange={(e) => setEditAwbInput(e.target.value)}
+                    placeholder={`Ketik nomor resi ${editCourierMethod} setelah paket dikirim...`}
+                    data-testid="admin-edit-awb-input"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#0B0A0E] border border-[#D4AF37]/50 focus:border-[#F5E6B8] text-sm font-mono-tabular text-white outline-none"
+                  />
+                  <p className="mt-1.5 text-[11px] text-zinc-400 leading-relaxed">
+                    Jika dikosongkan, status tetap tertulis:{' '}
+                    <span className="text-amber-300 font-semibold">
+                      &quot;{PENDING_AWB_STATUS_LABEL}&quot;
+                    </span>
+                    . Begitu Nomor Resi diisi dan disimpan, pelacakan perjalanan paket di halaman{' '}
+                    <strong className="text-[#F5E6B8]">CEK RESI</strong> langsung aktif otomatis.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setEditingResiOrder(null)}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const cleanAwb = isCodShippingMethod(editCourierMethod)
+                    ? ''
+                    : editAwbInput.trim();
+                  onUpdateCustomOrderResi?.(
+                    editingResiOrder.invoiceId,
+                    editCourierMethod,
+                    cleanAwb
+                  );
+                  if (
+                    createdOrderResult &&
+                    createdOrderResult.invoiceId.toUpperCase() ===
+                      editingResiOrder.invoiceId.toUpperCase()
+                  ) {
+                    setCreatedOrderResult({
+                      ...createdOrderResult,
+                      shippingMethod: editCourierMethod,
+                      awbNumber: cleanAwb,
+                      trackingId: cleanAwb || editingResiOrder.invoiceId,
+                    });
+                  }
+                  setEditingResiOrder(null);
+                }}
+                data-testid="admin-save-resi-btn"
+                className="px-5 py-2.5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-wider cursor-pointer"
+              >
+                💾 Simpan Resi &amp; Kurir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

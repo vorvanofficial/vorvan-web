@@ -16,6 +16,7 @@ import {
 } from '../data/conciergeGuide81';
 import {
   BrandHouseId,
+  ConciergeEmailLead,
   CustomAdminOrder,
   FragranceItem,
   GenderCategory,
@@ -31,6 +32,136 @@ import {
 
 export const VORVAN_SETTINGS_STORAGE_KEY = 'vorvan_site_settings_v1';
 export const VORVAN_CUSTOM_ORDERS_STORAGE_KEY = 'vorvan_custom_admin_orders_v1';
+export const VORVAN_DELETED_LEADS_STORAGE_KEY = 'vorvan_deleted_leads_v1';
+
+export const COD_FACE_TO_FACE_STATUS_LABEL =
+  '🤝 COD / Serah Terima Tatap Muka Langsung (Tanpa Resi Ekspedisi)';
+export const PENDING_AWB_STATUS_LABEL =
+  '⏳ Menunggu Pembayaran / Sedang Dikemas (Resi Belum Tersedia)';
+
+const memoryDeletedLeadEmails = new Set<string>();
+
+export function loadDeletedLeadEmails(): Set<string> {
+  const result = new Set<string>(memoryDeletedLeadEmails);
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(VORVAN_DELETED_LEADS_STORAGE_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw) as string[];
+        if (Array.isArray(arr)) {
+          for (const email of arr) {
+            if (typeof email === 'string' && email.trim()) {
+              result.add(email.trim().toLowerCase());
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return result;
+}
+
+export function markLeadEmailDeleted(email: string): void {
+  const clean = (email || '').trim().toLowerCase();
+  if (!clean) return;
+  memoryDeletedLeadEmails.add(clean);
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const current = loadDeletedLeadEmails();
+      current.add(clean);
+      window.localStorage.setItem(
+        VORVAN_DELETED_LEADS_STORAGE_KEY,
+        JSON.stringify(Array.from(current))
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function unmarkLeadEmailDeleted(email: string): void {
+  const clean = (email || '').trim().toLowerCase();
+  if (!clean) return;
+  memoryDeletedLeadEmails.delete(clean);
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const current = loadDeletedLeadEmails();
+      current.delete(clean);
+      window.localStorage.setItem(
+        VORVAN_DELETED_LEADS_STORAGE_KEY,
+        JSON.stringify(Array.from(current))
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Deduplicates visitor email leads and re-indexes their IDs sequentially
+ * with a consistent 3-digit format: `LEAD-VRV-001`, `LEAD-VRV-002`, `LEAD-VRV-003`, etc.
+ * Never produces duplicate IDs or mixed 2-digit/3-digit formats.
+ */
+export function reindexVisitorLeads(
+  leads: ConciergeEmailLead[],
+  deletedEmails: Set<string> = loadDeletedLeadEmails()
+): ConciergeEmailLead[] {
+  const seenEmails = new Set<string>();
+  const unique: ConciergeEmailLead[] = [];
+
+  for (const lead of leads) {
+    if (!lead || !lead.email) continue;
+    const emailKey = lead.email.trim().toLowerCase();
+    if (!emailKey || seenEmails.has(emailKey) || deletedEmails.has(emailKey)) {
+      continue;
+    }
+    seenEmails.add(emailKey);
+    unique.push({
+      ...lead,
+      email: emailKey,
+    });
+  }
+
+  return unique.map((lead, idx) => ({
+    ...lead,
+    id: `LEAD-VRV-${String(idx + 1).padStart(3, '0')}`,
+  }));
+}
+
+/**
+ * Checks whether the shipping method is VORVAN's Face-to-Face Hand-Delivery COD
+ * (pertemuan tatap muka langsung tanpa resi ekspedisi).
+ */
+export function isCodShippingMethod(
+  shippingMethod?: string,
+  awbNumber?: string
+): boolean {
+  const upperMethod = (shippingMethod || '').toUpperCase();
+  const upperAwb = (awbNumber || '').trim().toUpperCase();
+  return (
+    upperMethod.includes('COD') ||
+    upperMethod.includes('TATAP MUKA') ||
+    upperMethod.includes('INTERNAL') ||
+    upperAwb.startsWith('COD-')
+  );
+}
+
+/**
+ * Checks whether an expedition order has a valid AWB / Nomor Resi entered by Admin.
+ * Returns false for COD (which is face-to-face) and false when AWB is still empty/pending.
+ */
+export function hasValidCourierAwb(order: {
+  shippingMethod?: string;
+  awbNumber?: string;
+}): boolean {
+  if (isCodShippingMethod(order.shippingMethod, order.awbNumber)) {
+    return false;
+  }
+  const cleanAwb = (order.awbNumber || '').trim();
+  return cleanAwb.length > 0;
+}
 
 export function loadVorvanSettings(): VorvanSiteSettings {
   try {
@@ -190,72 +321,59 @@ export function savePaymentProofRecord(
   }
 }
 
+export function removePaymentProofRecord(invoiceId: string): void {
+  const cleanId = (invoiceId || '').trim().toUpperCase();
+  if (!cleanId) return;
+  delete memoryProofsMap[cleanId];
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const current = loadPaymentProofsMap();
+      delete current[cleanId];
+      window.localStorage.setItem(
+        VORVAN_PAYMENT_PROOFS_STORAGE_KEY,
+        JSON.stringify(current)
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /**
- * Automatically finds the target invoice in `orders` (by exact ID/AWB, fragrance item match,
- * or single active order fallback during testing), sets status to `PAID` (LUNAS), advances
- * `shippingStage`, and attaches the compressed `paymentProof` Base64 string.
+ * Strictly finds the target invoice in `orders` by exact unique `invoiceId` (or its exact AWB/trackingId),
+ * sets status to `PAID` (LUNAS), advances `shippingStage`, and attaches the compressed `paymentProof` Base64 string.
+ * Never modifies or marks PAID any other customer's invoice.
  */
 export function applyPaymentProofToOrders(
   orders: CustomAdminOrder[],
   invoiceId: string,
   proofBase64: string,
-  uploadedAt: string,
-  fragranceNames: string[] = []
+  uploadedAt: string
 ): {
   updatedOrders: CustomAdminOrder[];
   matchedInvoiceIds: string[];
 } {
   const cleanId = (invoiceId || '').trim().toUpperCase();
-  if (cleanId) {
-    savePaymentProofRecord(cleanId, proofBase64, uploadedAt);
+  if (!cleanId || !proofBase64) {
+    return {
+      updatedOrders: orders,
+      matchedInvoiceIds: [],
+    };
   }
+
+  savePaymentProofRecord(cleanId, proofBase64, uploadedAt);
 
   const matchedIndexes = new Set<number>();
 
-  // 1. Exact match by invoiceId, awbNumber, or trackingId
+  // Strict exact match by unique invoiceId (or exact AWB/trackingId of that order)
   orders.forEach((o, idx) => {
     const oInv = (o.invoiceId || '').trim().toUpperCase();
     const oAwb = (o.awbNumber || '').trim().toUpperCase();
     const oTrk = (o.trackingId || '').trim().toUpperCase();
-    if (
-      cleanId &&
-      (oInv === cleanId || oAwb === cleanId || oTrk === cleanId)
-    ) {
+    if (oInv === cleanId || oAwb === cleanId || oTrk === cleanId) {
       matchedIndexes.add(idx);
     }
   });
-
-  // 2. Fallback: Match by fragrance name if no exact ID matched
-  if (matchedIndexes.size === 0 && fragranceNames.length > 0) {
-    const cleanFragNames = fragranceNames
-      .map((n) => n.trim().toLowerCase())
-      .filter(Boolean);
-    orders.forEach((o, idx) => {
-      const oFrag = (o.fragranceName || '').trim().toLowerCase();
-      if (
-        oFrag &&
-        cleanFragNames.some(
-          (fn) => fn === oFrag || fn.includes(oFrag) || oFrag.includes(fn)
-        )
-      ) {
-        matchedIndexes.add(idx);
-      }
-    });
-  }
-
-  // 3. Fallback: If testing with 1 active/pending invoice (or INV-SAMPLE), match that active invoice
-  if (matchedIndexes.size === 0 && orders.length > 0) {
-    const pendingIndexes = orders
-      .map((o, idx) => (o.status !== 'PAID' ? idx : -1))
-      .filter((idx) => idx >= 0);
-    if (pendingIndexes.length === 1) {
-      matchedIndexes.add(pendingIndexes[0]);
-    } else if (orders.length === 1) {
-      matchedIndexes.add(0);
-    } else if (cleanId === 'INV-SAMPLE' && pendingIndexes.length > 0) {
-      matchedIndexes.add(pendingIndexes[0]);
-    }
-  }
 
   const matchedInvoiceIds: string[] = [];
   const updatedOrders = orders.map((o, idx) => {
@@ -674,18 +792,30 @@ function fromBase64Url(encoded: string): string {
 
 function encodeCourierShort(method: ShippingMethodType): string {
   const upper = (method || '').toUpperCase();
-  if (upper.includes('COD') || upper.includes('INTERNAL')) return 'COD';
+  if (
+    upper.includes('COD') ||
+    upper.includes('TATAP MUKA') ||
+    upper.includes('INTERNAL')
+  ) {
+    return 'COD';
+  }
   if (upper.includes('J&T') || upper.includes('JNT')) return 'JNT';
   if (upper.includes('SICEPAT') || upper === 'SCP') return 'SCP';
   if (upper.includes('PAXEL') || upper === 'PXL') return 'PXL';
+  if (upper.includes('POS')) return 'POS';
   if (upper.includes('ANTERAJA') || upper === 'ANT') return 'ANT';
   return 'JNE';
 }
 
 function decodeCourierShort(code: string): ShippingMethodType {
   const clean = (code || '').trim().toUpperCase();
-  if (clean === '5' || clean === 'COD' || clean.includes('INTERNAL')) {
-    return 'COD Kurir Internal VORVAN';
+  if (
+    clean === '5' ||
+    clean === 'COD' ||
+    clean.includes('TATAP MUKA') ||
+    clean.includes('INTERNAL')
+  ) {
+    return 'COD / Tatap Muka';
   }
   if (clean === '1' || clean === 'JNT' || clean.includes('J&T')) {
     return 'J&T Express';
@@ -695,6 +825,9 @@ function decodeCourierShort(code: string): ShippingMethodType {
   }
   if (clean === '3' || clean === 'PXL' || clean.includes('PAXEL')) {
     return 'Paxel';
+  }
+  if (clean === '6' || clean === 'POS' || clean.includes('POS')) {
+    return 'Pos Indonesia';
   }
   if (clean === '4' || clean === 'ANT' || clean.includes('ANTERAJA')) {
     return 'Anteraja';
@@ -750,7 +883,9 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
       : String(priceK);
   const statusDigit = order.status === 'PAID' ? '1' : '0';
   const courierCode = encodeCourierShort(order.shippingMethod);
-  const awb = sanitize(order.awbNumber || order.trackingId);
+  const awb = isCodShippingMethod(order.shippingMethod, order.awbNumber)
+    ? ''
+    : sanitize(order.awbNumber || '');
   const buyer = sanitize(order.buyerName);
   const city = sanitize(order.buyerCity);
 
@@ -949,18 +1084,15 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
           const status: 'PENDING_PAYMENT' | 'PAID' =
             statusDigit === '1' ? 'PAID' : 'PENDING_PAYMENT';
           const shippingMethod = decodeCourierShort(courierCode);
-          const awbNumber =
-            (rawAwb || '').trim() ||
-            (shippingMethod.includes('COD')
-              ? `COD-VRV-${invTrim}`
-              : `VRV-RESI-${invTrim}`);
+          const isCod = isCodShippingMethod(shippingMethod, rawAwb);
+          const awbNumber = isCod ? '' : (rawAwb || '').trim();
 
           const cleanCity = (rawCity || 'Indonesia').trim();
           const detectedZone = autoDetectShippingZoneByCity(cleanCity);
           const shippingCostIDR =
             shipKPart !== undefined && shipKPart !== ''
               ? Math.max(0, Math.round((Number(shipKPart) || 0) * 1000))
-              : shippingMethod.includes('COD')
+              : isCod
               ? 0
               : detectedZone?.cost ?? 0;
 
@@ -995,7 +1127,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
 
           return {
             invoiceId,
-            trackingId: awbNumber,
+            trackingId: awbNumber || invoiceId,
             createdAt: 'Terverifikasi · WIB',
             buyerName: rawBuyer.trim(),
             buyerCity: cleanCity,
@@ -1110,18 +1242,26 @@ export function buildBuyerInvoiceWhatsAppUrl(
 
   const normalizedPhone = normalizeIndonesianPhoneNumber(order.buyerPhone || '');
 
+  const isCod = isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const hasAwb = hasValidCourierAwb(order);
+  const shippingSummaryLine = isCod
+    ? `• Metode Serah Terima: 🤝 COD / Serah Terima Tatap Muka Langsung (Tanpa Resi Ekspedisi)`
+    : hasAwb
+    ? `• Ekspedisi: ${order.shippingMethod} (AWB: ${order.awbNumber})`
+    : `• Ekspedisi: ${order.shippingMethod} (Resi menyusul setelah pembayaran lunas & barang dikirim)`;
+
   const message =
     `Yth. ${order.buyerName},\n\n` +
     `Terima kasih telah mempercayakan alokasi parfum niche & koleksi eksklusif Anda kepada VORVAN.\n\n` +
-    `Berikut rincian Tagihan Resmi Privat & Resi Pengiriman Anda:\n` +
+    `Berikut rincian Tagihan Resmi Privat & Pengiriman Anda:\n` +
     `• Nomor Tagihan: #${order.invoiceId}\n` +
     `• Flacon Parfum: ${order.house} — ${order.fragranceName} (${order.volume})\n` +
     `• Total Tagihan: ${formattedTotal}\n` +
-    `• Ekspedisi: ${order.shippingMethod} (AWB: ${order.awbNumber})\n\n` +
+    `${shippingSummaryLine}\n\n` +
     `Silakan klik tautan resmi berikut untuk melihat dokumen tagihan, panduan pembayaran, dan jaminan keaslian:\n` +
     `👉 Link Tagihan Resmi: ${invoiceUrl}\n\n` +
-    `Lacak posisi kargo berasuransi Anda secara langsung:\n` +
-    `👉 Link Lacak Pengiriman: ${trackUrl}\n\n` +
+    `Pantau status pesanan Anda secara langsung:\n` +
+    `👉 Link Status Pesanan: ${trackUrl}\n\n` +
     `Hormat kami,\n` +
     `VORVAN Official Concierge\n` +
     `Haute Parfumerie & Olfactory Vault`;
@@ -1151,11 +1291,13 @@ export function buildInvoiceFromCustomOrder(
           Math.round(((retailPriceTotalIDR - dealPrice) / retailPriceTotalIDR) * 100)
         );
 
+  const isCod = isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const hasAwb = hasValidCourierAwb(order);
   const detectedZone = autoDetectShippingZoneByCity(order.buyerCity);
   const shippingInsuranceIDR =
     typeof order.shippingCostIDR === 'number'
       ? order.shippingCostIDR
-      : order.shippingMethod.includes('COD')
+      : isCod
       ? 0
       : detectedZone?.cost ?? 0;
 
@@ -1168,6 +1310,12 @@ export function buildInvoiceFromCustomOrder(
 
   const resolvedProof = order.paymentProof || order.paymentProofUrl;
   const resolvedStatus = resolvedProof ? 'PAID' : order.status || 'PENDING_PAYMENT';
+
+  const shippingNoteText = isCod
+    ? `Metode Penyerahan: ${COD_FACE_TO_FACE_STATUS_LABEL}.`
+    : hasAwb
+    ? `Metode Pengiriman: ${order.shippingMethod} (Resi: ${order.awbNumber}). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`
+    : `Metode Pengiriman: ${order.shippingMethod} (Resi diisi menyusul setelah pembayaran lunas & barang dikirim). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`;
 
   return {
     invoiceId: order.invoiceId.toUpperCase(),
@@ -1192,7 +1340,7 @@ export function buildInvoiceFromCustomOrder(
     paymentProof: resolvedProof,
     paymentProofUrl: resolvedProof,
     paymentProofUploadedAt: order.paymentProofUploadedAt,
-    notes: `Metode Pengiriman: ${order.shippingMethod} (Resi: ${order.awbNumber}). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`,
+    notes: shippingNoteText,
     items: [
       {
         sku: `VRV-${order.invoiceId.toUpperCase()}`,
@@ -1218,14 +1366,25 @@ export interface CourierIntegrationMetadata {
 
 /**
  * Resolves official courier tracking portal link, Binderbyte courier code, and display label
- * for JNE, J&T Express, SiCepat, Paxel, Anteraja, or COD Kurir Internal VORVAN.
+ * for JNE, J&T Express, SiCepat, Paxel, Pos Indonesia, Anteraja, or COD / Tatap Muka.
  */
 export function resolveCourierMetadata(
   shippingMethod: string,
   awbNumber: string = ''
 ): CourierIntegrationMetadata {
-  const upper = shippingMethod.toUpperCase();
-  const cleanAwb = awbNumber.trim();
+  const upper = (shippingMethod || '').toUpperCase();
+  const cleanAwb = (awbNumber || '').trim();
+
+  if (isCodShippingMethod(shippingMethod, awbNumber)) {
+    const waMsg = `Halo VORVAN Official Concierge, saya ingin mengatur koordinasi jadwal COD / Serah Terima Tatap Muka Langsung untuk pesanan saya.`;
+    return {
+      displayName: 'COD / Tatap Muka Langsung',
+      binderbyteCode: '',
+      officialTrackUrl: `https://wa.me/${VORVAN_WHATSAPP_NUMBER}?text=${encodeURIComponent(waMsg)}`,
+      portalLabel: 'Koordinasi Jadwal Tatap Muka VORVAN (WhatsApp VIP)',
+      isInternalCod: true,
+    };
+  }
 
   if (upper.includes('J&T') || upper.includes('JNT')) {
     return {
@@ -1257,6 +1416,16 @@ export function resolveCourierMetadata(
     };
   }
 
+  if (upper.includes('POS')) {
+    return {
+      displayName: 'Pos Indonesia',
+      binderbyteCode: 'pos',
+      officialTrackUrl: 'https://www.posindonesia.co.id/id/tracking',
+      portalLabel: 'Portal Pelacakan Resmi Pos Indonesia',
+      isInternalCod: false,
+    };
+  }
+
   if (upper.includes('ANTERAJA')) {
     return {
       displayName: 'Anteraja',
@@ -1267,17 +1436,7 @@ export function resolveCourierMetadata(
     };
   }
 
-  if (upper.includes('COD') || upper.includes('INTERNAL')) {
-    const waMsg = `Halo Concierge VORVAN, mohon update posisi live Kurir Internal COD untuk Nomor Resi ${cleanAwb || 'VIP-COD'}.`;
-    return {
-      displayName: 'COD Kurir Internal VORVAN',
-      binderbyteCode: '',
-      officialTrackUrl: `https://wa.me/${VORVAN_WHATSAPP_NUMBER}?text=${encodeURIComponent(waMsg)}`,
-      portalLabel: 'Koordinat Live Kurir Internal VORVAN (WhatsApp VIP)',
-      isInternalCod: true,
-    };
-  }
-
+  void cleanAwb;
   return {
     displayName: 'JNE',
     binderbyteCode: 'jne',
@@ -1323,11 +1482,20 @@ function formatWibDateTimeFromMs(timestampMs: number): string {
 /**
  * Automatically computes the current shipping stage (1..4) based on elapsed time
  * since the AWB/order was issued by Admin — zero manual editing required.
+ * Before AWB is filled (for non-COD orders), stays at Stage 1 (Menunggu Pembayaran / Sedang Dikemas).
  */
 export function computeAutoShippingStage(
   order: CustomAdminOrder,
   nowMs: number = Date.now()
 ): 1 | 2 | 3 | 4 {
+  if (isCodShippingMethod(order.shippingMethod, order.awbNumber)) {
+    return order.status === 'PAID' || order.paymentProof ? 3 : 2;
+  }
+
+  if (!hasValidCourierAwb(order)) {
+    return 1;
+  }
+
   const issuedAtMs = order.createdAtTimestampMs || nowMs;
   const elapsedMinutes = Math.max(0, (nowMs - issuedAtMs) / 60000);
 
@@ -1336,10 +1504,8 @@ export function computeAutoShippingStage(
     autoStage = 4;
   } else if (elapsedMinutes >= 15) {
     autoStage = 3;
-  } else if (order.awbNumber && order.awbNumber.trim().length > 0) {
-    autoStage = 2;
   } else {
-    autoStage = 1;
+    autoStage = 2;
   }
 
   if (order.shippingStage && order.shippingStage > autoStage) {
@@ -1352,16 +1518,139 @@ export function buildTrackingFromCustomOrder(
   order: CustomAdminOrder,
   nowMs: number = Date.now()
 ): TrackingRecord {
+  const isCod = isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const hasAwb = hasValidCourierAwb(order);
   const stage = computeAutoShippingStage(order, nowMs);
   const courierMeta = resolveCourierMetadata(
     order.shippingMethod,
     order.awbNumber
   );
   const baseMs = order.createdAtTimestampMs || nowMs;
-
   const tStage1 = order.createdAtTimestampMs
     ? formatWibDateTimeFromMs(baseMs)
     : order.createdAt;
+
+  // 1. Dedicated Face-to-Face COD Hand-Delivery Logic (No Expedition AWB)
+  if (isCod) {
+    const codMilestones: TrackingMilestone[] = [
+      {
+        timestamp: tStage1,
+        location: 'VORVAN Climate-Controlled Vault',
+        title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Batch Code)',
+        detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) telah melewati pemeriksaan fisik botol kaca, batch code, dan tekanan sprayer untuk penyerahan tatap muka.`,
+        completed: true,
+        current: false,
+      },
+      {
+        timestamp: formatWibDateTimeFromMs(baseMs + 5 * 60000),
+        location: `Titik Pertemuan VIP · ${order.buyerCity}`,
+        title: '2. Koordinasi Jadwal Pertemuan Tatap Muka Langsung (Face-to-Face)',
+        detail: `Transaksi ini menggunakan layanan COD / Serah Terima Tatap Muka Langsung bersama klien (${order.buyerName}) di ${order.buyerCity} tanpa menggunakan kurir paket ekspedisi.`,
+        completed: true,
+        current: order.status !== 'PAID' && !order.paymentProof,
+      },
+      {
+        timestamp:
+          order.status === 'PAID' || order.paymentProof
+            ? order.paymentProofUploadedAt || formatWibDateTimeFromMs(nowMs)
+            : 'Saat Pertemuan Tatap Muka',
+        location: order.buyerCity,
+        title: '3. Serah Terima Langsung & Inspeksi Bersama Klien',
+        detail: `Penyerahan flacon parfum secara langsung (Hand-Delivery) dan pengecekan fisik unit bersama ${order.buyerName}.`,
+        completed: Boolean(order.status === 'PAID' || order.paymentProof),
+        current: Boolean(order.status === 'PAID' || order.paymentProof),
+      },
+    ];
+
+    return {
+      trackingId: order.invoiceId,
+      invoiceId: order.invoiceId,
+      recipientName: order.buyerName,
+      destination: order.buyerCity,
+      courierService: 'COD / Tatap Muka Langsung',
+      awbNumber: 'Tanpa Resi Ekspedisi (Tatap Muka)',
+      fragranceSummary: `${order.house} — ${order.fragranceName} (${order.volume})`,
+      statusLabel: COD_FACE_TO_FACE_STATUS_LABEL,
+      estimatedArrival: COD_FACE_TO_FACE_STATUS_LABEL,
+      vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
+      boxInspectionNote:
+        'Transaksi COD / Serah Terima Tatap Muka Langsung: Pemeriksaan keaslian botol, batch code, dan fungsi sprayer dilakukan secara langsung saat pertemuan.',
+      milestones: codMilestones,
+      createdAtTimestampMs: order.createdAtTimestampMs,
+      courierOfficialUrl: courierMeta.officialTrackUrl,
+      binderbyteCourierCode: '',
+      isCodFaceToFace: true,
+      isAwbPending: false,
+    };
+  }
+
+  // 2. Expedition Order BEFORE Admin Inputs Follow-Up AWB (Resi Belum Tersedia)
+  if (!hasAwb) {
+    const pendingMilestones: TrackingMilestone[] = [
+      {
+        timestamp: tStage1,
+        location: 'VORVAN Private Vault & Dispatch Desk',
+        title:
+          order.status === 'PAID' || order.paymentProof
+            ? '1. Pembayaran Terverifikasi — Sedang Dikemas di QC Vault VORVAN'
+            : '1. Invoice Diterbitkan — Menunggu Penyelesaian Pembayaran',
+        detail:
+          order.status === 'PAID' || order.paymentProof
+            ? `Pembayaran untuk ${order.house} — ${order.fragranceName} (${order.volume}) telah diterima. Unit sedang dikemas dengan Double-Wall Thermal Box dan menunggu penyerahan ke ekspedisi ${courierMeta.displayName}.`
+            : `Tagihan #${order.invoiceId} untuk ${order.house} — ${order.fragranceName} (${order.volume}) telah diterbitkan. Nomor resi ekspedisi ${courierMeta.displayName} akan diinput setelah pembayaran lunas dan paket dikirim.`,
+        completed: true,
+        current: true,
+      },
+      {
+        timestamp: 'Menunggu Input Resi Admin',
+        location: `Manifest ${courierMeta.displayName}`,
+        title: '2. Penyerahan ke Ekspedisi & Penerbitan Nomor Resi Asli',
+        detail:
+          'Nomor resi ekspedisi akan muncul otomatis di halaman ini segera setelah paket dikirim dan resi diinput oleh Admin Concierge VORVAN.',
+        completed: false,
+        current: false,
+      },
+      {
+        timestamp: 'Menunggu Pengiriman',
+        location: `Transit Hub Antar-Kota → ${order.buyerCity}`,
+        title: '3. Perjalanan Paket & Gudang Sortir Ekspedisi',
+        detail: `Pelacakan perjalanan paket menuju ${order.buyerCity} akan aktif begitu Nomor Resi tersedia.`,
+        completed: false,
+        current: false,
+      },
+      {
+        timestamp: 'Menunggu Pengiriman',
+        location: order.buyerCity,
+        title: '4. Pengantaran Kurir ke Alamat Penerima',
+        detail: `Pengantaran oleh kurir ${courierMeta.displayName} menuju ${order.buyerName} (${order.buyerCity}).`,
+        completed: false,
+        current: false,
+      },
+    ];
+
+    return {
+      trackingId: order.invoiceId,
+      invoiceId: order.invoiceId,
+      recipientName: order.buyerName,
+      destination: order.buyerCity,
+      courierService: courierMeta.displayName,
+      awbNumber: 'Belum Tersedia (Menunggu Pengiriman)',
+      fragranceSummary: `${order.house} — ${order.fragranceName} (${order.volume})`,
+      statusLabel: PENDING_AWB_STATUS_LABEL,
+      estimatedArrival: PENDING_AWB_STATUS_LABEL,
+      vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
+      boxInspectionNote:
+        'WAJIB VIDEO UNBOXING UTUH TANPA JEDA sejak paket masih tersegel untuk klaim garansi botol pecah atau semprotan/atomizer macet pabrik.',
+      milestones: pendingMilestones,
+      createdAtTimestampMs: order.createdAtTimestampMs,
+      courierOfficialUrl: courierMeta.officialTrackUrl,
+      binderbyteCourierCode: '',
+      isCodFaceToFace: false,
+      isAwbPending: true,
+    };
+  }
+
+  // 3. Expedition Order WITH Valid AWB Entered by Admin (Active Tracking)
   const tStage2 = order.createdAtTimestampMs
     ? formatWibDateTimeFromMs(baseMs + 4 * 60000)
     : order.createdAt;
@@ -1425,9 +1714,7 @@ export function buildTrackingFromCustomOrder(
     awbNumber: order.awbNumber,
     fragranceSummary: `${order.house} — ${order.fragranceName} (${order.volume})`,
     statusLabel: stageLabels[stage],
-    estimatedArrival: courierMeta.isInternalCod
-      ? 'Pengantaran Langsung Tim Internal VORVAN (Hari Ini)'
-      : `Terintegrasi Manifest Resmi ${courierMeta.displayName}`,
+    estimatedArrival: `Terintegrasi Manifest Resmi ${courierMeta.displayName}`,
     vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
     boxInspectionNote:
       'WAJIB VIDEO UNBOXING UTUH TANPA JEDA sejak paket masih tersegel untuk klaim garansi botol pecah atau semprotan/atomizer macet pabrik.',
@@ -1435,6 +1722,8 @@ export function buildTrackingFromCustomOrder(
     createdAtTimestampMs: order.createdAtTimestampMs,
     courierOfficialUrl: courierMeta.officialTrackUrl,
     binderbyteCourierCode: courierMeta.binderbyteCode,
+    isCodFaceToFace: false,
+    isAwbPending: false,
   };
 }
 
@@ -1450,10 +1739,11 @@ export function resolvePrivateInvoice(
   const normalized = rawInvoiceId.trim().toUpperCase();
 
   const attachProof = (inv: PrivateInvoice): PrivateInvoice => {
+    const invKey = inv.invoiceId.trim().toUpperCase();
     const proofs = loadPaymentProofsMap();
-    const stored = proofs[normalized] || proofs[inv.invoiceId.toUpperCase()];
+    const stored = proofs[invKey];
     const existingProof = inv.paymentProof || inv.paymentProofUrl;
-    const finalProof = existingProof || stored?.proofUrl;
+    const finalProof = existingProof || stored?.proofUrl || undefined;
     if (finalProof) {
       return {
         ...inv,
@@ -1467,7 +1757,12 @@ export function resolvePrivateInvoice(
           inv.paymentProofUploadedAt || stored?.uploadedAt,
       };
     }
-    return inv;
+    return {
+      ...inv,
+      paymentProof: undefined,
+      paymentProofUrl: undefined,
+      paymentProofUploadedAt: undefined,
+    };
   };
 
   const ordersList = customOrders ?? loadCustomAdminOrders();
@@ -1567,6 +1862,7 @@ export function resolvePrivateInvoice(
 
 /**
  * Looks up a shipment tracking record by Tracking ID, AWB Number, or Invoice ID.
+ * Prioritizes customOrders (including follow-up AWB updates by Admin) before smartOrder fallback.
  */
 export function lookupTrackingOrder(
   query: string,
@@ -1575,28 +1871,42 @@ export function lookupTrackingOrder(
 ): TrackingRecord | null {
   const clean = query.trim().toUpperCase();
 
+  const ordersList = customOrders ?? loadCustomAdminOrders();
+  if (clean) {
+    const matchedCustom = ordersList.find((o) => {
+      const oAwb = (o.awbNumber || '').trim().toUpperCase();
+      const oInv = (o.invoiceId || '').trim().toUpperCase();
+      const oTrk = (o.trackingId || '').trim().toUpperCase();
+      return (
+        (oAwb.length > 0 && oAwb === clean) ||
+        oInv === clean ||
+        (oTrk.length > 0 && oTrk === clean)
+      );
+    });
+    if (matchedCustom) {
+      return buildTrackingFromCustomOrder(matchedCustom);
+    }
+  }
+
   if (
     smartOrder &&
     (!clean ||
-      smartOrder.awbNumber.toUpperCase() === clean ||
-      smartOrder.invoiceId.toUpperCase() === clean ||
-      smartOrder.trackingId.toUpperCase() === clean)
+      ((smartOrder.awbNumber || '').trim().toUpperCase() === clean &&
+        clean.length > 0) ||
+      (smartOrder.invoiceId || '').trim().toUpperCase() === clean ||
+      ((smartOrder.trackingId || '').trim().toUpperCase() === clean &&
+        clean.length > 0))
   ) {
-    return buildTrackingFromCustomOrder(smartOrder);
+    // Check if customOrders has an updated record for smartOrder.invoiceId (e.g., follow-up resi added)
+    const updatedMatch = ordersList.find(
+      (o) =>
+        o.invoiceId.trim().toUpperCase() ===
+        smartOrder.invoiceId.trim().toUpperCase()
+    );
+    return buildTrackingFromCustomOrder(updatedMatch || smartOrder);
   }
 
   if (!clean) return null;
-
-  const ordersList = customOrders ?? loadCustomAdminOrders();
-  const matchedCustom = ordersList.find(
-    (o) =>
-      o.awbNumber.toUpperCase() === clean ||
-      o.invoiceId.toUpperCase() === clean ||
-      o.trackingId.toUpperCase() === clean
-  );
-  if (matchedCustom) {
-    return buildTrackingFromCustomOrder(matchedCustom);
-  }
 
   if (TRACKING_RECORDS_SEED[clean]) {
     return TRACKING_RECORDS_SEED[clean];

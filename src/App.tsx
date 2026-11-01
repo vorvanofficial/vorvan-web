@@ -21,6 +21,7 @@ import {
   ConciergeEmailLead,
   CustomAdminOrder,
   FragranceItem,
+  ShippingMethodType,
   VorvanSiteSettings,
 } from './types/fragrance';
 import {
@@ -30,10 +31,15 @@ import {
   buildWhatsAppInquiryUrl,
   decodeSmartOrderParam,
   encodeSmartOrderParam,
+  isCodShippingMethod,
   loadCustomAdminOrders,
   loadVorvanSettings,
+  markLeadEmailDeleted,
+  reindexVisitorLeads,
+  removePaymentProofRecord,
   saveCustomAdminOrders,
   saveVorvanSettings,
+  unmarkLeadEmailDeleted,
 } from './utils/businessRules';
 import {
   mergeCustomAdminOrders,
@@ -342,11 +348,11 @@ export default function App() {
   const [emailLeads, setEmailLeads] = useState<ConciergeEmailLead[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_LEADS_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) return reindexVisitorLeads(JSON.parse(saved));
     } catch {
       // ignore
     }
-    return INITIAL_CONCIERGE_EMAIL_LEADS;
+    return reindexVisitorLeads(INITIAL_CONCIERGE_EMAIL_LEADS);
   });
   const [emailGatewayOpen, setEmailGatewayOpen] = useState<boolean>(false);
   const [pendingInquiry, setPendingInquiry] = useState<{
@@ -425,9 +431,11 @@ export default function App() {
     const cloudData = await pullCloudVaultState();
     if (!cloudData) return;
 
-    if (cloudData.leads.length > 0) {
+    if (cloudData.leads.length > 0 || cloudData.deletedLeadEmails.size > 0) {
       setEmailLeads((prev) => {
-        const merged = mergeVisitorLeads(prev, cloudData.leads);
+        const merged = reindexVisitorLeads(
+          mergeVisitorLeads(prev, cloudData.leads)
+        );
         try {
           localStorage.setItem(STORAGE_LEADS_KEY, JSON.stringify(merged));
         } catch {
@@ -637,6 +645,7 @@ export default function App() {
   };
 
   const handleEmailRegistered = (normalizedEmail: string) => {
+    unmarkLeadEmailDeleted(normalizedEmail);
     setRegisteredEmail(normalizedEmail);
     try {
       localStorage.setItem(STORAGE_EMAIL_KEY, normalizedEmail);
@@ -645,20 +654,26 @@ export default function App() {
     }
 
     const waktuDaftar = new Date().toLocaleString('id-ID');
-    const leadId = `LEAD-VRV-0${emailLeads.length + 1}`;
     const fragranceContext = pendingInquiry
       ? `${pendingInquiry.fragrance.house} — ${pendingInquiry.fragrance.name} (${pendingInquiry.volume})`
       : 'Akses Concierge Katalog';
 
-    const newLead: ConciergeEmailLead = {
-      id: leadId,
+    const tempLead: ConciergeEmailLead = {
+      id: `LEAD-VRV-${String(emailLeads.length + 1).padStart(3, '0')}`,
       email: normalizedEmail,
       registeredAt: `${waktuDaftar} WIB`,
       triggeredByFragrance: fragranceContext,
       syncedToVorvanMail: true,
     };
 
-    const updatedLeads = mergeVisitorLeads(emailLeads, [newLead]);
+    const updatedLeads = reindexVisitorLeads(
+      mergeVisitorLeads(emailLeads, [tempLead])
+    );
+    const assignedLead =
+      updatedLeads.find(
+        (l) => l.email.toLowerCase() === normalizedEmail.toLowerCase()
+      ) || tempLead;
+
     setEmailLeads(updatedLeads);
     try {
       localStorage.setItem(STORAGE_LEADS_KEY, JSON.stringify(updatedLeads));
@@ -668,7 +683,7 @@ export default function App() {
 
     // 1. Real HTTP POST to vorvanlifestyle@gmail.com via FormSubmit AJAX
     void sendVisitorLeadToGmail({
-      leadId,
+      leadId: assignedLead.id,
       visitorEmail: normalizedEmail,
       triggeredByFragrance: fragranceContext,
       waktuDaftar,
@@ -682,7 +697,7 @@ export default function App() {
     void saveSharedCloudLeadsAndOrders(updatedLeads, customOrders);
     void pushCloudVaultPacket({
       kind: 'VORVAN_LEAD',
-      lead: newLead,
+      lead: assignedLead,
       ts: Date.now(),
     });
 
@@ -692,16 +707,46 @@ export default function App() {
     );
   };
 
+  const handleDeleteEmailLead = (emailToDelete: string) => {
+    const cleanEmail = emailToDelete.trim().toLowerCase();
+    markLeadEmailDeleted(cleanEmail);
+    const updatedLeads = reindexVisitorLeads(
+      emailLeads.filter((l) => l.email.trim().toLowerCase() !== cleanEmail)
+    );
+    setEmailLeads(updatedLeads);
+    try {
+      localStorage.setItem(STORAGE_LEADS_KEY, JSON.stringify(updatedLeads));
+    } catch {
+      // ignore
+    }
+    void saveSharedCloudLeadsAndOrders(updatedLeads, customOrders);
+    void pushCloudVaultPacket({
+      kind: 'VORVAN_LEAD_DELETE',
+      email: cleanEmail,
+      ts: Date.now(),
+    });
+  };
+
   const handleUpdateSiteSettings = (nextSettings: VorvanSiteSettings) => {
     setSiteSettings(nextSettings);
     saveVorvanSettings(nextSettings);
   };
 
   const handleCreateCustomOrder = (newOrder: CustomAdminOrder) => {
+    removePaymentProofRecord(newOrder.invoiceId);
+    const cleanNewOrder: CustomAdminOrder = {
+      ...newOrder,
+      status: 'PENDING_PAYMENT',
+      paymentProof: null,
+      paymentProofUrl: null,
+      paymentProofUploadedAt: null,
+    };
     const updated = [
-      newOrder,
+      cleanNewOrder,
       ...customOrders.filter(
-        (o) => o.invoiceId.toUpperCase() !== newOrder.invoiceId.toUpperCase()
+        (o) =>
+          o.invoiceId.trim().toUpperCase() !==
+          cleanNewOrder.invoiceId.trim().toUpperCase()
       ),
     ];
     setCustomOrders(updated);
@@ -711,14 +756,14 @@ export default function App() {
     void saveSharedCloudLeadsAndOrders(emailLeads, updated);
     void pushCloudVaultPacket({
       kind: 'VORVAN_ORDER_UPSERT',
-      order: newOrder,
+      order: cleanNewOrder,
       ts: Date.now(),
     });
 
     // Send real backup notification to vorvanlifestyle@gmail.com
-    const invUrl = buildSmartShareUrl(newOrder, 'invoice');
-    const trkUrl = buildSmartShareUrl(newOrder, 'track');
-    void sendAdminOrderBackupToGmail(newOrder, invUrl, trkUrl);
+    const invUrl = buildSmartShareUrl(cleanNewOrder, 'invoice');
+    const trkUrl = buildSmartShareUrl(cleanNewOrder, 'track');
+    void sendAdminOrderBackupToGmail(cleanNewOrder, invUrl, trkUrl);
   };
 
   const handleUpdateCustomOrderStage = (
@@ -751,17 +796,59 @@ export default function App() {
     });
   };
 
+  const handleUpdateCustomOrderResi = (
+    invoiceId: string,
+    shippingMethod: ShippingMethodType,
+    awbNumber: string
+  ) => {
+    const cleanTargetId = invoiceId.trim().toUpperCase();
+    const isCod = isCodShippingMethod(shippingMethod);
+    const cleanAwb = isCod ? '' : awbNumber.trim().toUpperCase();
+    let updatedOrderRef: CustomAdminOrder | null = null;
+
+    const updated = customOrders.map((o) => {
+      if (o.invoiceId.trim().toUpperCase() !== cleanTargetId) return o;
+      const nextStage: 1 | 2 | 3 | 4 = isCod
+        ? (Math.max(o.shippingStage || 2, 2) as 1 | 2 | 3 | 4)
+        : cleanAwb
+        ? (Math.max(o.shippingStage || 2, 2) as 1 | 2 | 3 | 4)
+        : 1;
+      const nextOrder: CustomAdminOrder = {
+        ...o,
+        shippingMethod,
+        awbNumber: cleanAwb,
+        trackingId: cleanAwb || o.invoiceId,
+        shippingStage: nextStage,
+      };
+      updatedOrderRef = nextOrder;
+      return nextOrder;
+    });
+
+    setCustomOrders(updated);
+    saveCustomAdminOrders(updated);
+    void saveSharedCloudLeadsAndOrders(emailLeads, updated);
+
+    if (updatedOrderRef) {
+      void pushCloudVaultPacket({
+        kind: 'VORVAN_ORDER_UPSERT',
+        order: updatedOrderRef,
+        ts: Date.now(),
+      });
+    }
+  };
+
   const handleUploadPaymentProof = (
     invoiceId: string,
     proofBase64: string,
     uploadedAt: string
   ) => {
+    const cleanTargetId = invoiceId.trim().toUpperCase();
     setCustomOrders((prev) => {
       const stored = loadCustomAdminOrders();
       const baseList = mergeCustomAdminOrders(prev, stored);
       const { updatedOrders } = applyPaymentProofToOrders(
         baseList,
-        invoiceId,
+        cleanTargetId,
         proofBase64,
         uploadedAt
       );
@@ -770,7 +857,11 @@ export default function App() {
       return updatedOrders;
     });
 
-    if (route.view === 'invoice' && route.smartOrder) {
+    if (
+      route.view === 'invoice' &&
+      route.smartOrder &&
+      route.smartOrder.invoiceId.trim().toUpperCase() === cleanTargetId
+    ) {
       const updatedSmart: CustomAdminOrder = {
         ...route.smartOrder,
         status: 'PAID',
@@ -790,6 +881,7 @@ export default function App() {
   };
 
   const handleDeleteCustomOrder = (invoiceId: string) => {
+    removePaymentProofRecord(invoiceId);
     const updated = customOrders.filter((o) => o.invoiceId !== invoiceId);
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
@@ -1754,7 +1846,9 @@ export default function App() {
         onCreateCustomOrder={handleCreateCustomOrder}
         onUpdateCustomOrderStage={handleUpdateCustomOrderStage}
         onUpdateCustomOrderStatus={handleUpdateCustomOrderStatus}
+        onUpdateCustomOrderResi={handleUpdateCustomOrderResi}
         onDeleteCustomOrder={handleDeleteCustomOrder}
+        onDeleteLead={handleDeleteEmailLead}
         onOpenInvoicePreview={(invId, smartOrd) =>
           navigateToInvoice(invId, smartOrd)
         }

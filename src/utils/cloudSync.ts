@@ -1,8 +1,12 @@
 import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
 import {
   applyPaymentProofToOrders,
+  loadDeletedLeadEmails,
   loadPaymentProofsMap,
+  markLeadEmailDeleted,
+  reindexVisitorLeads,
   savePaymentProofRecord,
+  unmarkLeadEmailDeleted,
 } from './businessRules';
 
 export const FORMSUBMIT_GMAIL_ENDPOINT =
@@ -24,6 +28,11 @@ export type CloudVaultPacket =
   | {
       kind: 'VORVAN_LEAD';
       lead: ConciergeEmailLead;
+      ts: number;
+    }
+  | {
+      kind: 'VORVAN_LEAD_DELETE';
+      email: string;
       ts: number;
     }
   | {
@@ -368,10 +377,12 @@ export async function pullCloudVaultState(): Promise<{
   leads: ConciergeEmailLead[];
   orders: CustomAdminOrder[];
   deletedInvoiceIds: Set<string>;
+  deletedLeadEmails: Set<string>;
 } | null> {
   const leadsByEmail = new Map<string, ConciergeEmailLead>();
   const ordersById = new Map<string, CustomAdminOrder>();
   const deletedInvoiceIds = new Set<string>();
+  const deletedLeadEmails = loadDeletedLeadEmails();
   const proofsByInv = new Map<
     string,
     { proofUrl: string; uploadedAt: string }
@@ -381,6 +392,7 @@ export async function pullCloudVaultState(): Promise<{
   const registerLead = (lead: ConciergeEmailLead) => {
     if (!lead || !lead.email) return;
     const emailKey = lead.email.trim().toLowerCase();
+    if (deletedLeadEmails.has(emailKey)) return;
     if (!leadsByEmail.has(emailKey)) {
       leadsByEmail.set(emailKey, lead);
     }
@@ -496,7 +508,20 @@ export async function pullCloudVaultState(): Promise<{
           }
 
           if (packet.kind === 'VORVAN_LEAD' && packet.lead?.email) {
+            const emailKey = packet.lead.email.trim().toLowerCase();
+            deletedLeadEmails.delete(emailKey);
+            unmarkLeadEmailDeleted(emailKey);
             streamLeads.push(packet.lead);
+          } else if (packet.kind === 'VORVAN_LEAD_DELETE' && packet.email) {
+            const emailKey = packet.email.trim().toLowerCase();
+            deletedLeadEmails.add(emailKey);
+            markLeadEmailDeleted(emailKey);
+            leadsByEmail.delete(emailKey);
+            for (let i = streamLeads.length - 1; i >= 0; i--) {
+              if (streamLeads[i].email.trim().toLowerCase() === emailKey) {
+                streamLeads.splice(i, 1);
+              }
+            }
           } else if (
             packet.kind === 'VORVAN_ORDER_UPSERT' &&
             packet.order?.invoiceId
@@ -591,7 +616,9 @@ export async function pullCloudVaultState(): Promise<{
       for (let i = streamLeads.length - 1; i >= 0; i--) {
         const l = streamLeads[i];
         const key = l.email.trim().toLowerCase();
-        leadsByEmail.set(key, l);
+        if (!deletedLeadEmails.has(key)) {
+          leadsByEmail.set(key, l);
+        }
       }
     }
   } catch {
@@ -612,31 +639,26 @@ export async function pullCloudVaultState(): Promise<{
   }
 
   return {
-    leads: Array.from(leadsByEmail.values()),
+    leads: reindexVisitorLeads(
+      Array.from(leadsByEmail.values()),
+      deletedLeadEmails
+    ),
     orders: currentOrders,
     deletedInvoiceIds,
+    deletedLeadEmails,
   };
 }
 
 /**
- * Merges locally stored visitor email leads with cloud-synced leads without duplicates.
+ * Merges locally stored visitor email leads with cloud-synced leads without duplicates,
+ * filters out deleted emails, and re-indexes sequentially (`LEAD-VRV-001`, `LEAD-VRV-002`, ...).
  */
 export function mergeVisitorLeads(
   localLeads: ConciergeEmailLead[],
-  cloudLeads: ConciergeEmailLead[]
+  cloudLeads: ConciergeEmailLead[],
+  deletedEmails: Set<string> = loadDeletedLeadEmails()
 ): ConciergeEmailLead[] {
-  const seenEmails = new Set<string>();
-  const combined: ConciergeEmailLead[] = [];
-
-  for (const lead of [...cloudLeads, ...localLeads]) {
-    if (!lead || !lead.email) continue;
-    const key = lead.email.trim().toLowerCase();
-    if (seenEmails.has(key)) continue;
-    seenEmails.add(key);
-    combined.push(lead);
-  }
-
-  return combined;
+  return reindexVisitorLeads([...cloudLeads, ...localLeads], deletedEmails);
 }
 
 /**

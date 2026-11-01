@@ -507,36 +507,48 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const effectiveCode =
     customIdInput.trim() || invoiceId.trim() || smartOrder?.invoiceId || 'INV-SAMPLE';
 
-  useEffect(() => {
-    setIsLegalAgreed(false);
-    setLegalAgreedTimestamp('');
-  }, [effectiveCode]);
-
   const baseInvoice: PrivateInvoice = resolvePrivateInvoice(
     effectiveCode,
     customOrders,
     smartOrder
   );
 
-  // Synchronize payment proof if previously stored or attached to invoice
+  // Force full reset of legal checkbox, proof preview, and modal whenever switching invoices
   useEffect(() => {
+    setIsLegalAgreed(false);
+    setLegalAgreedTimestamp('');
+    setProofError(null);
+    setIsProofModalOpen(false);
+  }, [effectiveCode, baseInvoice.invoiceId, invoiceId, smartOrder?.invoiceId]);
+
+  // Synchronize payment proof strictly by the exact unique baseInvoice.invoiceId
+  useEffect(() => {
+    const exactInvKey = baseInvoice.invoiceId.trim().toUpperCase();
     const proofsMap = loadPaymentProofsMap();
-    const stored =
-      proofsMap[effectiveCode.toUpperCase()] ||
-      proofsMap[baseInvoice.invoiceId.toUpperCase()];
-    if (stored?.proofUrl) {
-      setPaymentProofUrl(stored.proofUrl);
-      setPaymentProofUploadedAt(stored.uploadedAt);
-    } else if (baseInvoice.paymentProofUrl) {
-      setPaymentProofUrl(baseInvoice.paymentProofUrl);
-      setPaymentProofUploadedAt(baseInvoice.paymentProofUploadedAt || '');
+    const stored = proofsMap[exactInvKey];
+    const resolvedProof =
+      baseInvoice.paymentProof ||
+      baseInvoice.paymentProofUrl ||
+      stored?.proofUrl ||
+      '';
+    const resolvedUploadedAt =
+      baseInvoice.paymentProofUploadedAt || stored?.uploadedAt || '';
+
+    if (resolvedProof) {
+      setPaymentProofUrl(resolvedProof);
+      setPaymentProofUploadedAt(resolvedUploadedAt);
     } else {
       setPaymentProofUrl('');
       setPaymentProofUploadedAt('');
+      setIsLegalAgreed(false);
+      setLegalAgreedTimestamp('');
+      setProofError(null);
+      setIsProofModalOpen(false);
     }
   }, [
     effectiveCode,
     baseInvoice.invoiceId,
+    baseInvoice.paymentProof,
     baseInvoice.paymentProofUrl,
     baseInvoice.paymentProofUploadedAt,
   ]);
@@ -597,48 +609,48 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const effectiveTimestamp =
     legalAgreedTimestamp || formatLegalTimestampWIB(new Date());
 
-  // Handle HTML5 Canvas image compression (max 400px, quality 0.5) & automatic PAID recording to Web Admin
+  // Handle HTML5 Canvas image compression (max 400px, quality 0.5) & automatic PAID recording strictly for this invoiceId
   const handleProofFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
     setProofError(null);
     setIsCompressingProof(true);
 
     try {
       const compressed = await compressPaymentProofImage(file, 400, 0.5);
       const nowWIB = formatLegalTimestampWIB(new Date());
+      const targetInvId = baseInvoice.invoiceId.trim().toUpperCase();
       setPaymentProofUrl(compressed);
       setPaymentProofUploadedAt(nowWIB);
 
-      // 1. Save locally to payment proof records map
-      savePaymentProofRecord(baseInvoice.invoiceId, compressed, nowWIB);
+      // 1. Save locally to payment proof records map strictly under targetInvId
+      savePaymentProofRecord(targetInvId, compressed, nowWIB);
 
-      // 2. Automatically match & update customOrders in localStorage (status -> PAID, paymentProof, shippingStage)
+      // 2. Strictly match & update ONLY this exact invoiceId in localStorage (status -> PAID, paymentProof, shippingStage)
       const localOrders =
         customOrders && customOrders.length > 0
           ? customOrders
           : loadCustomAdminOrders();
-      const itemFragNames = baseInvoice.items.map((it) => it.fragranceName);
       const { updatedOrders, matchedInvoiceIds } = applyPaymentProofToOrders(
         localOrders,
-        baseInvoice.invoiceId,
+        targetInvId,
         compressed,
-        nowWIB,
-        itemFragNames
+        nowWIB
       );
       saveCustomAdminOrders(updatedOrders);
 
-      // 3. Inform parent App component to immediately update adminInvoices state & Cloud KV
-      onUploadPaymentProof?.(baseInvoice.invoiceId, compressed, nowWIB);
+      // 3. Inform parent App component to immediately update adminInvoices state & Cloud KV for this invoiceId
+      onUploadPaymentProof?.(targetInvId, compressed, nowWIB);
 
-      // 4. Send Cloud Vault Real-Time packet for invoiceId and any matched Admin order IDs
+      // 4. Send Cloud Vault Real-Time packet strictly for targetInvId
       const targetIds = Array.from(
-        new Set([baseInvoice.invoiceId, ...matchedInvoiceIds])
+        new Set([targetInvId, ...matchedInvoiceIds])
       );
-      for (const targetInvId of targetIds) {
+      for (const invKey of targetIds) {
         void pushCloudVaultPacket({
           kind: 'VORVAN_PAYMENT_PROOF',
-          invoiceId: targetInvId,
+          invoiceId: invKey,
           paymentProofUrl: compressed,
           uploadedAt: nowWIB,
           autoMarkPaid: true,
