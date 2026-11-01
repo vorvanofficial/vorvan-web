@@ -303,7 +303,7 @@ test('Dual-Concierge Telegram VIP URL and Ultra-Short Smart Shareable Order URL 
   const invoice = resolvePrivateInvoice('INV-VRV-9750', [], decoded);
   assert.equal(
     invoice.conciergeAdvisor,
-    'VORVAN Official Concierge — Andre Satria P'
+    'VORVAN Official Concierge'
   );
   assert.equal(invoice.items[0].unitPriceIDR, 4350000);
 
@@ -537,6 +537,12 @@ test('VORVAN Legal Shield Clickwrap Agreement timestamp and WhatsApp verificatio
     agreedTimestamp: '31 Okt 2026, 15.30.15 WIB',
   });
 
+  assert.ok(
+    msg.startsWith(
+      'Halo VORVAN Official Concierge, saya ingin mengonfirmasi pembayaran untuk Private Invoice berikut:'
+    )
+  );
+  assert.ok(!msg.includes('Andre Satria P'));
   assert.ok(
     msg.includes(
       '✅ [Persetujuan Layanan Elektronik Tercatat pada 31 Okt 2026, 15.30.15 WIB: Saya telah membaca dan menyetujui Ketentuan Layanan, Garansi Unboxing & Sprayer, Kebijakan Final Sale, serta Karakteristik Subjektif Aroma VORVAN].'
@@ -983,6 +989,70 @@ test('getVorvanBaseDomain dynamically detects preview vs custom domain (.com / .
     globalThis.window = originalWindow;
   }
 });
+
+test('applyPaymentProofToOrders automatically updates status to PAID (LUNAS), stores paymentProof Base64, and advances shippingStage', async () => {
+  const { applyPaymentProofToOrders, resolvePrivateInvoice } = await import(
+    './businessRules.ts'
+  );
+
+  const pendingOrder = {
+    invoiceId: 'INV-VRV-8899',
+    trackingId: 'JNE-8899',
+    createdAt: '01 Nov 2026 · 14:00 WIB',
+    buyerName: 'Bpk. Hendra',
+    buyerCity: 'Surabaya',
+    house: 'Creed',
+    fragranceName: 'Aventus',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    batchCode: 'CRD-88',
+    dealPriceIDR: 4200000,
+    shippingMethod: 'JNE' as const,
+    awbNumber: 'JNE-8899',
+    shippingStage: 2 as const,
+    status: 'PENDING_PAYMENT' as const,
+  };
+
+  const fakeBase64Proof = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/';
+  const uploadedTime = '01 Nov 2026 · 14:05:12 WIB';
+
+  // 1. Exact ID match
+  const exactRes = applyPaymentProofToOrders(
+    [pendingOrder],
+    'INV-VRV-8899',
+    fakeBase64Proof,
+    uploadedTime
+  );
+  assert.equal(exactRes.matchedInvoiceIds[0], 'INV-VRV-8899');
+  assert.equal(exactRes.updatedOrders[0].status, 'PAID');
+  assert.equal(exactRes.updatedOrders[0].paymentProof, fakeBase64Proof);
+  assert.equal(exactRes.updatedOrders[0].paymentProofUrl, fakeBase64Proof);
+  assert.equal(exactRes.updatedOrders[0].paymentProofUploadedAt, uploadedTime);
+  assert.equal(exactRes.updatedOrders[0].shippingStage, 3);
+
+  // 2. Fallback when testing on INV-SAMPLE with 1 active invoice in Admin
+  const fallbackRes = applyPaymentProofToOrders(
+    [pendingOrder],
+    'INV-SAMPLE',
+    fakeBase64Proof,
+    uploadedTime
+  );
+  assert.equal(fallbackRes.matchedInvoiceIds[0], 'INV-VRV-8899');
+  assert.equal(fallbackRes.updatedOrders[0].status, 'PAID');
+  assert.equal(fallbackRes.updatedOrders[0].paymentProof, fakeBase64Proof);
+  assert.equal(fallbackRes.updatedOrders[0].shippingStage, 3);
+
+  // 3. resolvePrivateInvoice prioritizes updated customOrders over stale smartOrder
+  const resolved = resolvePrivateInvoice(
+    'INV-VRV-8899',
+    fallbackRes.updatedOrders,
+    pendingOrder
+  );
+  assert.equal(resolved.status, 'PAID');
+  assert.equal(resolved.paymentProof, fakeBase64Proof);
+  assert.equal(resolved.paymentProofUrl, fakeBase64Proof);
+});
+
 
 
 

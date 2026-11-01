@@ -44,6 +44,7 @@ import {
   filterVorvanCheatSheet,
   formatIDRCurrency,
   getVorvanBaseDomain,
+  loadPaymentProofsMap,
   normalizeIndonesianPhoneNumber,
   resolveCourierMetadata,
   resolveVorvanSkuPricing,
@@ -626,7 +627,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
             <div>
               <div className="flex items-center gap-2 text-xs text-[#E5C87E] uppercase tracking-[0.2em]">
                 <Database className="w-4 h-4 text-[#E5C87E]" />
-                <span>VORVAN EXECUTIVE ADMIN SUITE · ANDRE SATRIA P</span>
+                <span>VORVAN EXECUTIVE ADMIN SUITE · VORVAN OFFICIAL CONCIERGE</span>
               </div>
               <h2
                 id="secret-admin-title"
@@ -1959,10 +1960,39 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                       </thead>
                       <tbody className="divide-y divide-zinc-800/70">
                         {customOrders.map((ord) => {
-                          const autoStage = computeAutoShippingStage(ord);
+                          const proofsMap = loadPaymentProofsMap();
+                          const storedProof =
+                            proofsMap[ord.invoiceId.toUpperCase()] ||
+                            (customOrders.length === 1
+                              ? proofsMap['INV-SAMPLE']
+                              : undefined);
+                          const resolvedProof =
+                            ord.paymentProof ||
+                            ord.paymentProofUrl ||
+                            storedProof?.proofUrl;
+                          const resolvedUploadedAt =
+                            ord.paymentProofUploadedAt ||
+                            storedProof?.uploadedAt;
+                          const isPaid =
+                            Boolean(resolvedProof) || ord.status === 'PAID';
+                          const effectiveOrder: CustomAdminOrder = resolvedProof
+                            ? {
+                                ...ord,
+                                status: 'PAID',
+                                paymentProof: resolvedProof,
+                                paymentProofUrl: resolvedProof,
+                                paymentProofUploadedAt: resolvedUploadedAt,
+                                shippingStage: Math.min(
+                                  4,
+                                  Math.max(ord.shippingStage || 2, 3)
+                                ) as 1 | 2 | 3 | 4,
+                              }
+                            : ord;
+                          const autoStage =
+                            computeAutoShippingStage(effectiveOrder);
                           const courierMeta = resolveCourierMetadata(
-                            ord.shippingMethod,
-                            ord.awbNumber
+                            effectiveOrder.shippingMethod,
+                            effectiveOrder.awbNumber
                           );
                           return (
                             <tr key={ord.invoiceId}>
@@ -1982,36 +2012,45 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                 <div className="text-[#E5C87E]">
                                   {ord.house} — {ord.fragranceName}
                                 </div>
-                                <div className="font-mono-tabular text-emerald-400">
-                                  {formatIDRCurrency(ord.dealPriceIDR)} ·{' '}
+                                <div className="font-mono-tabular text-emerald-400 flex items-center flex-wrap gap-1.5 mt-1">
+                                  <span>{formatIDRCurrency(ord.dealPriceIDR)}</span>
+                                  <span>·</span>
                                   <button
                                     type="button"
                                     onClick={() =>
                                       onUpdateCustomOrderStatus(
                                         ord.invoiceId,
-                                        ord.status === 'PAID'
-                                          ? 'PENDING_PAYMENT'
-                                          : 'PAID'
+                                        isPaid ? 'PENDING_PAYMENT' : 'PAID'
                                       )
                                     }
-                                    className="underline cursor-pointer"
+                                    data-testid={`admin-order-status-${ord.invoiceId}`}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer border transition-colors ${
+                                      isPaid
+                                        ? 'bg-emerald-950/90 border-emerald-500/70 text-emerald-300'
+                                        : 'bg-amber-950/60 border-amber-500/50 text-amber-300 underline'
+                                    }`}
                                   >
-                                    {ord.status}
+                                    {isPaid ? 'PAID / LUNAS' : 'PENDING_PAYMENT'}
                                   </button>
                                 </div>
                               </td>
-                              <td className="py-3 px-3">
-                                {ord.paymentProofUrl ? (
-                                  <div className="space-y-1.5 min-w-[140px]">
+                              <td
+                                className="py-3 px-3"
+                                data-testid={`admin-order-proof-${ord.invoiceId}`}
+                              >
+                                {resolvedProof ? (
+                                  <div className="space-y-1.5 min-w-[148px]">
                                     <div className="flex items-center gap-2">
                                       <button
                                         type="button"
-                                        onClick={() => setSelectedProofOrder(ord)}
-                                        className="relative w-10 h-10 rounded-lg overflow-hidden border border-[#D4AF37]/50 group shrink-0 cursor-pointer"
+                                        onClick={() =>
+                                          setSelectedProofOrder(effectiveOrder)
+                                        }
+                                        className="relative w-11 h-11 rounded-lg overflow-hidden border border-[#D4AF37]/60 group shrink-0 cursor-pointer shadow-sm"
                                         title="Klik untuk melihat bukti transfer penuh"
                                       >
                                         <img
-                                          src={ord.paymentProofUrl}
+                                          src={resolvedProof}
                                           alt={`Bukti Bayar ${ord.invoiceId}`}
                                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                         />
@@ -2019,14 +2058,14 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                           <Eye className="w-3.5 h-3.5 text-white" />
                                         </div>
                                       </button>
-                                      <div className="min-w-0">
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-500/50 text-[10px] font-semibold text-emerald-300 whitespace-nowrap">
+                                      <div className="min-w-0 space-y-0.5">
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/85 border border-emerald-500/60 text-[10px] font-bold text-emerald-300 whitespace-nowrap">
                                           <CheckCircle2 className="w-3 h-3" />
-                                          <span>Terupload</span>
+                                          <span>PAID / LUNAS</span>
                                         </span>
-                                        {ord.paymentProofUploadedAt && (
+                                        {resolvedUploadedAt && (
                                           <div className="text-[10px] text-zinc-400 font-mono-tabular truncate">
-                                            {ord.paymentProofUploadedAt}
+                                            {resolvedUploadedAt}
                                           </div>
                                         )}
                                       </div>
@@ -2035,34 +2074,20 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                     <div className="flex flex-col gap-1">
                                       <button
                                         type="button"
-                                        onClick={() => setSelectedProofOrder(ord)}
-                                        className="text-[11px] text-[#E5C87E] hover:text-white underline underline-offset-2 flex items-center gap-1 cursor-pointer"
+                                        onClick={() =>
+                                          setSelectedProofOrder(effectiveOrder)
+                                        }
+                                        data-testid={`admin-view-proof-btn-${ord.invoiceId}`}
+                                        className="px-2.5 py-1 rounded-lg bg-[#161522] hover:bg-[#211E32] border border-[#D4AF37]/50 text-[11px] font-semibold text-[#F5E6B8] flex items-center justify-center gap-1.5 cursor-pointer self-start transition-colors"
                                       >
-                                        <Eye className="w-3 h-3" />
-                                        <span>Lihat Bukti Bayar</span>
+                                        <span>👁️ Lihat Bukti</span>
                                       </button>
-
-                                      {ord.status !== 'PAID' && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            onUpdateCustomOrderStatus(
-                                              ord.invoiceId,
-                                              'PAID'
-                                            )
-                                          }
-                                          className="px-2 py-0.5 rounded bg-emerald-900/70 hover:bg-emerald-800 border border-emerald-500/60 text-[10px] font-bold uppercase tracking-wider text-emerald-200 cursor-pointer self-start"
-                                          title="Tandai pembayaran telah diverifikasi dan lunas"
-                                        >
-                                          ✅ Verifikasi Lunas (PAID)
-                                        </button>
-                                      )}
                                     </div>
                                   </div>
                                 ) : (
                                   <div className="text-zinc-500 italic text-[11px] flex items-center gap-1">
                                     <Lock className="w-3 h-3 text-zinc-600" />
-                                    <span>Belum Upload</span>
+                                    <span>🔒 Belum Upload</span>
                                   </div>
                                 )}
                               </td>
@@ -2448,88 +2473,80 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       )}
 
       {/* LIGHTBOX MODAL: FULL PREVIEW BUKTI PEMBAYARAN */}
-      {selectedProofOrder && selectedProofOrder.paymentProofUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
-          onClick={() => setSelectedProofOrder(null)}
-          data-testid="admin-proof-lightbox"
-        >
+      {selectedProofOrder &&
+        (selectedProofOrder.paymentProof ||
+          selectedProofOrder.paymentProofUrl) && (
           <div
-            className="relative max-w-2xl w-full bg-[#121118] border border-[#D4AF37]/50 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 animate-fade-up"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+            onClick={() => setSelectedProofOrder(null)}
+            data-testid="admin-proof-lightbox"
           >
-            <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
-              <div className="flex items-center gap-2">
-                <Eye className="w-4 h-4 text-[#E5C87E]" />
-                <h4 className="font-brand text-xs font-bold uppercase tracking-wider text-white">
-                  Foto Bukti Pembayaran #{selectedProofOrder.invoiceId} — {selectedProofOrder.buyerName}
-                </h4>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedProofOrder(null)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="max-h-[70vh] overflow-auto flex items-center justify-center rounded-xl bg-[#09080E] p-2 border border-zinc-800">
-              <img
-                src={selectedProofOrder.paymentProofUrl}
-                alt={`Bukti Transfer ${selectedProofOrder.invoiceId}`}
-                className="max-h-[65vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
-              />
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-300 pt-1">
-              <div className="space-y-0.5">
-                <p>
-                  Total Tagihan:{' '}
-                  <strong className="text-[#F5E6B8]">
-                    {formatIDRCurrency(
-                      selectedProofOrder.dealPriceIDR +
-                        (selectedProofOrder.shippingCostIDR || 0)
-                    )}
-                  </strong>
-                </p>
-                {selectedProofOrder.paymentProofUploadedAt && (
-                  <p className="text-zinc-400 text-[11px]">
-                    Diunggah: {selectedProofOrder.paymentProofUploadedAt}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {selectedProofOrder.status !== 'PAID' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onUpdateCustomOrderStatus(
-                        selectedProofOrder.invoiceId,
-                        'PAID'
-                      );
-                      setSelectedProofOrder((prev) =>
-                        prev ? { ...prev, status: 'PAID' } : null
-                      );
-                    }}
-                    className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 border border-emerald-400 text-white font-brand text-xs font-bold uppercase tracking-wider cursor-pointer"
-                  >
-                    ✅ Verifikasi Lunas (PAID)
-                  </button>
-                )}
+            <div
+              className="relative max-w-2xl w-full bg-[#121118] border border-[#D4AF37]/50 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 animate-fade-up"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-3">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-[#E5C87E]" />
+                  <h4 className="font-brand text-xs font-bold uppercase tracking-wider text-white">
+                    Foto Bukti Pembayaran #{selectedProofOrder.invoiceId} —{' '}
+                    {selectedProofOrder.buyerName}
+                  </h4>
+                </div>
                 <button
                   type="button"
                   onClick={() => setSelectedProofOrder(null)}
-                  className="px-4 py-2 rounded-lg bg-[#1C1A27] hover:bg-[#252233] border border-[#D4AF37]/40 text-[#F5E6B8] font-brand text-xs font-semibold uppercase tracking-wider cursor-pointer"
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
                 >
-                  Tutup
+                  <X className="w-5 h-5" />
                 </button>
+              </div>
+
+              <div className="max-h-[70vh] overflow-auto flex items-center justify-center rounded-xl bg-[#09080E] p-2 border border-zinc-800">
+                <img
+                  src={
+                    selectedProofOrder.paymentProof ||
+                    selectedProofOrder.paymentProofUrl
+                  }
+                  alt={`Bukti Transfer ${selectedProofOrder.invoiceId}`}
+                  className="max-h-[65vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-300 pt-1">
+                <div className="space-y-0.5">
+                  <p>
+                    Total Tagihan:{' '}
+                    <strong className="text-[#F5E6B8]">
+                      {formatIDRCurrency(
+                        selectedProofOrder.dealPriceIDR +
+                          (selectedProofOrder.shippingCostIDR || 0)
+                      )}
+                    </strong>
+                  </p>
+                  {selectedProofOrder.paymentProofUploadedAt && (
+                    <p className="text-zinc-400 text-[11px]">
+                      Diunggah: {selectedProofOrder.paymentProofUploadedAt}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-500/70 text-emerald-300 font-brand text-[11px] font-bold uppercase tracking-wider">
+                    ✅ STATUS: PAID / LUNAS
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProofOrder(null)}
+                    className="px-4 py-2 rounded-lg bg-[#1C1A27] hover:bg-[#252233] border border-[#D4AF37]/40 text-[#F5E6B8] font-brand text-xs font-semibold uppercase tracking-wider cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 };

@@ -138,6 +138,7 @@ export interface PrivateInvoice {
   shippingLabel?: string;
   items: PrivateInvoiceItem[];
   notes: string;
+  paymentProof?: string;
   paymentProofUrl?: string;
   paymentProofUploadedAt?: string;
 }
@@ -274,6 +275,7 @@ export interface CustomAdminOrder {
   status: 'PENDING_PAYMENT' | 'PAID';
   buyerEmail?: string;
   buyerPhone?: string;
+  paymentProof?: string;
   paymentProofUrl?: string;
   paymentProofUploadedAt?: string;
 }

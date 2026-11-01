@@ -28,6 +28,7 @@ import {
   VorvanSiteSettings,
 } from '../types/fragrance';
 import {
+  applyPaymentProofToOrders,
   buildVerifiedLegalWhatsAppMessage,
   buildVerifiedLegalWhatsAppUrl,
   calculateInvoiceTotals,
@@ -596,7 +597,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const effectiveTimestamp =
     legalAgreedTimestamp || formatLegalTimestampWIB(new Date());
 
-  // Handle HTML5 Canvas image compression & automatic recording to Web Admin
+  // Handle HTML5 Canvas image compression (max 400px, quality 0.5) & automatic PAID recording to Web Admin
   const handleProofFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -604,7 +605,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     setIsCompressingProof(true);
 
     try {
-      const compressed = await compressPaymentProofImage(file, 600, 0.7);
+      const compressed = await compressPaymentProofImage(file, 400, 0.5);
       const nowWIB = formatLegalTimestampWIB(new Date());
       setPaymentProofUrl(compressed);
       setPaymentProofUploadedAt(nowWIB);
@@ -612,42 +613,47 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
       // 1. Save locally to payment proof records map
       savePaymentProofRecord(baseInvoice.invoiceId, compressed, nowWIB);
 
-      // 2. Also update locally stored custom orders if present
-      const localOrders = loadCustomAdminOrders();
-      const isAutoPaid = Boolean(activeSettings.autoPaidOnProofUpload);
-      const updatedOrders = localOrders.map((o) =>
-        o.invoiceId.toUpperCase() === baseInvoice.invoiceId.toUpperCase()
-          ? {
-              ...o,
-              paymentProofUrl: compressed,
-              paymentProofUploadedAt: nowWIB,
-              status: isAutoPaid ? ('PAID' as const) : o.status,
-            }
-          : o
+      // 2. Automatically match & update customOrders in localStorage (status -> PAID, paymentProof, shippingStage)
+      const localOrders =
+        customOrders && customOrders.length > 0
+          ? customOrders
+          : loadCustomAdminOrders();
+      const itemFragNames = baseInvoice.items.map((it) => it.fragranceName);
+      const { updatedOrders, matchedInvoiceIds } = applyPaymentProofToOrders(
+        localOrders,
+        baseInvoice.invoiceId,
+        compressed,
+        nowWIB,
+        itemFragNames
       );
       saveCustomAdminOrders(updatedOrders);
 
-      // 3. Inform parent App component
+      // 3. Inform parent App component to immediately update adminInvoices state & Cloud KV
       onUploadPaymentProof?.(baseInvoice.invoiceId, compressed, nowWIB);
 
-      // 4. Send Cloud Vault Real-Time packet
-      void pushCloudVaultPacket({
-        kind: 'VORVAN_PAYMENT_PROOF',
-        invoiceId: baseInvoice.invoiceId,
-        paymentProofUrl: compressed,
-        uploadedAt: nowWIB,
-        autoMarkPaid: isAutoPaid,
-        ts: Date.now(),
-      });
+      // 4. Send Cloud Vault Real-Time packet for invoiceId and any matched Admin order IDs
+      const targetIds = Array.from(
+        new Set([baseInvoice.invoiceId, ...matchedInvoiceIds])
+      );
+      for (const targetInvId of targetIds) {
+        void pushCloudVaultPacket({
+          kind: 'VORVAN_PAYMENT_PROOF',
+          invoiceId: targetInvId,
+          paymentProofUrl: compressed,
+          uploadedAt: nowWIB,
+          autoMarkPaid: true,
+          ts: Date.now(),
+        });
+      }
 
       // 5. Fire Google Apps Script Webhook
       void sendPaymentProofWebhook({
-        invNo: baseInvoice.invoiceId,
+        invNo: matchedInvoiceIds[0] || baseInvoice.invoiceId,
         buyerName: baseInvoice.buyerName,
         itemName: perfumeSummaryDesc,
         totalPrice: formatIDRCurrency(totals.grandTotalIDR),
         uploadedAt: nowWIB,
-        autoMarkPaid: isAutoPaid,
+        autoMarkPaid: true,
         hasProofImage: true,
       });
     } catch (err) {
@@ -874,7 +880,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               <div className="text-[11px] sm:text-xs text-zinc-400 flex flex-col sm:flex-row sm:items-center md:justify-end gap-x-1.5 gap-y-0.5">
                 <span className="whitespace-nowrap">Penanggung Jawab:</span>
                 <strong className="text-[#F5E6B8] whitespace-nowrap">
-                  VORVAN Official Concierge — Andre Satria P
+                  VORVAN Official Concierge
                 </strong>
               </div>
             </div>
@@ -1038,7 +1044,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
           <div className="p-6 sm:p-10 bg-[#0D0C12] space-y-8">
             <div className="space-y-2">
               <span className="font-brand text-[10px] uppercase tracking-[0.22em] text-[#E5C87E] block">
-                OFFICIAL SETTLEMENT CHANNELS · ANDRE SATRIA P
+                OFFICIAL SETTLEMENT CHANNELS · VORVAN OFFICIAL CONCIERGE
               </span>
               <h3 className="font-serif-luxury text-2xl sm:text-3xl font-semibold text-white">
                 Pilih Metode Pembayaran Resmi VORVAN

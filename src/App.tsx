@@ -24,6 +24,7 @@ import {
   VorvanSiteSettings,
 } from './types/fragrance';
 import {
+  applyPaymentProofToOrders,
   buildSmartShareUrl,
   buildTelegramInquiryUrl,
   buildWhatsAppInquiryUrl,
@@ -451,6 +452,14 @@ export default function App() {
 
   // Sync on boot, when opening Admin Console, or when visiting Invoice/Tracking views
   useEffect(() => {
+    if (adminLogModalOpen) {
+      setCustomOrders((prev) => {
+        const stored = loadCustomAdminOrders();
+        const merged = mergeCustomAdminOrders(prev, stored);
+        saveCustomAdminOrders(merged);
+        return merged;
+      });
+    }
     void syncFromCloudVault();
   }, [syncFromCloudVault, adminLogModalOpen, route.view]);
 
@@ -466,11 +475,39 @@ export default function App() {
               o.invoiceId.toUpperCase() === smartOrd.invoiceId.toUpperCase()
           );
           const next = exists
-            ? prev.map((o) =>
-                o.invoiceId.toUpperCase() === smartOrd.invoiceId.toUpperCase()
-                  ? smartOrd
-                  : o
-              )
+            ? prev.map((o) => {
+                if (
+                  o.invoiceId.toUpperCase() !== smartOrd.invoiceId.toUpperCase()
+                ) {
+                  return o;
+                }
+                const proofImg =
+                  o.paymentProof ||
+                  o.paymentProofUrl ||
+                  smartOrd.paymentProof ||
+                  smartOrd.paymentProofUrl;
+                const isPaid =
+                  Boolean(proofImg) ||
+                  o.status === 'PAID' ||
+                  smartOrd.status === 'PAID';
+                return {
+                  ...smartOrd,
+                  ...o,
+                  status: isPaid ? ('PAID' as const) : smartOrd.status,
+                  paymentProof: proofImg,
+                  paymentProofUrl: proofImg,
+                  paymentProofUploadedAt:
+                    o.paymentProofUploadedAt || smartOrd.paymentProofUploadedAt,
+                  shippingStage: Math.min(
+                    4,
+                    Math.max(
+                      o.shippingStage || 2,
+                      smartOrd.shippingStage || 2,
+                      proofImg ? 3 : 2
+                    )
+                  ) as 1 | 2 | 3 | 4,
+                };
+              })
             : [smartOrd, ...prev];
           saveCustomAdminOrders(next);
           return next;
@@ -719,20 +756,37 @@ export default function App() {
     proofBase64: string,
     uploadedAt: string
   ) => {
-    const isAutoPaid = Boolean(siteSettings.autoPaidOnProofUpload);
-    const updated = customOrders.map((o) =>
-      o.invoiceId.toUpperCase() === invoiceId.toUpperCase()
-        ? {
-            ...o,
-            paymentProofUrl: proofBase64,
-            paymentProofUploadedAt: uploadedAt,
-            status: isAutoPaid ? ('PAID' as const) : o.status,
-          }
-        : o
-    );
-    setCustomOrders(updated);
-    saveCustomAdminOrders(updated);
-    void saveSharedCloudLeadsAndOrders(emailLeads, updated);
+    setCustomOrders((prev) => {
+      const stored = loadCustomAdminOrders();
+      const baseList = mergeCustomAdminOrders(prev, stored);
+      const { updatedOrders } = applyPaymentProofToOrders(
+        baseList,
+        invoiceId,
+        proofBase64,
+        uploadedAt
+      );
+      saveCustomAdminOrders(updatedOrders);
+      void saveSharedCloudLeadsAndOrders(emailLeads, updatedOrders);
+      return updatedOrders;
+    });
+
+    if (route.view === 'invoice' && route.smartOrder) {
+      const updatedSmart: CustomAdminOrder = {
+        ...route.smartOrder,
+        status: 'PAID',
+        paymentProof: proofBase64,
+        paymentProofUrl: proofBase64,
+        paymentProofUploadedAt: uploadedAt,
+        shippingStage: Math.min(
+          4,
+          Math.max((route.smartOrder.shippingStage || 2) + 1, 3)
+        ) as 1 | 2 | 3 | 4,
+      };
+      setRoute({
+        ...route,
+        smartOrder: updatedSmart,
+      });
+    }
   };
 
   const handleDeleteCustomOrder = (invoiceId: string) => {

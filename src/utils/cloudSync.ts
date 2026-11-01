@@ -1,4 +1,9 @@
 import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
+import {
+  applyPaymentProofToOrders,
+  loadPaymentProofsMap,
+  savePaymentProofRecord,
+} from './businessRules';
 
 export const FORMSUBMIT_GMAIL_ENDPOINT =
   'https://formsubmit.co/ajax/vorvanlifestyle@gmail.com';
@@ -43,6 +48,16 @@ export type CloudVaultPacket =
       paymentProofUrl: string;
       uploadedAt: string;
       autoMarkPaid?: boolean;
+      ts: number;
+    }
+  | {
+      kind: 'VORVAN_PAYMENT_PROOF_CHUNK';
+      invoiceId: string;
+      uploadedAt: string;
+      autoMarkPaid?: boolean;
+      chunkIndex: number;
+      totalChunks: number;
+      chunkData: string;
       ts: number;
     };
 
@@ -288,13 +303,50 @@ export async function saveSharedCloudLeadsAndOrders(
 }
 
 /**
- * Publishes a cross-device sync packet (Lead or Order) to the shared VORVAN Cloud Vault channel
+ * Publishes a cross-device sync packet (Lead, Order, or Payment Proof) to the shared VORVAN Cloud Vault channel
  * so Incognito tabs and other devices can read it without sharing browser localStorage.
+ * Automatically splits Base64 payment proofs > 2400 chars into small chunks (< 3 KB) so ntfy.sh
+ * keeps every packet inline as JSON messages.
  */
 export async function pushCloudVaultPacket(
   packet: CloudVaultPacket
 ): Promise<boolean> {
   try {
+    if (
+      packet.kind === 'VORVAN_PAYMENT_PROOF' &&
+      packet.paymentProofUrl &&
+      packet.paymentProofUrl.length > 2400
+    ) {
+      const chunkSize = 2400;
+      const totalChunks = Math.ceil(packet.paymentProofUrl.length / chunkSize);
+      let allOk = true;
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkData = packet.paymentProofUrl.slice(
+          i * chunkSize,
+          (i + 1) * chunkSize
+        );
+        const chunkPacket: CloudVaultPacket = {
+          kind: 'VORVAN_PAYMENT_PROOF_CHUNK',
+          invoiceId: packet.invoiceId,
+          uploadedAt: packet.uploadedAt,
+          autoMarkPaid: true,
+          chunkIndex: i,
+          totalChunks,
+          chunkData,
+          ts: packet.ts,
+        };
+        const res = await fetch(VORVAN_CLOUD_SYNC_TOPIC, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=UTF-8',
+          },
+          body: JSON.stringify(chunkPacket),
+        });
+        if (!res.ok) allOk = false;
+      }
+      return allOk;
+    }
+
     const res = await fetch(VORVAN_CLOUD_SYNC_TOPIC, {
       method: 'POST',
       headers: {
@@ -320,6 +372,10 @@ export async function pullCloudVaultState(): Promise<{
   const leadsByEmail = new Map<string, ConciergeEmailLead>();
   const ordersById = new Map<string, CustomAdminOrder>();
   const deletedInvoiceIds = new Set<string>();
+  const proofsByInv = new Map<
+    string,
+    { proofUrl: string; uploadedAt: string }
+  >();
   let fetchedAny = false;
 
   const registerLead = (lead: ConciergeEmailLead) => {
@@ -374,7 +430,20 @@ export async function pullCloudVaultState(): Promise<{
         if (Array.isArray(restJson.data.orders)) {
           for (const ord of restJson.data.orders) {
             if (ord?.invoiceId) {
-              ordersById.set(ord.invoiceId.trim().toUpperCase(), ord);
+              const invKey = ord.invoiceId.trim().toUpperCase();
+              const proofImg = ord.paymentProof || ord.paymentProofUrl;
+              if (proofImg) {
+                proofsByInv.set(invKey, {
+                  proofUrl: proofImg,
+                  uploadedAt: ord.paymentProofUploadedAt || 'Terverifikasi · WIB',
+                });
+                savePaymentProofRecord(
+                  invKey,
+                  proofImg,
+                  ord.paymentProofUploadedAt || 'Terverifikasi · WIB'
+                );
+              }
+              ordersById.set(invKey, ord);
             }
           }
         }
@@ -404,6 +473,15 @@ export async function pullCloudVaultState(): Promise<{
         .filter(Boolean);
 
       const streamLeads: ConciergeEmailLead[] = [];
+      const chunkCollector = new Map<
+        string,
+        {
+          totalChunks: number;
+          uploadedAt: string;
+          chunks: Map<number, string>;
+        }
+      >();
+
       for (const line of lines) {
         try {
           const outer = JSON.parse(line) as {
@@ -425,7 +503,24 @@ export async function pullCloudVaultState(): Promise<{
           ) {
             const invKey = packet.order.invoiceId.trim().toUpperCase();
             deletedInvoiceIds.delete(invKey);
-            ordersById.set(invKey, packet.order);
+            const existing = ordersById.get(invKey);
+            const proofImg =
+              packet.order.paymentProof ||
+              packet.order.paymentProofUrl ||
+              existing?.paymentProof ||
+              existing?.paymentProofUrl;
+            ordersById.set(invKey, {
+              ...packet.order,
+              status:
+                proofImg || existing?.status === 'PAID'
+                  ? 'PAID'
+                  : packet.order.status,
+              paymentProof: proofImg,
+              paymentProofUrl: proofImg,
+              paymentProofUploadedAt:
+                packet.order.paymentProofUploadedAt ||
+                existing?.paymentProofUploadedAt,
+            });
           } else if (
             packet.kind === 'VORVAN_ORDER_STATUS' &&
             packet.invoiceId
@@ -447,17 +542,44 @@ export async function pullCloudVaultState(): Promise<{
             ordersById.delete(invKey);
           } else if (
             packet.kind === 'VORVAN_PAYMENT_PROOF' &&
-            packet.invoiceId
+            packet.invoiceId &&
+            packet.paymentProofUrl
           ) {
             const invKey = packet.invoiceId.trim().toUpperCase();
-            const existing = ordersById.get(invKey);
-            if (existing) {
-              ordersById.set(invKey, {
-                ...existing,
-                paymentProofUrl: packet.paymentProofUrl,
-                paymentProofUploadedAt: packet.uploadedAt,
-                status: packet.autoMarkPaid ? 'PAID' : existing.status,
+            proofsByInv.set(invKey, {
+              proofUrl: packet.paymentProofUrl,
+              uploadedAt: packet.uploadedAt,
+            });
+            savePaymentProofRecord(
+              invKey,
+              packet.paymentProofUrl,
+              packet.uploadedAt
+            );
+          } else if (
+            packet.kind === 'VORVAN_PAYMENT_PROOF_CHUNK' &&
+            packet.invoiceId &&
+            typeof packet.chunkIndex === 'number' &&
+            typeof packet.totalChunks === 'number'
+          ) {
+            const key = `${packet.invoiceId.trim().toUpperCase()}__${packet.ts}`;
+            const entry = chunkCollector.get(key) || {
+              totalChunks: packet.totalChunks,
+              uploadedAt: packet.uploadedAt,
+              chunks: new Map<number, string>(),
+            };
+            entry.chunks.set(packet.chunkIndex, packet.chunkData);
+            chunkCollector.set(key, entry);
+            if (entry.chunks.size === entry.totalChunks) {
+              let fullProof = '';
+              for (let i = 0; i < entry.totalChunks; i++) {
+                fullProof += entry.chunks.get(i) || '';
+              }
+              const invKey = packet.invoiceId.trim().toUpperCase();
+              proofsByInv.set(invKey, {
+                proofUrl: fullProof,
+                uploadedAt: entry.uploadedAt,
               });
+              savePaymentProofRecord(invKey, fullProof, entry.uploadedAt);
             }
           }
         } catch {
@@ -478,9 +600,20 @@ export async function pullCloudVaultState(): Promise<{
 
   if (!fetchedAny) return null;
 
+  let currentOrders = Array.from(ordersById.values());
+  for (const [invKey, proofData] of proofsByInv.entries()) {
+    const applied = applyPaymentProofToOrders(
+      currentOrders,
+      invKey,
+      proofData.proofUrl,
+      proofData.uploadedAt
+    );
+    currentOrders = applied.updatedOrders;
+  }
+
   return {
     leads: Array.from(leadsByEmail.values()),
-    orders: Array.from(ordersById.values()),
+    orders: currentOrders,
     deletedInvoiceIds,
   };
 }
@@ -508,6 +641,8 @@ export function mergeVisitorLeads(
 
 /**
  * Merges locally stored custom admin orders with cloud-synced orders without duplicates.
+ * Automatically promotes status to PAID and attaches paymentProof whenever a proof exists
+ * in local orders, cloud orders, or paymentProofsMap.
  */
 export function mergeCustomAdminOrders(
   localOrders: CustomAdminOrder[],
@@ -530,24 +665,63 @@ export function mergeCustomAdminOrders(
     if (!deletedInvoiceIds.has(key)) {
       const local = byInvoiceId.get(key);
       if (local) {
+        const mergedProof =
+          ord.paymentProof ||
+          ord.paymentProofUrl ||
+          local.paymentProof ||
+          local.paymentProofUrl;
+        const isPaid =
+          Boolean(mergedProof) ||
+          ord.status === 'PAID' ||
+          local.status === 'PAID';
+        const mergedStage = Math.min(
+          4,
+          Math.max(
+            local.shippingStage || 2,
+            ord.shippingStage || 2,
+            mergedProof ? 3 : 2
+          )
+        ) as 1 | 2 | 3 | 4;
+
         byInvoiceId.set(key, {
           ...local,
           ...ord,
-          paymentProofUrl: ord.paymentProofUrl || local.paymentProofUrl,
+          paymentProof: mergedProof,
+          paymentProofUrl: mergedProof,
           paymentProofUploadedAt:
             ord.paymentProofUploadedAt || local.paymentProofUploadedAt,
-          status:
-            ord.status === 'PAID' || local.status === 'PAID'
-              ? 'PAID'
-              : ord.status,
+          status: isPaid ? 'PAID' : ord.status,
+          shippingStage: mergedStage,
         });
       } else {
-        byInvoiceId.set(key, ord);
+        const proofImg = ord.paymentProof || ord.paymentProofUrl;
+        byInvoiceId.set(key, {
+          ...ord,
+          paymentProof: proofImg,
+          paymentProofUrl: proofImg,
+          status: proofImg ? 'PAID' : ord.status,
+        });
       }
     }
   }
 
-  return Array.from(byInvoiceId.values()).sort(
+  let mergedList = Array.from(byInvoiceId.values()).sort(
     (a, b) => (b.createdAtTimestampMs || 0) - (a.createdAtTimestampMs || 0)
   );
+
+  // Also apply any proofs stored in local/memory paymentProofsMap
+  const proofsMap = loadPaymentProofsMap();
+  for (const [invKey, record] of Object.entries(proofsMap)) {
+    if (record?.proofUrl) {
+      const res = applyPaymentProofToOrders(
+        mergedList,
+        invKey,
+        record.proofUrl,
+        record.uploadedAt
+      );
+      mergedList = res.updatedOrders;
+    }
+  }
+
+  return mergedList;
 }
