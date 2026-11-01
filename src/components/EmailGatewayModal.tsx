@@ -211,6 +211,7 @@ interface AdminEmailRegistryModalProps {
   onDeleteCustomOrder: (invoiceId: string) => void;
   onOpenInvoicePreview: (invoiceId: string, smartOrder?: CustomAdminOrder) => void;
   onOpenTrackingPreview: (query: string, smartOrder?: CustomAdminOrder) => void;
+  onSyncCloud?: () => Promise<void> | void;
 }
 
 export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = ({
@@ -226,7 +227,9 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   onDeleteCustomOrder,
   onOpenInvoicePreview,
   onOpenTrackingPreview,
+  onSyncCloud,
 }) => {
+  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
   const [isPinUnlocked, setIsPinUnlocked] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>('');
   const [pinError, setPinError] = useState<string | null>(null);
@@ -1692,9 +1695,30 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
 
               {/* Created Custom Orders Table */}
               <div className="p-5 rounded-2xl bg-[#0B0A0E] border border-zinc-800 space-y-4">
-                <h3 className="font-serif-luxury text-xl font-semibold text-white">
-                  Daftar Invoice &amp; Resi Otomatis yang Dibuat Admin ({customOrders.length})
-                </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h3 className="font-serif-luxury text-xl font-semibold text-white">
+                    Daftar Invoice &amp; Resi Otomatis yang Dibuat Admin ({customOrders.length})
+                  </h3>
+                  {onSyncCloud && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsSyncingCloud(true);
+                        try {
+                          await onSyncCloud();
+                        } finally {
+                          setIsSyncingCloud(false);
+                        }
+                      }}
+                      data-testid="admin-sync-cloud-btn"
+                      className="px-3.5 py-1.5 rounded-lg bg-[#161521] hover:bg-[#1F1D2E] border border-[#D4AF37]/45 text-[11px] font-semibold text-[#F5E6B8] cursor-pointer self-start sm:self-auto"
+                    >
+                      {isSyncingCloud
+                        ? '⏳ Menyinkronkan Cloud...'
+                        : '🔄 Sinkronkan Cloud Lintas Perangkat'}
+                    </button>
+                  )}
+                </div>
                 {customOrders.length === 0 ? (
                   <p className="text-xs text-zinc-400">
                     Belum ada invoice/resi baru yang dibuat pada sesi ini. Gunakan Tab 1
@@ -1814,10 +1838,17 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
 
               {/* Visitor Emails Table */}
               <div className="p-5 rounded-2xl bg-[#0B0A0E] border border-zinc-800 space-y-4">
-                <h3 className="font-serif-luxury text-xl font-semibold text-white">
-                  Database Email Pengunjung Terdaftar ({leads.length}) — Sinkron ke{' '}
-                  <span className="text-[#E5C87E]">{settings.conciergeEmail}</span>
-                </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-serif-luxury text-xl font-semibold text-white">
+                      Database Email Pengunjung Terdaftar ({leads.length}) — Sinkron ke{' '}
+                      <span className="text-[#E5C87E]">{settings.conciergeEmail}</span>
+                    </h3>
+                    <p className="text-[11px] text-emerald-400/90 mt-0.5">
+                      ✓ Terhubung ke FormSubmit AJAX (`vorvanlifestyle@gmail.com`) &amp; Cloud Sync Lintas Perangkat / Tab Samaran
+                    </p>
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>

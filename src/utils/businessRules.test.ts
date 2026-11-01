@@ -617,3 +617,102 @@ test('Tab 4 Concierge Guide (Panduan 81 Parfum — Iklim Indonesia) filters by m
   );
 });
 
+test('FormSubmit AJAX Gmail delivery and Cross-Device/Incognito Cloud Sync helpers format payload and merge leads & orders without duplicates', async () => {
+  const {
+    FORMSUBMIT_GMAIL_ENDPOINT,
+    sendVisitorLeadToGmail,
+    mergeVisitorLeads,
+    mergeCustomAdminOrders,
+  } = await import('./cloudSync.ts');
+
+  assert.equal(
+    FORMSUBMIT_GMAIL_ENDPOINT,
+    'https://formsubmit.co/ajax/vorvanlifestyle@gmail.com'
+  );
+
+  let capturedUrl = '';
+  let capturedBody: Record<string, string> = {};
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    capturedUrl = String(input);
+    capturedBody = JSON.parse(String(init?.body || '{}'));
+    return { ok: true } as Response;
+  }) as typeof fetch;
+
+  try {
+    const ok = await sendVisitorLeadToGmail({
+      leadId: 'LEAD-VRV-03',
+      visitorEmail: 'vip.buyer@gmail.com',
+      waktuDaftar: '1/11/2026, 12.00.00',
+      sumberWeb: 'https://vorvan-official.vercel.app/',
+    });
+    assert.equal(ok, true);
+    assert.equal(
+      capturedUrl,
+      'https://formsubmit.co/ajax/vorvanlifestyle@gmail.com'
+    );
+    assert.equal(
+      capturedBody._subject,
+      '🌟 VIP Lead Baru VORVAN: vip.buyer@gmail.com'
+    );
+    assert.equal(capturedBody.ID_Lead, 'LEAD-VRV-03');
+    assert.equal(capturedBody.Email_Klien, 'vip.buyer@gmail.com');
+    assert.equal(capturedBody.Waktu_Daftar, '1/11/2026, 12.00.00');
+    assert.equal(capturedBody.Sumber_Web, 'https://vorvan-official.vercel.app/');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const mergedLeads = mergeVisitorLeads(
+    [
+      {
+        id: 'LEAD-VRV-01',
+        email: 'raditya@capital.co.id',
+        registeredAt: '26 Okt 2026',
+        syncedToVorvanMail: true,
+      },
+    ],
+    [
+      {
+        id: 'LEAD-VRV-02',
+        email: 'incognito.user@gmail.com',
+        registeredAt: '1 Nov 2026',
+        syncedToVorvanMail: true,
+      },
+      {
+        id: 'LEAD-VRV-01-DUP',
+        email: 'RADITYA@capital.co.id',
+        registeredAt: '26 Okt 2026',
+        syncedToVorvanMail: true,
+      },
+    ]
+  );
+  assert.equal(mergedLeads.length, 2);
+  assert.equal(mergedLeads[0].email, 'incognito.user@gmail.com');
+
+  const mergedOrders = mergeCustomAdminOrders(
+    [],
+    [
+      {
+        invoiceId: 'INV-VRV-9991',
+        trackingId: 'JNE9991',
+        createdAt: '01 Nov 2026 · 12:00 WIB',
+        createdAtTimestampMs: 1700000000000,
+        buyerName: 'Bpk. Dimas',
+        buyerCity: 'Surabaya',
+        house: 'LV (Louis Vuitton)',
+        fragranceName: 'Imagination',
+        concentration: 'Eau de Parfum',
+        volume: '100ml',
+        batchCode: 'LV-99',
+        dealPriceIDR: 4550000,
+        shippingMethod: 'JNE',
+        awbNumber: 'JNE9991',
+        status: 'PENDING_PAYMENT',
+      },
+    ]
+  );
+  assert.equal(mergedOrders.length, 1);
+  assert.equal(mergedOrders[0].invoiceId, 'INV-VRV-9991');
+});
+

@@ -24,14 +24,24 @@ import {
   VorvanSiteSettings,
 } from './types/fragrance';
 import {
+  buildSmartShareUrl,
   buildTelegramInquiryUrl,
   buildWhatsAppInquiryUrl,
   decodeSmartOrderParam,
+  encodeSmartOrderParam,
   loadCustomAdminOrders,
   loadVorvanSettings,
   saveCustomAdminOrders,
   saveVorvanSettings,
 } from './utils/businessRules';
+import {
+  mergeCustomAdminOrders,
+  mergeVisitorLeads,
+  pullCloudVaultState,
+  pushCloudVaultPacket,
+  sendAdminOrderBackupToGmail,
+  sendVisitorLeadToGmail,
+} from './utils/cloudSync';
 import { VorvanCrestImage } from './components/VorvanLogo';
 import { WelcomeSplashScreen } from './components/WelcomeSplashScreen';
 import { FragranceCard } from './components/FragranceCard';
@@ -408,7 +418,42 @@ export default function App() {
     };
   }, []);
 
-  // Auto-clean URL (`?v=...` or `?order=...`) when opened by buyer & cache order locally
+  // Cross-device & Incognito Cloud Sync function (pulls leads & orders from shared Cloud Vault)
+  const syncFromCloudVault = React.useCallback(async () => {
+    const cloudData = await pullCloudVaultState();
+    if (!cloudData) return;
+
+    if (cloudData.leads.length > 0) {
+      setEmailLeads((prev) => {
+        const merged = mergeVisitorLeads(prev, cloudData.leads);
+        try {
+          localStorage.setItem(STORAGE_LEADS_KEY, JSON.stringify(merged));
+        } catch {
+          // ignore
+        }
+        return merged;
+      });
+    }
+
+    if (cloudData.orders.length > 0 || cloudData.deletedInvoiceIds.size > 0) {
+      setCustomOrders((prev) => {
+        const merged = mergeCustomAdminOrders(
+          prev,
+          cloudData.orders,
+          cloudData.deletedInvoiceIds
+        );
+        saveCustomAdminOrders(merged);
+        return merged;
+      });
+    }
+  }, []);
+
+  // Sync on boot, when opening Admin Console, or when visiting Invoice/Tracking views
+  useEffect(() => {
+    void syncFromCloudVault();
+  }, [syncFromCloudVault, adminLogModalOpen, route.view]);
+
+  // Cache order locally when opened via `?v=...` Smart URL while keeping `?v=...` intact in the address bar for Incognito / cross-device copy-paste
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (route.view === 'invoice' || route.view === 'track') {
@@ -429,31 +474,35 @@ export default function App() {
           saveCustomAdminOrders(next);
           return next;
         });
-      }
 
-      const params = new URLSearchParams(window.location.search);
-      if (params.has('v') || params.has('order')) {
+        const token = encodeSmartOrderParam(smartOrd);
         if (route.view === 'invoice') {
           const cleanInvId = (
             route.invoiceId ||
-            smartOrd?.invoiceId ||
+            smartOrd.invoiceId ||
             ''
           ).toUpperCase();
-          if (cleanInvId) {
-            window.history.replaceState(null, '', '/pay/' + cleanInvId);
+          if (cleanInvId && token) {
+            window.history.replaceState(
+              null,
+              '',
+              `/pay/${cleanInvId}?v=${encodeURIComponent(token)}`
+            );
           }
         } else if (route.view === 'track') {
           const cleanTrackId = (
             route.query ||
-            smartOrd?.trackingId ||
-            smartOrd?.awbNumber ||
+            smartOrd.trackingId ||
+            smartOrd.awbNumber ||
             ''
           ).trim();
-          if (cleanTrackId) {
+          if (cleanTrackId && token) {
             window.history.replaceState(
               null,
               '',
-              '/track/' + encodeURIComponent(cleanTrackId)
+              `/track/${encodeURIComponent(cleanTrackId)}?v=${encodeURIComponent(
+                token
+              )}`
             );
           }
         }
@@ -488,8 +537,21 @@ export default function App() {
     smartOrder?: CustomAdminOrder | null
   ) => {
     const cleanId = invoiceId.trim().toUpperCase();
-    window.history.pushState({}, '', cleanId ? `/pay/${cleanId}` : '/pay');
-    setRoute({ view: 'invoice', invoiceId: cleanId, smartOrder });
+    const matchedOrder =
+      smartOrder ||
+      customOrders.find(
+        (o) =>
+          o.invoiceId.toUpperCase() === cleanId ||
+          o.awbNumber.toUpperCase() === cleanId ||
+          o.trackingId.toUpperCase() === cleanId
+      ) ||
+      null;
+    const token = matchedOrder ? encodeSmartOrderParam(matchedOrder) : '';
+    const nextUrl = cleanId
+      ? `/pay/${cleanId}${token ? `?v=${encodeURIComponent(token)}` : ''}`
+      : '/pay';
+    window.history.pushState({}, '', nextUrl);
+    setRoute({ view: 'invoice', invoiceId: cleanId, smartOrder: matchedOrder });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -498,12 +560,23 @@ export default function App() {
     smartOrder?: CustomAdminOrder | null
   ) => {
     const clean = trackingQuery.trim().toUpperCase();
-    window.history.pushState(
-      {},
-      '',
-      clean ? `/track/${encodeURIComponent(clean)}` : '/track'
-    );
-    setRoute({ view: 'track', query: clean, smartOrder });
+    const matchedOrder =
+      smartOrder ||
+      customOrders.find(
+        (o) =>
+          o.awbNumber.toUpperCase() === clean ||
+          o.invoiceId.toUpperCase() === clean ||
+          o.trackingId.toUpperCase() === clean
+      ) ||
+      null;
+    const token = matchedOrder ? encodeSmartOrderParam(matchedOrder) : '';
+    const nextUrl = clean
+      ? `/track/${encodeURIComponent(clean)}${
+          token ? `?v=${encodeURIComponent(token)}` : ''
+        }`
+      : '/track';
+    window.history.pushState({}, '', nextUrl);
+    setRoute({ view: 'track', query: clean, smartOrder: matchedOrder });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -533,17 +606,21 @@ export default function App() {
       // ignore
     }
 
+    const waktuDaftar = new Date().toLocaleString('id-ID');
+    const leadId = `LEAD-VRV-0${emailLeads.length + 1}`;
+    const fragranceContext = pendingInquiry
+      ? `${pendingInquiry.fragrance.house} — ${pendingInquiry.fragrance.name} (${pendingInquiry.volume})`
+      : 'Akses Concierge Katalog';
+
     const newLead: ConciergeEmailLead = {
-      id: `LEAD-VRV-0${emailLeads.length + 1}`,
+      id: leadId,
       email: normalizedEmail,
-      registeredAt: 'Baru Saja Terdaftar · WIB',
-      triggeredByFragrance: pendingInquiry
-        ? `${pendingInquiry.fragrance.house} — ${pendingInquiry.fragrance.name} (${pendingInquiry.volume})`
-        : 'Akses Concierge Katalog',
+      registeredAt: `${waktuDaftar} WIB`,
+      triggeredByFragrance: fragranceContext,
       syncedToVorvanMail: true,
     };
 
-    const updatedLeads = [newLead, ...emailLeads];
+    const updatedLeads = mergeVisitorLeads(emailLeads, [newLead]);
     setEmailLeads(updatedLeads);
     try {
       localStorage.setItem(STORAGE_LEADS_KEY, JSON.stringify(updatedLeads));
@@ -551,9 +628,28 @@ export default function App() {
       // ignore
     }
 
+    // 1. Real HTTP POST to vorvanlifestyle@gmail.com via FormSubmit AJAX
+    void sendVisitorLeadToGmail({
+      leadId,
+      visitorEmail: normalizedEmail,
+      triggeredByFragrance: fragranceContext,
+      waktuDaftar,
+      sumberWeb:
+        typeof window !== 'undefined'
+          ? window.location.href
+          : 'https://vorvan-official.vercel.app',
+    });
+
+    // 2. Sync to shared VORVAN Cloud Vault so Admin Tab 3 sees it across devices & Incognito tabs
+    void pushCloudVaultPacket({
+      kind: 'VORVAN_LEAD',
+      lead: newLead,
+      ts: Date.now(),
+    });
+
     setEmailGatewayOpen(false);
     setEmailToastMessage(
-      `Email Anda telah terdaftar & tersinkronisasi ke ${siteSettings.conciergeEmail}`
+      `Email Anda telah terdaftar & terkirim ke ${siteSettings.conciergeEmail}`
     );
   };
 
@@ -563,9 +659,26 @@ export default function App() {
   };
 
   const handleCreateCustomOrder = (newOrder: CustomAdminOrder) => {
-    const updated = [newOrder, ...customOrders];
+    const updated = [
+      newOrder,
+      ...customOrders.filter(
+        (o) => o.invoiceId.toUpperCase() !== newOrder.invoiceId.toUpperCase()
+      ),
+    ];
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
+
+    // Sync to shared Cloud Vault for cross-device / Incognito lookup
+    void pushCloudVaultPacket({
+      kind: 'VORVAN_ORDER_UPSERT',
+      order: newOrder,
+      ts: Date.now(),
+    });
+
+    // Send real backup notification to vorvanlifestyle@gmail.com
+    const invUrl = buildSmartShareUrl(newOrder, 'invoice');
+    const trkUrl = buildSmartShareUrl(newOrder, 'track');
+    void sendAdminOrderBackupToGmail(newOrder, invUrl, trkUrl);
   };
 
   const handleUpdateCustomOrderStage = (
@@ -588,12 +701,25 @@ export default function App() {
     );
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
+
+    void pushCloudVaultPacket({
+      kind: 'VORVAN_ORDER_STATUS',
+      invoiceId,
+      status,
+      ts: Date.now(),
+    });
   };
 
   const handleDeleteCustomOrder = (invoiceId: string) => {
     const updated = customOrders.filter((o) => o.invoiceId !== invoiceId);
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
+
+    void pushCloudVaultPacket({
+      kind: 'VORVAN_ORDER_DELETE',
+      invoiceId,
+      ts: Date.now(),
+    });
   };
 
   const apexShowcaseIds = [
@@ -870,7 +996,9 @@ export default function App() {
             settings={siteSettings}
             onSelectInvoiceId={(newId) => navigateToInvoice(newId)}
             onBackToCatalog={() => navigateToShowroom()}
-            onOpenOrderTracking={(resi) => navigateToTrack(resi)}
+            onOpenOrderTracking={(resi) =>
+              navigateToTrack(resi, route.smartOrder)
+            }
           />
         )}
 
@@ -881,7 +1009,7 @@ export default function App() {
             customOrders={customOrders}
             settings={siteSettings}
             onBackToCatalog={() => navigateToShowroom()}
-            onOpenInvoice={(invId) => navigateToInvoice(invId)}
+            onOpenInvoice={(invId) => navigateToInvoice(invId, route.smartOrder)}
           />
         )}
 
@@ -1551,6 +1679,7 @@ export default function App() {
           navigateToInvoice(invId, smartOrd)
         }
         onOpenTrackingPreview={(q, smartOrd) => navigateToTrack(q, smartOrd)}
+        onSyncCloud={syncFromCloudVault}
       />
 
       {returnPolicyModalOpen && (
