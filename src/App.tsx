@@ -39,6 +39,7 @@ import {
   mergeVisitorLeads,
   pullCloudVaultState,
   pushCloudVaultPacket,
+  saveSharedCloudLeadsAndOrders,
   sendAdminOrderBackupToGmail,
   sendVisitorLeadToGmail,
 } from './utils/cloudSync';
@@ -640,7 +641,8 @@ export default function App() {
           : 'https://vorvan-official.vercel.app',
     });
 
-    // 2. Sync to shared VORVAN Cloud Vault so Admin Tab 3 sees it across devices & Incognito tabs
+    // 2. Sync to Fixed Shared Cloud Key-Value Endpoints & Cloud Stream so Admin Tab 3 sees it across devices & Incognito tabs
+    void saveSharedCloudLeadsAndOrders(updatedLeads, customOrders);
     void pushCloudVaultPacket({
       kind: 'VORVAN_LEAD',
       lead: newLead,
@@ -668,7 +670,8 @@ export default function App() {
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
 
-    // Sync to shared Cloud Vault for cross-device / Incognito lookup
+    // Sync to Fixed Shared Cloud Key-Value Endpoints & Cloud Vault for cross-device / Incognito lookup
+    void saveSharedCloudLeadsAndOrders(emailLeads, updated);
     void pushCloudVaultPacket({
       kind: 'VORVAN_ORDER_UPSERT',
       order: newOrder,
@@ -702,6 +705,7 @@ export default function App() {
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
 
+    void saveSharedCloudLeadsAndOrders(emailLeads, updated);
     void pushCloudVaultPacket({
       kind: 'VORVAN_ORDER_STATUS',
       invoiceId,

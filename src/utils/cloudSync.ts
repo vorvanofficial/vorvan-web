@@ -3,6 +3,12 @@ import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
 export const FORMSUBMIT_GMAIL_ENDPOINT =
   'https://formsubmit.co/ajax/vorvanlifestyle@gmail.com';
 
+export const VORVAN_KVDB_SHARED_URL =
+  'https://kvdb.io/6Wa9pL2mX8nQ4vR7tY3kJc/vorvan_leads_shared';
+
+export const VORVAN_RESTFUL_KV_URL =
+  'https://api.restful-api.dev/objects/ff808181a09d98f701a1985bf76f018a';
+
 export const VORVAN_CLOUD_SYNC_TOPIC =
   'https://ntfy.sh/vorvan_vault_sync_2026_v1';
 
@@ -112,6 +118,89 @@ export async function sendAdminOrderBackupToGmail(
 }
 
 /**
+ * Syncs the full shared JSON array of visitor email leads & custom orders
+ * to Fixed Shared Cloud Key-Value Endpoints (`VORVAN_KVDB_SHARED_URL` & `VORVAN_RESTFUL_KV_URL`)
+ * so Incognito tabs and other devices share the exact same Tab 3 database.
+ */
+export async function saveSharedCloudLeadsAndOrders(
+  leads: ConciergeEmailLead[],
+  orders: CustomAdminOrder[]
+): Promise<boolean> {
+  let anySuccess = false;
+
+  // 1. Fixed KVDB Shared Endpoint (PUT JSON array of leads)
+  try {
+    const kvRes = await fetch(VORVAN_KVDB_SHARED_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(leads),
+    });
+    if (kvRes.ok) anySuccess = true;
+  } catch {
+    // Ignore and continue to secondary fixed KV endpoint
+  }
+
+  // 2. Fixed RESTful Cloud KV Object Endpoint (PUT full { leads, orders } JSON)
+  try {
+    // First pull existing cloud object so an Incognito tab with fresh localStorage never overwrites older cloud leads
+    let cloudExistingLeads: ConciergeEmailLead[] = [];
+    let cloudExistingOrders: CustomAdminOrder[] = [];
+    try {
+      const getRes = await fetch(VORVAN_RESTFUL_KV_URL, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (getRes.ok) {
+        const json = (await getRes.json()) as {
+          data?: {
+            leads?: ConciergeEmailLead[];
+            orders?: CustomAdminOrder[];
+          };
+        };
+        if (Array.isArray(json?.data?.leads)) {
+          cloudExistingLeads = json.data.leads;
+        }
+        if (Array.isArray(json?.data?.orders)) {
+          cloudExistingOrders = json.data.orders;
+        }
+      }
+    } catch {
+      // ignore pre-fetch error
+    }
+
+    const mergedLeadsPayload = mergeVisitorLeads(cloudExistingLeads, leads);
+    const mergedOrdersPayload = mergeCustomAdminOrders(
+      cloudExistingOrders,
+      orders
+    );
+
+    const putRes = await fetch(VORVAN_RESTFUL_KV_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'vorvan_leads_shared',
+        data: {
+          leads: mergedLeadsPayload,
+          orders: mergedOrdersPayload,
+          updatedAt: new Date().toISOString(),
+        },
+      }),
+    });
+    if (putRes.ok) anySuccess = true;
+  } catch {
+    // Ignore network error
+  }
+
+  return anySuccess;
+}
+
+/**
  * Publishes a cross-device sync packet (Lead or Order) to the shared VORVAN Cloud Vault channel
  * so Incognito tabs and other devices can read it without sharing browser localStorage.
  */
@@ -133,17 +222,85 @@ export async function pushCloudVaultPacket(
 }
 
 /**
- * Pulls all cached cross-device packets (Visitor Leads & Custom Admin Orders)
- * from the shared VORVAN Cloud Vault channel.
+ * Pulls all cached cross-device Visitor Leads & Custom Admin Orders
+ * from the Fixed Shared Cloud Key-Value Endpoints (`VORVAN_KVDB_SHARED_URL`, `VORVAN_RESTFUL_KV_URL`, and `VORVAN_CLOUD_SYNC_TOPIC`).
  */
 export async function pullCloudVaultState(): Promise<{
   leads: ConciergeEmailLead[];
   orders: CustomAdminOrder[];
   deletedInvoiceIds: Set<string>;
 } | null> {
+  const leadsByEmail = new Map<string, ConciergeEmailLead>();
+  const ordersById = new Map<string, CustomAdminOrder>();
+  const deletedInvoiceIds = new Set<string>();
+  let fetchedAny = false;
+
+  const registerLead = (lead: ConciergeEmailLead) => {
+    if (!lead || !lead.email) return;
+    const emailKey = lead.email.trim().toLowerCase();
+    if (!leadsByEmail.has(emailKey)) {
+      leadsByEmail.set(emailKey, lead);
+    }
+  };
+
+  // 1. Fetch from Fixed KVDB Shared Endpoint (`GET https://kvdb.io/6Wa9pL2mX8nQ4vR7tY3kJc/vorvan_leads_shared`)
+  try {
+    const kvRes = await fetch(VORVAN_KVDB_SHARED_URL, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    if (kvRes.ok) {
+      const kvData = await kvRes.json();
+      if (Array.isArray(kvData)) {
+        fetchedAny = true;
+        for (const item of kvData) {
+          if (item && typeof item.email === 'string') {
+            registerLead(item as ConciergeEmailLead);
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore KVDB error and fallback to next cloud store
+  }
+
+  // 2. Fetch from Fixed RESTful KV Object Endpoint
+  try {
+    const restRes = await fetch(VORVAN_RESTFUL_KV_URL, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    if (restRes.ok) {
+      const restJson = (await restRes.json()) as {
+        data?: {
+          leads?: ConciergeEmailLead[];
+          orders?: CustomAdminOrder[];
+        };
+      };
+      if (restJson?.data) {
+        fetchedAny = true;
+        if (Array.isArray(restJson.data.leads)) {
+          for (const lead of restJson.data.leads) {
+            registerLead(lead);
+          }
+        }
+        if (Array.isArray(restJson.data.orders)) {
+          for (const ord of restJson.data.orders) {
+            if (ord?.invoiceId) {
+              ordersById.set(ord.invoiceId.trim().toUpperCase(), ord);
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore error and continue
+  }
+
+  // 3. Fetch real-time stream history from NTFY (`?poll=1&since=12h`)
   try {
     const res = await fetch(
-      `${VORVAN_CLOUD_SYNC_TOPIC}/json?poll=1&since=all`,
+      `${VORVAN_CLOUD_SYNC_TOPIC}/json?poll=1&since=12h`,
       {
         method: 'GET',
         headers: {
@@ -151,74 +308,80 @@ export async function pullCloudVaultState(): Promise<{
         },
       }
     );
-    if (!res.ok) return null;
+    if (res.ok) {
+      fetchedAny = true;
+      const rawText = await res.text();
+      const lines = rawText
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
 
-    const rawText = await res.text();
-    const lines = rawText
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
+      const streamLeads: ConciergeEmailLead[] = [];
+      for (const line of lines) {
+        try {
+          const outer = JSON.parse(line) as {
+            event?: string;
+            message?: string;
+          };
+          if (outer.event !== 'message' || !outer.message) continue;
 
-    const leadsByEmail = new Map<string, ConciergeEmailLead>();
-    const ordersById = new Map<string, CustomAdminOrder>();
-    const deletedInvoiceIds = new Set<string>();
-
-    for (const line of lines) {
-      try {
-        const outer = JSON.parse(line) as {
-          event?: string;
-          message?: string;
-        };
-        if (outer.event !== 'message' || !outer.message) continue;
-
-        const packet = JSON.parse(outer.message) as CloudVaultPacket;
-        if (!packet || typeof packet !== 'object' || !('kind' in packet)) {
-          continue;
-        }
-
-        if (packet.kind === 'VORVAN_LEAD' && packet.lead?.email) {
-          const emailKey = packet.lead.email.trim().toLowerCase();
-          leadsByEmail.set(emailKey, packet.lead);
-        } else if (
-          packet.kind === 'VORVAN_ORDER_UPSERT' &&
-          packet.order?.invoiceId
-        ) {
-          const invKey = packet.order.invoiceId.trim().toUpperCase();
-          deletedInvoiceIds.delete(invKey);
-          ordersById.set(invKey, packet.order);
-        } else if (
-          packet.kind === 'VORVAN_ORDER_STATUS' &&
-          packet.invoiceId
-        ) {
-          const invKey = packet.invoiceId.trim().toUpperCase();
-          const existing = ordersById.get(invKey);
-          if (existing) {
-            ordersById.set(invKey, {
-              ...existing,
-              status: packet.status,
-            });
+          const packet = JSON.parse(outer.message) as CloudVaultPacket;
+          if (!packet || typeof packet !== 'object' || !('kind' in packet)) {
+            continue;
           }
-        } else if (
-          packet.kind === 'VORVAN_ORDER_DELETE' &&
-          packet.invoiceId
-        ) {
-          const invKey = packet.invoiceId.trim().toUpperCase();
-          deletedInvoiceIds.add(invKey);
-          ordersById.delete(invKey);
+
+          if (packet.kind === 'VORVAN_LEAD' && packet.lead?.email) {
+            streamLeads.push(packet.lead);
+          } else if (
+            packet.kind === 'VORVAN_ORDER_UPSERT' &&
+            packet.order?.invoiceId
+          ) {
+            const invKey = packet.order.invoiceId.trim().toUpperCase();
+            deletedInvoiceIds.delete(invKey);
+            ordersById.set(invKey, packet.order);
+          } else if (
+            packet.kind === 'VORVAN_ORDER_STATUS' &&
+            packet.invoiceId
+          ) {
+            const invKey = packet.invoiceId.trim().toUpperCase();
+            const existing = ordersById.get(invKey);
+            if (existing) {
+              ordersById.set(invKey, {
+                ...existing,
+                status: packet.status,
+              });
+            }
+          } else if (
+            packet.kind === 'VORVAN_ORDER_DELETE' &&
+            packet.invoiceId
+          ) {
+            const invKey = packet.invoiceId.trim().toUpperCase();
+            deletedInvoiceIds.add(invKey);
+            ordersById.delete(invKey);
+          }
+        } catch {
+          // Ignore malformed lines
         }
-      } catch {
-        // Ignore malformed lines
+      }
+
+      // Register newest stream leads first
+      for (let i = streamLeads.length - 1; i >= 0; i--) {
+        const l = streamLeads[i];
+        const key = l.email.trim().toLowerCase();
+        leadsByEmail.set(key, l);
       }
     }
-
-    return {
-      leads: Array.from(leadsByEmail.values()).reverse(),
-      orders: Array.from(ordersById.values()).reverse(),
-      deletedInvoiceIds,
-    };
   } catch {
-    return null;
+    // Ignore stream fetch error
   }
+
+  if (!fetchedAny) return null;
+
+  return {
+    leads: Array.from(leadsByEmail.values()),
+    orders: Array.from(ordersById.values()),
+    deletedInvoiceIds,
+  };
 }
 
 /**
@@ -239,7 +402,6 @@ export function mergeVisitorLeads(
     combined.push(lead);
   }
 
-  // Re-index LEAD-VRV-0X if needed while preserving existing IDs
   return combined;
 }
 

@@ -628,7 +628,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
 
             <button
               type="button"
-              onClick={() => setActiveTab('database')}
+              onClick={() => {
+                setActiveTab('database');
+                void onSyncCloud?.();
+              }}
               className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
                 activeTab === 'database'
                   ? 'btn-luxury-gold text-zinc-950 font-bold'
@@ -1848,6 +1851,23 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                       ✓ Terhubung ke FormSubmit AJAX (`vorvanlifestyle@gmail.com`) &amp; Cloud Sync Lintas Perangkat / Tab Samaran
                     </p>
                   </div>
+                  {onSyncCloud && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsSyncingCloud(true);
+                        try {
+                          await onSyncCloud();
+                        } finally {
+                          setIsSyncingCloud(false);
+                        }
+                      }}
+                      data-testid="admin-sync-leads-btn"
+                      className="px-3.5 py-2 rounded-xl btn-luxury-gold text-zinc-950 text-xs font-bold cursor-pointer self-start sm:self-auto shrink-0"
+                    >
+                      {isSyncingCloud ? '⏳ Menyinkronkan...' : '🔄 Sinkronkan Data'}
+                    </button>
+                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
