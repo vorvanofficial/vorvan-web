@@ -1278,3 +1278,86 @@ test('All 81 fragrances use VRV-[NomorSKU] archive codes (VRV-001..VRV-081) and 
   assert.equal(inv.items[0].batchCode, 'VRV-028');
 });
 
+test('Extra Closing Discount / VIP Voucher (extraDiscountIDR) preserves full catalog Subtotal while deducting from Grand Total, Smart URL, and WhatsApp message', async () => {
+  const {
+    buildInvoiceFromCustomOrder,
+    calculateInvoiceTotals,
+    encodeSmartOrderParam,
+    decodeSmartOrderParam,
+    buildBuyerInvoiceWhatsAppUrl,
+  } = await import('./businessRules.ts');
+
+  // 1. Default without Extra Discount (0)
+  const baseOrderNoExtra = {
+    invoiceId: 'INV-VRV-6001',
+    trackingId: 'INV-VRV-6001',
+    createdAt: '02 Nov 2026 · 10:00 WIB',
+    buyerName: 'Bpk. Aditya',
+    buyerCity: 'Jakarta Selatan',
+    house: 'Louis Vuitton',
+    fragranceName: 'Afternoon Swim',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    batchCode: 'VRV-001',
+    dealPriceIDR: 4550000,
+    retailPriceIDR: 6500000,
+    discountPct: 30,
+    extraDiscountIDR: 0,
+    shippingCostIDR: 25000,
+    shippingMethod: 'JNE' as const,
+    awbNumber: '',
+    status: 'PENDING_PAYMENT' as const,
+  };
+
+  const invNoExtra = buildInvoiceFromCustomOrder(baseOrderNoExtra);
+  const totalsNoExtra = calculateInvoiceTotals(invNoExtra);
+  assert.equal(totalsNoExtra.itemsSubtotalIDR, 4550000);
+  assert.equal(totalsNoExtra.extraDiscountIDR, 0);
+  assert.equal(totalsNoExtra.protectionTotalIDR, 25000);
+  assert.equal(totalsNoExtra.grandTotalIDR, 4575000);
+
+  // 2. With 1-Click Extra Closing Discount (e.g. -Rp 100.000)
+  const orderWith100k = {
+    ...baseOrderNoExtra,
+    invoiceId: 'INV-VRV-6002',
+    extraDiscountIDR: 100000,
+  };
+  const inv100k = buildInvoiceFromCustomOrder(orderWith100k);
+  const totals100k = calculateInvoiceTotals(inv100k);
+  // Catalog price (Harga Jual VORVAN) stays intact at 4.550.000
+  assert.equal(totals100k.itemsSubtotalIDR, 4550000);
+  assert.equal(totals100k.extraDiscountIDR, 100000);
+  // Grand Total = 4.550.000 - 100.000 + 25.000 = 4.475.000
+  assert.equal(totals100k.grandTotalIDR, 4475000);
+
+  // 3. With Custom Manual Extra Closing Discount (e.g. Rp 140.000 to make total round)
+  const orderWithCustom140k = {
+    ...baseOrderNoExtra,
+    invoiceId: 'INV-VRV-6003',
+    dealPriceIDR: 3140000,
+    extraDiscountIDR: 140000,
+    shippingCostIDR: 0,
+  };
+  const encodedCustom = encodeSmartOrderParam(orderWithCustom140k);
+  const decodedCustom = decodeSmartOrderParam(encodedCustom);
+  assert.ok(decodedCustom);
+  assert.equal(decodedCustom.dealPriceIDR, 3140000);
+  assert.equal(decodedCustom.extraDiscountIDR, 140000);
+  assert.equal(decodedCustom.shippingCostIDR, 0);
+
+  const invCustom = buildInvoiceFromCustomOrder(decodedCustom);
+  const totalsCustom = calculateInvoiceTotals(invCustom);
+  assert.equal(totalsCustom.itemsSubtotalIDR, 3140000);
+  assert.equal(totalsCustom.extraDiscountIDR, 140000);
+  assert.equal(totalsCustom.grandTotalIDR, 3000000);
+
+  const waUrl = buildBuyerInvoiceWhatsAppUrl(
+    orderWith100k,
+    'https://vorvan-official.vercel.app'
+  );
+  const decodedWa = decodeURIComponent(waUrl);
+  assert.ok(decodedWa.includes('- Rp 100.000'));
+  assert.ok(decodedWa.includes('Rp 4.475.000'));
+});
+
+

@@ -1036,6 +1036,23 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 </span>
               </div>
 
+              {totals.extraDiscountIDR > 0 && (
+                <div
+                  className="w-full sm:w-[440px] px-3 py-2 rounded-lg bg-gradient-to-r from-amber-950/60 via-emerald-950/55 to-amber-950/60 border border-[#D4AF37]/65 flex items-center justify-between gap-3 text-xs sm:text-[13px] shadow-[0_0_16px_rgba(212,175,55,0.2)]"
+                  data-testid="invoice-extra-discount-row"
+                >
+                  <span className="font-semibold text-[#F5E6B8]">
+                    ✨ Ekstra Privilese Transaksi Hari Ini (VIP Voucher):
+                  </span>
+                  <span
+                    className="font-mono-tabular font-bold text-emerald-400 whitespace-nowrap shrink-0"
+                    data-testid="invoice-extra-discount-amount"
+                  >
+                    - {formatIDRCurrency(totals.extraDiscountIDR)}
+                  </span>
+                </div>
+              )}
+
               <div className="w-full sm:w-[440px] flex items-center justify-between gap-4 text-zinc-300">
                 <span>
                   {baseInvoice.shippingLabel ||

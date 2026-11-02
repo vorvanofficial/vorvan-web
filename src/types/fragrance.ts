@@ -135,6 +135,7 @@ export interface PrivateInvoice {
   woodenCratePackagingIDR: number;
   retailPriceTotalIDR?: number;
   discountPct?: number;
+  extraDiscountIDR?: number;
   shippingLabel?: string;
   items: PrivateInvoiceItem[];
   notes: string;
@@ -271,6 +272,7 @@ export interface CustomAdminOrder {
   dealPriceIDR: number;
   retailPriceIDR?: number;
   discountPct?: number;
+  extraDiscountIDR?: number;
   shippingCostIDR?: number;
   shippingLabel?: string;
   shippingMethod: ShippingMethodType;

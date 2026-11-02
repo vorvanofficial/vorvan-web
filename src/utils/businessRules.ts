@@ -741,10 +741,11 @@ export function formatIDRCurrency(amount: number): string {
 }
 
 /**
- * Calculates itemized subtotal and grand total for a Private Invoice.
+ * Calculates itemized subtotal, extra closing discount, and grand total for a Private Invoice.
  */
 export function calculateInvoiceTotals(invoice: PrivateInvoice): {
   itemsSubtotalIDR: number;
+  extraDiscountIDR: number;
   protectionTotalIDR: number;
   grandTotalIDR: number;
 } {
@@ -752,12 +753,17 @@ export function calculateInvoiceTotals(invoice: PrivateInvoice): {
     (sum, item) => sum + item.unitPriceIDR * item.quantity,
     0
   );
+  const extraDiscountIDR = Math.max(0, Math.round(invoice.extraDiscountIDR || 0));
   const protectionTotalIDR =
     invoice.shippingInsuranceIDR + invoice.woodenCratePackagingIDR;
-  const grandTotalIDR = itemsSubtotalIDR + protectionTotalIDR;
+  const grandTotalIDR = Math.max(
+    0,
+    itemsSubtotalIDR - extraDiscountIDR + protectionTotalIDR
+  );
 
   return {
     itemsSubtotalIDR,
+    extraDiscountIDR,
     protectionTotalIDR,
     grandTotalIDR,
   };
@@ -877,9 +883,16 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
   }
 
   const priceK = Math.max(1, Math.round((order.dealPriceIDR || 0) / 1000));
-  const priceField =
+  const shipK =
     typeof order.shippingCostIDR === 'number'
-      ? `${priceK}:${Math.max(0, Math.round(order.shippingCostIDR / 1000))}`
+      ? Math.max(0, Math.round(order.shippingCostIDR / 1000))
+      : undefined;
+  const extraDisc = Math.max(0, Math.round(order.extraDiscountIDR || 0));
+  const priceField =
+    extraDisc > 0
+      ? `${priceK}:${shipK ?? 0}:${extraDisc}`
+      : shipK !== undefined
+      ? `${priceK}:${shipK}`
       : String(priceK);
   const statusDigit = order.status === 'PAID' ? '1' : '0';
   const courierCode = encodeCourierShort(order.shippingMethod);
@@ -1112,8 +1125,11 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             }
           }
 
-          const [dealKPart, shipKPart] = (priceKStr || '').split(':');
+          const [dealKPart, shipKPart, extraDiscPart] = (priceKStr || '').split(':');
           const dealPriceIDR = Math.round((Number(dealKPart) || 0) * 1000);
+          const extraDiscountIDR = extraDiscPart
+            ? Math.max(0, Math.round(Number(extraDiscPart) || 0))
+            : 0;
           const status: 'PENDING_PAYMENT' | 'PAID' =
             statusDigit === '1' ? 'PAID' : 'PENDING_PAYMENT';
           const shippingMethod = decodeCourierShort(courierCode);
@@ -1174,6 +1190,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             dealPriceIDR: finalDealPrice,
             retailPriceIDR,
             discountPct,
+            extraDiscountIDR: extraDiscountIDR > 0 ? extraDiscountIDR : undefined,
             shippingCostIDR,
             shippingLabel,
             shippingMethod,
@@ -1269,8 +1286,11 @@ export function buildBuyerInvoiceWhatsAppUrl(
   const baseDomain = originOverride || getVorvanBaseDomain();
   const invoiceUrl = buildSmartShareUrl(order, 'invoice', baseDomain);
   const trackUrl = buildSmartShareUrl(order, 'track', baseDomain);
-  const grandTotal =
-    order.dealPriceIDR + (order.shippingCostIDR || 0);
+  const extraDisc = Math.max(0, Math.round(order.extraDiscountIDR || 0));
+  const grandTotal = Math.max(
+    0,
+    order.dealPriceIDR - extraDisc + (order.shippingCostIDR || 0)
+  );
   const formattedTotal = formatIDRCurrency(grandTotal);
 
   const normalizedPhone = normalizeIndonesianPhoneNumber(order.buyerPhone || '');
@@ -1282,6 +1302,10 @@ export function buildBuyerInvoiceWhatsAppUrl(
     : hasAwb
     ? `• Ekspedisi: ${order.shippingMethod} (AWB: ${order.awbNumber})`
     : `• Ekspedisi: ${order.shippingMethod} (Resi menyusul setelah pembayaran lunas & barang dikirim)`;
+  const extraDiscLine =
+    extraDisc > 0
+      ? `• Ekstra Privilese Hari Ini (VIP Voucher): - ${formatIDRCurrency(extraDisc)}\n`
+      : '';
 
   const message =
     `Yth. ${order.buyerName},\n\n` +
@@ -1289,6 +1313,7 @@ export function buildBuyerInvoiceWhatsAppUrl(
     `Berikut rincian Tagihan Resmi Privat & Pengiriman Anda:\n` +
     `• Nomor Tagihan: #${order.invoiceId}\n` +
     `• Flacon Parfum: ${order.house} — ${order.fragranceName} (${order.volume})\n` +
+    extraDiscLine +
     `• Total Tagihan: ${formattedTotal}\n` +
     `${shippingSummaryLine}\n\n` +
     `Silakan klik tautan resmi berikut untuk melihat dokumen tagihan, panduan pembayaran, dan jaminan keaslian:\n` +
@@ -1369,6 +1394,7 @@ export function buildInvoiceFromCustomOrder(
     woodenCratePackagingIDR: 0,
     retailPriceTotalIDR,
     discountPct,
+    extraDiscountIDR: Math.max(0, Math.round(order.extraDiscountIDR || 0)),
     shippingLabel,
     paymentProof: resolvedProof,
     paymentProofUrl: resolvedProof,

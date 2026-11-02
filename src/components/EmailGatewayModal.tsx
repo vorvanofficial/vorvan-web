@@ -86,6 +86,17 @@ const SHIPPING_ZONE_BUTTONS: {
   { key: 'ZONA_4', shortTitle: 'Zona 4 · Maluku & Papua', subText: 'Rp 95.000' },
 ];
 
+const EXTRA_CLOSING_DISCOUNT_BUTTONS: {
+  amount: number;
+  label: string;
+}[] = [
+  { amount: 0, label: 'Tanpa Ekstra (Rp 0)' },
+  { amount: 50000, label: '- Rp 50.000' },
+  { amount: 100000, label: '- Rp 100.000' },
+  { amount: 150000, label: '- Rp 150.000' },
+  { amount: 200000, label: '- Rp 200.000' },
+];
+
 interface EmailGatewayModalProps {
   isOpen: boolean;
   pendingFragrance?: { fragrance: FragranceItem; volume: string } | null;
@@ -296,6 +307,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   const [discountPct, setDiscountPct] = useState<string>(
     String(initialSku?.disc || 30)
   );
+  const [extraDiscountIDR, setExtraDiscountIDR] = useState<string>('0');
   const [selectedShippingZone, setSelectedShippingZone] =
     useState<ShippingZoneKey>('FREE_VIP');
   const [shippingCostIDR, setShippingCostIDR] = useState<string>(
@@ -459,6 +471,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       0,
       Number(shippingCostIDR.replace(/\D/g, '')) || 0
     );
+    const numericExtraDiscount = Math.max(
+      0,
+      Number(extraDiscountIDR.replace(/\D/g, '')) || 0
+    );
     const cleanShipLabel =
       shippingLabel.trim() || SHIPPING_ZONES[selectedShippingZone].label;
 
@@ -513,6 +529,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       dealPriceIDR: numericPrice,
       retailPriceIDR: numericRetail,
       discountPct: numericDisc,
+      extraDiscountIDR: numericExtraDiscount > 0 ? numericExtraDiscount : 0,
       shippingCostIDR: numericShipCost,
       shippingLabel: cleanShipLabel,
       shippingMethod,
@@ -534,7 +551,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     if (cleanBuyerEmail) {
       setAutoEmailStatus('sending');
       setAutoEmailRecipient(cleanBuyerEmail);
-      const grandTotalNum = numericPrice + numericShipCost;
+      const grandTotalNum = Math.max(
+        0,
+        numericPrice - numericExtraDiscount + numericShipCost
+      );
       const formattedGrandTotal = formatIDRCurrency(grandTotalNum);
       const baseDomain =
         typeof window !== 'undefined' &&
@@ -1016,6 +1036,96 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                     </div>
                   </div>
 
+                  {/* FITUR BARU: EKSTRA PRIVILESE / DISKON CLOSING HARI INI (OPSIONAL) */}
+                  <div
+                    className="p-4 rounded-xl bg-gradient-to-b from-[#17141F] to-[#111018] border border-[#D4AF37]/45 space-y-3"
+                    data-testid="admin-extra-discount-box"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <label
+                        htmlFor="admin-extra-discount-input"
+                        className="block text-xs text-[#F5E6B8] font-bold uppercase tracking-wider"
+                      >
+                        🔥 EKSTRA PRIVILESE / DISKON CLOSING HARI INI (OPSIONAL)
+                      </label>
+                      <span className="text-[11px] text-emerald-400 font-medium">
+                        Klik nominal cepat atau ketik angka bebas di bawah:
+                      </span>
+                    </div>
+
+                    <div
+                      className="flex flex-wrap gap-2"
+                      role="group"
+                      aria-label="Pilihan Cepat Ekstra Diskon Closing"
+                    >
+                      {EXTRA_CLOSING_DISCOUNT_BUTTONS.map((btn) => {
+                        const currentExtraNum =
+                          Number(extraDiscountIDR.replace(/\D/g, '')) || 0;
+                        const isSelected = currentExtraNum === btn.amount;
+                        return (
+                          <button
+                            key={btn.amount}
+                            type="button"
+                            onClick={() =>
+                              setExtraDiscountIDR(String(btn.amount))
+                            }
+                            data-testid={`extra-discount-btn-${btn.amount}`}
+                            className={`px-3 py-2 rounded-lg text-xs font-mono-tabular transition-all cursor-pointer border text-center whitespace-nowrap ${
+                              isSelected
+                                ? 'bg-gradient-to-r from-[#F5E6B8] via-[#E5C87E] to-[#D4AF37] !text-zinc-950 border-[#FFF3C4] font-extrabold shadow-[0_0_12px_rgba(212,175,55,0.35)]'
+                                : 'bg-[#0B0A0E] !text-[#F5E6B8] border-[#D4AF37]/40 hover:border-[#E5C87E] font-medium'
+                            }`}
+                          >
+                            {btn.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 items-end">
+                      <div>
+                        <label
+                          htmlFor="admin-extra-discount-input"
+                          className="block text-[11px] text-zinc-300 mb-1"
+                        >
+                          Ekstra Potongan (Rp)
+                        </label>
+                        <input
+                          id="admin-extra-discount-input"
+                          type="text"
+                          inputMode="numeric"
+                          value={extraDiscountIDR}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '');
+                            setExtraDiscountIDR(digitsOnly || '0');
+                          }}
+                          placeholder="Contoh: 140000"
+                          data-testid="admin-extra-discount-input"
+                          className="w-full px-3.5 py-2 rounded-lg bg-[#0B0A0E] border border-[#D4AF37]/45 focus:border-[#E5C87E] text-xs sm:text-sm font-mono-tabular font-semibold text-emerald-400 outline-none"
+                        />
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-[#0B0A0E]/90 border border-zinc-800 flex items-center justify-between text-xs">
+                        <span className="text-zinc-400">
+                          Nett Setelah Ekstra Potongan:
+                        </span>
+                        <span
+                          className="font-mono-tabular font-bold text-[#F5E6B8]"
+                          data-testid="admin-net-after-extra-preview"
+                        >
+                          {formatIDRCurrency(
+                            Math.max(
+                              0,
+                              (Number(dealPriceIDR.replace(/\D/g, '')) || 0) -
+                                (Number(extraDiscountIDR.replace(/\D/g, '')) ||
+                                  0)
+                            )
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* POIN 4: SISTEM ONGKIR PINTAR (ZONA FLAT 1-KLIK + AUTO-DETEKSI KOTA) */}
                   <div className="p-4 rounded-xl bg-[#121118] border border-[#D4AF37]/30 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
@@ -1279,6 +1389,17 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             {formatIDRCurrency(createdOrderResult.dealPriceIDR)}
                           </span>
                         </div>
+                        {(createdOrderResult.extraDiscountIDR || 0) > 0 && (
+                          <div className="flex items-center justify-between text-[#F5E6B8] font-semibold">
+                            <span>✨ Ekstra Privilese (VIP Voucher):</span>
+                            <span className="font-mono-tabular text-emerald-400">
+                              -{' '}
+                              {formatIDRCurrency(
+                                createdOrderResult.extraDiscountIDR || 0
+                              )}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-zinc-400">Ongkir &amp; Asuransi:</span>
                           <span className="font-mono-tabular text-zinc-200">
@@ -1295,8 +1416,12 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           </span>
                           <span className="font-mono-tabular font-bold text-[#F5E6B8] text-sm">
                             {formatIDRCurrency(
-                              createdOrderResult.dealPriceIDR +
-                                (createdOrderResult.shippingCostIDR || 0)
+                              Math.max(
+                                0,
+                                createdOrderResult.dealPriceIDR -
+                                  (createdOrderResult.extraDiscountIDR || 0) +
+                                  (createdOrderResult.shippingCostIDR || 0)
+                              )
                             )}
                           </span>
                         </div>
@@ -2077,7 +2202,21 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                   {ord.house} — {ord.fragranceName}
                                 </div>
                                 <div className="font-mono-tabular text-emerald-400 flex items-center flex-wrap gap-1.5 mt-1">
-                                  <span>{formatIDRCurrency(ord.dealPriceIDR)}</span>
+                                  <span>
+                                    {formatIDRCurrency(
+                                      Math.max(
+                                        0,
+                                        ord.dealPriceIDR -
+                                          (ord.extraDiscountIDR || 0) +
+                                          (ord.shippingCostIDR || 0)
+                                      )
+                                    )}
+                                  </span>
+                                  {(ord.extraDiscountIDR || 0) > 0 && (
+                                    <span className="text-[10px] text-[#F5E6B8]">
+                                      (Voucher -{formatIDRCurrency(ord.extraDiscountIDR || 0)})
+                                    </span>
+                                  )}
                                   <span>·</span>
                                   <button
                                     type="button"
