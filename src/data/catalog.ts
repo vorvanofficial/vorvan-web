@@ -247,9 +247,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Ledakan kesegaran jeruk Sisilia yang memancarkan energi kemewahan musim panas tanpa batas.',
     sillage: 'Strong',
-    longevity: '8 – 10 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Daytime Resort · Summer Yacht · Tropical Elegance',
-    batchCode: 'LV-4A01',
+    batchCode: 'VRV-001',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Sicilian Orange', 'Bergamot'],
@@ -282,9 +282,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Mahakarya kayu gaharu gelap yang mistis, berasap, dan meninggalkan jejak wibawa luar biasa.',
     sillage: 'Enormous',
-    longevity: '14 – 18+ Jam',
+    longevity: 'Opulent & Majestic · Royal Sillage',
     seasonality: 'Royal Gala · Night Couture · Sovereign Presence',
-    batchCode: 'LV-4C09',
+    batchCode: 'VRV-002',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Raspberry', 'Incense'],
@@ -317,9 +317,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Perpaduan abadi antara kelopak mawar segar dan kehangatan gurun kayu gaharu yang sensual.',
     sillage: 'Strong',
-    longevity: '12 – 15 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Evening Lounge · Formal Reception · All-Season Luxury',
-    batchCode: 'LV-4B12',
+    batchCode: 'VRV-003',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Centifolia Rose'],
@@ -352,9 +352,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Komposisi teh hitam dan sitrus modern yang bersih, tajam, dan mencerminkan karisma pria visioner.',
     sillage: 'Strong',
-    longevity: '10 – 14 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Executive Suite · Signature Daily · Resort Wear',
-    batchCode: 'LV-4D05',
+    batchCode: 'VRV-004',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Citron', 'Calabrian Bergamot'],
@@ -387,9 +387,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kesegaran aromatik jahe dan grapefruit dengan fondasi amber maskulin yang sangat memikat.',
     sillage: 'Strong',
-    longevity: '10 – 12 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Boardroom · Evening Cocktail · All-Year Signature',
-    batchCode: 'LV-4A18',
+    batchCode: 'VRV-005',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Grapefruit', 'Ginger'],
@@ -422,9 +422,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Buket bunga peony dan sentuhan kakao mentah yang anggun, merayakan pesona feminin tak terlupakan.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Gala Dinner · Romantic Soirée · Couture Daytime',
-    batchCode: 'LV-4E02',
+    batchCode: 'VRV-006',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Litchi', 'Peony'],
@@ -457,9 +457,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Aura magnetis bunga iris Florence dan mawar mewah yang membius layaknya mantra romantis.',
     sillage: 'Moderate',
-    longevity: '8 – 11 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Intimate Evening · Bridal Couture · Fine Dining',
-    batchCode: 'LV-4F11',
+    batchCode: 'VRV-007',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Violet', 'Tuscan Iris'],
@@ -492,9 +492,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Bisikan lembut tiga varietas mawar bangsawan yang berpadu dengan kayu cedar yang menenangkan.',
     sillage: 'Moderate',
-    longevity: '8 – 10 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Spring Garden · Daytime Elegance · Silk Attire',
-    batchCode: 'LV-4B07',
+    batchCode: 'VRV-008',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['May Rose', 'Turkish Rose'],
@@ -531,9 +531,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Ikon maskulinitas modern dengan kesegaran bergamot pedas dan kehangatan vanila malam hari.',
     sillage: 'Strong',
-    longevity: '10 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Versatile All-Rounder · Night Out · Smart Casual',
-    batchCode: 'DIR-4B02',
+    batchCode: 'VRV-009',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Calabrian Bergamot', 'Sichuan Pepper'],
@@ -566,9 +566,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kesegaran mentah dan tegas yang mendominasi ruangan sejak semprotan pertama.',
     sillage: 'Strong',
-    longevity: '8 – 10 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Daily Signature · Active Metropolitan · Summer Heat',
-    batchCode: 'DIR-4A11',
+    batchCode: 'VRV-010',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Bergamot', 'Pepper'],
@@ -601,9 +601,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Legenda aroma kulit dan daun violet yang berani, hangat, dan penuh karakter klasik.',
     sillage: 'Strong',
-    longevity: '9 – 11 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Evening Leather Jacket · Autumn Night · Collector Icon',
-    batchCode: 'DIR-4C05',
+    batchCode: 'VRV-011',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Mandarin', 'Violet Leaf'],
@@ -636,9 +636,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Buket seribu bunga millefiori yang lembut, manis, dan memancarkan keanggunan Paris.',
     sillage: 'Moderate',
-    longevity: '8 – 10 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Romantis · Pesta Kebun · Couture Daytime',
-    batchCode: 'DIR-4D08',
+    batchCode: 'VRV-012',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Iris', 'Peony'],
@@ -671,9 +671,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Hamparan kelopak mawar Grasse yang segar berkilau dengan sentuhan sitrus yang ceria.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Morning Brunch · Spring & Summer · Office Elegance',
-    batchCode: 'DIR-4E03',
+    batchCode: 'VRV-013',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Mandarin'],
@@ -706,9 +706,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Keharuman bunga musim semi yang sangat halus, bersih, dan memikat secara natural.',
     sillage: 'Intimate',
-    longevity: '6 – 8 Jam',
+    longevity: 'Fresh & Luminous · Effortless Distinction',
     seasonality: 'Daytime Grace · Bridal Shower · Tropical Afternoon',
-    batchCode: 'DIR-4F09',
+    batchCode: 'VRV-014',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Sicilian Mandarin', 'Apricot'],
@@ -741,9 +741,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Simbol kemewahan emas cair dengan harmoni bunga putih yang glamor dan abadi.',
     sillage: 'Strong',
-    longevity: '9 – 11 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Gala Dinner · Evening Couture · Sovereign Femme',
-    batchCode: 'DIR-4A21',
+    batchCode: 'VRV-015',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pear', 'Melon'],
@@ -776,9 +776,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kemegahan istana Timur Tengah dalam balutan mawar damaskus dan kayu oud yang megah.',
     sillage: 'Enormous',
-    longevity: '12 – 16 Jam',
+    longevity: 'Opulent & Majestic · Royal Sillage',
     seasonality: 'Black Tie · Royal Reception · Evening Prestige',
-    batchCode: 'DIR-4G01',
+    batchCode: 'VRV-016',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Labdanum', 'Saffron'],
@@ -811,9 +811,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Interpretasi ekstra pekat dari harmoni rempah hangat, mawar gelap, dan resin kayu mulia.',
     sillage: 'Enormous',
-    longevity: '14 – 18 Jam',
+    longevity: 'Rich & Enveloping · Haute Extrait',
     seasonality: 'Private Salon · Intimate Luxury · Evening Wear',
-    batchCode: 'DIR-4H04',
+    batchCode: 'VRV-017',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Cloves', 'Cumin'],
@@ -850,9 +850,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Aroma kulit hitam mewah bertekstur halus dengan sentuhan kapulaga dan bunga melati liar.',
     sillage: 'Strong',
-    longevity: '10 – 13 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Evening Gala · Lounge · Cool Nights',
-    batchCode: 'TF-A83',
+    batchCode: 'VRV-018',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Cardamom'],
@@ -885,9 +885,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Versi lebih kaya dan intens dari Ombré Leather dengan sentuhan daun violet dan iris bangsawan.',
     sillage: 'Strong',
-    longevity: '12 – 15 Jam',
+    longevity: 'Rich & Enveloping · Haute Extrait',
     seasonality: 'Black Tie · VIP Lounge · Night Signature',
-    batchCode: 'TF-B41',
+    batchCode: 'VRV-019',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Violet Leaf', 'Cedar'],
@@ -920,9 +920,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kemewahan resor pulau pribadi dengan perpaduan kelapa eksotis, bunga putih, dan amber hangat.',
     sillage: 'Moderate',
-    longevity: '8 – 10 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Beach Club · Private Yacht · Summer Couture',
-    batchCode: 'TF-C19',
+    batchCode: 'VRV-020',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pistachio', 'Bergamot'],
@@ -955,9 +955,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Trilogi mawar liar yang tajam, berani, dan dibalut rempah lada Sichuan yang menggoda.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Couture Soirée · Romantic Night · Statement Floral',
-    batchCode: 'TF-D22',
+    batchCode: 'VRV-021',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Sichuan Pepper', 'Turmeric'],
@@ -990,9 +990,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Komposisi kayu oud paling berkelas di dunia yang lembut, eksotis, dan sangat berwibawa.',
     sillage: 'Moderate',
-    longevity: '8 – 11 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Boardroom · Formal Suit · Timeless Classic',
-    batchCode: 'TF-E08',
+    batchCode: 'VRV-022',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Brazilian Rosewood', 'Cardamom'],
@@ -1025,9 +1025,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kemewahan klub gentleman London dengan aroma daun tembakau manis, vanila pekat, dan rempah.',
     sillage: 'Enormous',
-    longevity: '12 – 16 Jam',
+    longevity: 'Rich & Enveloping · Haute Extrait',
     seasonality: 'Evening Lounge · Cigar Room · Formal Gala',
-    batchCode: 'TF-F14',
+    batchCode: 'VRV-023',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Tobacco Leaf', 'Spicy Notes'],
@@ -1060,9 +1060,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Perpaduan memabukkan antara ceri hitam ranum, likur almond pahit, dan kayu hangat.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Date Night · Cocktail Party · Red Carpet',
-    batchCode: 'TF-G09',
+    batchCode: 'VRV-024',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Bitter Almond', 'Black Cherry'],
@@ -1095,9 +1095,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Pernyataan kemewahan tanpa kompromi dengan harmoni kulit lembut, almond pahit, dan iris.',
     sillage: 'Strong',
-    longevity: '10 – 13 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'VIP Club · Fashion Week · Statement Night',
-    batchCode: 'TF-H11',
+    batchCode: 'VRV-025',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Lavender', 'Clary Sage'],
@@ -1130,9 +1130,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Angin sepoi-sepoi pesisir Riviera Italia yang jernih dengan semerbak bunga jeruk neroli.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Mediterranean Resort · Linen Shirt · Sunny Morning',
-    batchCode: 'TF-J05',
+    batchCode: 'VRV-026',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Bergamot', 'Mandarin', 'Neroli'],
@@ -1169,9 +1169,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Wewangian pria modern yang tajam, bersih, dan sangat tahan lama untuk segala suasana.',
     sillage: 'Strong',
-    longevity: '10 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Daily Signature · Metropolitan Office · Evening Hangout',
-    batchCode: 'YSL-38X0',
+    batchCode: 'VRV-027',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Apple', 'Ginger', 'Bergamot'],
@@ -1204,9 +1204,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Ekspresi maskulinitas baru yang memadukan bunga jeruk segar dengan kayu modern yang hangat.',
     sillage: 'Strong',
-    longevity: '9 – 11 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Modern Executive · Night Gallery · All-Season',
-    batchCode: 'YSL-41M2',
+    batchCode: 'VRV-028',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Calabrian Bergamot'],
@@ -1239,9 +1239,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Simbol kebebasan wanita berkelas dengan perpaduan kontras lavender Prancis dan vanila hangat.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Power Suit · Evening Cocktail · Signature Femme',
-    batchCode: 'YSL-39L4',
+    batchCode: 'VRV-029',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Lavender', 'Mandarin'],
@@ -1274,9 +1274,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Adrenalin kopi hitam pekat dan vanila sensual yang menguasai kemewahan pesta malam hari.',
     sillage: 'Strong',
-    longevity: '8 – 11 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Nightlife · Romantic Dinner · Evening Glamour',
-    batchCode: 'YSL-40B8',
+    batchCode: 'VRV-030',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pear', 'Pink Pepper'],
@@ -1313,9 +1313,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Raja parfum pria dunia yang melambangkan kejayaan, kekuasaan, dan karisma tak tertandingi.',
     sillage: 'Strong',
-    longevity: '10 – 12 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Executive Boardroom · Formal Reception · All-Season',
-    batchCode: 'CRD-F001942',
+    batchCode: 'VRV-031',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Pineapple', 'Bergamot', 'Black Currant'],
@@ -1348,9 +1348,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Interpretasi lebih segar dan energik dari DNA legendaris Aventus untuk pria dinamis.',
     sillage: 'Strong',
-    longevity: '8 – 10 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Tropical Business · Yacht Club · Daytime Prestige',
-    batchCode: 'CRD-F002108',
+    batchCode: 'VRV-032',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Mandarin Orange', 'Ginger', 'Pink Pepper'],
@@ -1383,9 +1383,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kemurnian aliran air pegunungan Alpen Swiss dengan aroma teh hijau dan blackcurrant yang sejuk.',
     sillage: 'Moderate',
-    longevity: '8 – 10 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Crisp Morning · White Linen · Tropical Heat',
-    batchCode: 'CRD-F001815',
+    batchCode: 'VRV-033',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Bergamot', 'Mandarin'],
@@ -1418,9 +1418,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Standar emas kemewahan kerajaan dengan perpaduan buah segar dan angin laut asin yang berkilau.',
     sillage: 'Moderate',
-    longevity: '8 – 10 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Gold Standard · Resort Gala · Warm Weather Luxury',
-    batchCode: 'CRD-F001799',
+    batchCode: 'VRV-034',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Fruit Notes', 'Sea Salt'],
@@ -1457,9 +1457,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Puncak kemewahan kristal merah dalam konsentrasi tertinggi yang manis, hangat, dan abadi di kulit.',
     sillage: 'Enormous',
-    longevity: '14 – 18+ Jam',
+    longevity: 'Rich & Enveloping · Haute Extrait',
     seasonality: 'Red Carpet · Sovereign Gala · Ultimate Collector Piece',
-    batchCode: 'MFK-25X09R',
+    batchCode: 'VRV-035',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Bitter Almond', 'Saffron'],
@@ -1492,9 +1492,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Fenomena wewangian dunia dengan jejak aroma saffron dan ambergris yang melayang anggun di udara.',
     sillage: 'Enormous',
-    longevity: '12 – 16 Jam',
+    longevity: 'Opulent & Majestic · Royal Sillage',
     seasonality: 'Evening Gala · Black Tie · Signature Luxury',
-    batchCode: 'MFK-25J04B',
+    batchCode: 'VRV-036',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Saffron', 'Jasmine'],
@@ -1527,9 +1527,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kelembutan kain satin mewah dalam balutan mawar pekat, vanila lembut, dan kayu oud berkelas.',
     sillage: 'Enormous',
-    longevity: '14 – 18 Jam',
+    longevity: 'Rich & Enveloping · Haute Extrait',
     seasonality: 'Formal Evening · Velvet Tuxedo · Opera Night',
-    batchCode: 'MFK-25S11M',
+    batchCode: 'VRV-037',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Bulgarian Rose', 'Violet'],
@@ -1562,9 +1562,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kesegaran kemeja putih bersih yang memancarkan aura kerapian dan kemurnian tingkat tinggi.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Fresh & Luminous · Effortless Distinction',
     seasonality: 'White Shirt Executive · Daytime Luxury · Summer Heat',
-    batchCode: 'MFK-25A02U',
+    batchCode: 'VRV-038',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Bergamot', 'Sicilian Lemon'],
@@ -1597,9 +1597,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Sebanyak 400 kelopak mawar pilihan dalam satu botol yang memancarkan keanggunan wanita sejati.',
     sillage: 'Moderate',
-    longevity: '8 – 10 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Couture Afternoon · Bridal · Spring Elegance',
-    batchCode: 'MFK-25R06F',
+    batchCode: 'VRV-039',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Calabrian Bergamot', 'Litchi'],
@@ -1636,9 +1636,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Ramuan hipnotis ambroxan dan musk bersih yang menyatu dengan kimia tubuh secara magis.',
     sillage: 'Strong',
-    longevity: '12 – 15 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Art Gallery · Minimalist Luxury · All-Season',
-    batchCode: 'LLB-2510AN',
+    batchCode: 'VRV-040',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pear', 'Ambrette Seeds'],
@@ -1671,9 +1671,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Ikon gaya hidup kontemporer dunia dengan aroma kayu cendana kering, kulit, dan kapulaga.',
     sillage: 'Strong',
-    longevity: '10 – 14 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'All-Season · Creative Studio · Evening Lounge',
-    batchCode: 'LLB-2509NY',
+    batchCode: 'VRV-041',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Cardamom', 'Violet'],
@@ -1706,9 +1706,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kedalaman daun teh hitam dan buah ara yang hangat, artistik, dan menenangkan jiwa.',
     sillage: 'Strong',
-    longevity: '10 – 13 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Evening Jazz · Autumn Rain · Tailored Coat',
-    batchCode: 'LLB-2511TN',
+    batchCode: 'VRV-042',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Fig', 'Bay Leaf', 'Bergamot'],
@@ -1745,9 +1745,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Karya haute parfumerie Paris dengan sentuhan neroli cerah dan musk powdery yang sangat aristokrat.',
     sillage: 'Moderate',
-    longevity: '8 – 10 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Parisian Tailoring · Daytime Vernissage · All-Season',
-    batchCode: 'CEL-3K01',
+    batchCode: 'VRV-043',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Bergamot', 'Neroli'],
@@ -1780,9 +1780,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Elegansi tuksedo hitam malam hari dengan balutan vanila berasap dan mentega iris yang memikat.',
     sillage: 'Strong',
-    longevity: '10 – 13 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Black Tie Gala · Couture Evening · Midnight Lounge',
-    batchCode: 'CEL-3K09',
+    batchCode: 'VRV-044',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['White Orris Butter'],
@@ -1819,9 +1819,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Konsentrasi tertinggi Bleu de Chanel dengan kedalaman kayu cendana Kaledonia Baru yang sangat mewah.',
     sillage: 'Strong',
-    longevity: '11 – 14 Jam',
+    longevity: 'Rich & Enveloping · Haute Extrait',
     seasonality: 'Boardroom · Formal Gala · Executive Signature',
-    batchCode: 'CHN-9904',
+    batchCode: 'VRV-045',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Lemon Zest', 'Bergamot', 'Mint'],
@@ -1854,9 +1854,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Keseimbangan sempurna antara kesegaran sitrus dan kehangatan dupa kayu yang maskulin.',
     sillage: 'Moderate',
-    longevity: '9 – 11 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Daily Executive · Business Travel · Evening Dinner',
-    batchCode: 'CHN-9801',
+    batchCode: 'VRV-046',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Grapefruit', 'Lemon', 'Mint'],
@@ -1889,9 +1889,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Klasik modern yang segar, tajam, dan membangkitkan rasa percaya diri seketika.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Daytime Office · Summer Breeze · Smart Casual',
-    batchCode: 'CHN-9712',
+    batchCode: 'VRV-047',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Grapefruit', 'Mint'],
@@ -1924,9 +1924,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Esensi wanita independen dan berkelas dengan harmoni jeruk segar, mawar, dan nilam elegan.',
     sillage: 'Strong',
-    longevity: '10 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Couture Signature · Formal Event · All-Season Elegance',
-    batchCode: 'CHN-9605',
+    batchCode: 'VRV-048',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Orange', 'Bergamot'],
@@ -1959,9 +1959,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kelembutan buah quince dan melati yang romantis, anggun, dan sangat disukai banyak orang.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Daytime Chic · Spring Blossom · Feminine Grace',
-    batchCode: 'CHN-9518',
+    batchCode: 'VRV-049',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Quince', 'Grapefruit'],
@@ -1994,9 +1994,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Percikan sitrus dan kayu jati yang berkilau, memberikan kesegaran mewah sepanjang hari.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Fresh & Luminous · Effortless Distinction',
     seasonality: 'Sunny Resort · Tennis Club · Crisp Daytime',
-    batchCode: 'CHN-9522',
+    batchCode: 'VRV-050',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Lemon', 'Pink Pepper'],
@@ -2033,9 +2033,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Misteri kedalaman samudra biru dengan perpaduan mineral laut dan rempah aromatik maskulin.',
     sillage: 'Strong',
-    longevity: '8 – 10 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Mediterranean Summer · Executive Casual · Coastal Breeze',
-    batchCode: 'ARM-62X1',
+    batchCode: 'VRV-051',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Sea Notes', 'Aquozone'],
@@ -2068,9 +2068,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Mahakarya legendaris yang mempertemukan ombak laut segar dengan kabut dupa batu vulkanik.',
     sillage: 'Strong',
-    longevity: '10 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Evening Suit · Collector Vault · All-Season Icon',
-    batchCode: 'ARM-60P9',
+    batchCode: 'VRV-052',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Sea Notes', 'Bergamot'],
@@ -2103,9 +2103,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kehangatan karamel toffee, kayu manis, dan vanila yang sangat memikat untuk momen romantis.',
     sillage: 'Strong',
-    longevity: '10 – 14 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Romantic Date · Night Lounge · Cool Evening',
-    batchCode: 'ARM-63S4',
+    batchCode: 'VRV-053',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pink Pepper', 'Juniper'],
@@ -2142,9 +2142,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Eliksir emas yang kaya akan madu hangat, tembakau, dan vanila dengan daya pikat luar biasa.',
     sillage: 'Enormous',
-    longevity: '12 – 15 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Nightlife · Evening Gala · Statement Presence',
-    batchCode: 'JPG-3194X',
+    batchCode: 'VRV-054',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Lavender', 'Mint'],
@@ -2177,9 +2177,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kesegaran tropis nanas dan kayu kelapa yang berpadu dengan amber sensual nan menggoda.',
     sillage: 'Strong',
-    longevity: '10 – 12 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Tropical Night · Beach Party · Resort Evening',
-    batchCode: 'JPG-3201B',
+    batchCode: 'VRV-055',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pineapple', 'Iris'],
@@ -2212,9 +2212,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Ledakan bunga tuberose, raspberry merah, dan sentuhan susu lembut yang glamor dan berani.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Couture Party · Evening Glamour · Red Carpet',
-    batchCode: 'JPG-3188S',
+    batchCode: 'VRV-056',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Orange Blossom', 'Raspberry'],
@@ -2251,9 +2251,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Energi dewa cinta Yunani dengan ledakan mint segar, apel manis, dan vanila maskulin.',
     sillage: 'Strong',
-    longevity: '10 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Night Out · Evening Social · High Energy',
-    batchCode: 'VRS-81E2',
+    batchCode: 'VRV-057',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Mint', 'Candy Apple', 'Lemon'],
@@ -2286,9 +2286,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kontras api dan es melalui perpaduan jeruk Italia, lada hitam hangat, dan kayu cendana.',
     sillage: 'Strong',
-    longevity: '10 – 13 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Romantic Evening · Night Lounge · Statement Red',
-    batchCode: 'VRS-82F5',
+    batchCode: 'VRV-058',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Mandarin', 'Black Pepper', 'Chinotto'],
@@ -2321,9 +2321,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kejernihan berlian merah muda dengan aroma buah delima segar dan kelopak bunga peony.',
     sillage: 'Moderate',
-    longevity: '6 – 8 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Daytime Chic · Tropical Sunshine · Effortless Glamour',
-    batchCode: 'VRS-80B9',
+    batchCode: 'VRV-059',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Yuzu', 'Pomegranate'],
@@ -2360,9 +2360,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Keindahan estetika minimalis Skandinavia yang memancarkan aroma linen putih bersih dan murni.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Minimalist Daytime · Crisp Linen · Intimate Luxury',
-    batchCode: 'BYR-51B2',
+    batchCode: 'VRV-060',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Aldehydes', 'Rose', 'Pink Pepper'],
@@ -2395,9 +2395,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Perayaan seni dan kehangatan dengan harmoni sitrus cerah, bunga marigold, dan akar wangi halus.',
     sillage: 'Moderate',
-    longevity: '8 – 10 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Art Vernissage · Golden Hour · All-Season Signature',
-    batchCode: 'BYR-52A8',
+    batchCode: 'VRV-061',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Bergamot', 'Amalfi Lemon', 'African Marigold'],
@@ -2430,9 +2430,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Pesona hutan pinus yang segar berpadu dengan kelembutan vanila dan kayu cendana yang menenangkan.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Bohemian Luxury · Creative Lounge · All-Season',
-    batchCode: 'BYR-50G4',
+    batchCode: 'VRV-062',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Juniper', 'Lemon', 'Bergamot'],
@@ -2469,9 +2469,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Keharuman kulit kedua (second-skin) terbaik dengan perpaduan iris bangsawan dan musk lembut.',
     sillage: 'Moderate',
-    longevity: '9 – 11 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Intimate Skin Scent · Parisian Salon · All-Season',
-    batchCode: 'DIP-71F3',
+    batchCode: 'VRV-063',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Aldehydes', 'Pink Pepper'],
@@ -2504,9 +2504,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Interpretasi lebih ringan dan bercahaya dari Fleur de Peau dengan sentuhan bunga magnolia segar.',
     sillage: 'Intimate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Fresh & Luminous · Effortless Distinction',
     seasonality: 'Daytime Poetry · Linen Wardrobe · Warm Weather',
-    batchCode: 'DIP-72F8',
+    batchCode: 'VRV-064',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Mandarin', 'Pink Pepper'],
@@ -2539,9 +2539,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Nostalgia bar jazz artistik Saint-Germain Paris dalam balutan kayu hangat, juniper, dan tonka.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Evening Jazz · Art Salon · Sophisticated Night',
-    batchCode: 'DIP-73P1',
+    batchCode: 'VRV-065',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Juniper Berries'],
@@ -2578,9 +2578,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Sensasi bangun pagi di atas seprai katun putih yang sejuk, lembut, dan menenangkan pikiran.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Fresh & Luminous · Effortless Distinction',
     seasonality: 'Sunday Brunch · Clean Linen · Effortless Daily',
-    batchCode: 'MMG-22L1',
+    batchCode: 'VRV-066',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Aldehydes', 'Lily-of-the-Valley', 'Pear'],
@@ -2613,9 +2613,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Atmosfer klub malam eksklusif dengan aroma koktail rum tua, cerutu tembakau, dan vanila.',
     sillage: 'Strong',
-    longevity: '8 – 11 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Evening Lounge · Jazz Bar · Autumn & Winter Night',
-    batchCode: 'MMG-23J4',
+    batchCode: 'VRV-067',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pink Pepper', 'Neroli'],
@@ -2648,9 +2648,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kehangatan kayu bakar perapian yang berpadu dengan kacang kastanye panggang dan vanila manis.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Rainy Evening · Cozy Lounge · Statement Gourmand',
-    batchCode: 'MMG-24F8',
+    batchCode: 'VRV-068',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Cloves', 'Pink Pepper'],
@@ -2683,9 +2683,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Sore hari yang cerah di taman bunga bermekaran dengan sentuhan buah pir segar.',
     sillage: 'Moderate',
-    longevity: '6 – 8 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Afternoon Walk · Floral Daytime · Spring Breeze',
-    batchCode: 'MMG-25S2',
+    batchCode: 'VRV-069',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pear', 'Bergamot'],
@@ -2722,9 +2722,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kesegaran buah pir Inggris yang baru matang dibungkus buket bunga freesia putih yang anggun.',
     sillage: 'Moderate',
-    longevity: '6 – 8 Jam',
+    longevity: 'Fresh & Luminous · Effortless Distinction',
     seasonality: 'British Garden · Afternoon Tea · Daytime Elegance',
-    batchCode: 'JML-11E4',
+    batchCode: 'VRV-070',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['King William Pear', 'Melon'],
@@ -2757,9 +2757,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Kebebasan angin pantai Inggris dengan aroma garam laut mineral dan daun sage kayu yang menenangkan.',
     sillage: 'Moderate',
-    longevity: '6 – 8 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Coastal Walk · Layering Signature · All-Season',
-    batchCode: 'JML-14W2',
+    batchCode: 'VRV-071',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Ambrette Seeds', 'Grapefruit'],
@@ -2796,9 +2796,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Simbol feminitas multidimensi Prada dengan kesegaran neroli dan kehangatan amber modern.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Milanese Chic · Evening Cocktail · Signature Femme',
-    batchCode: 'PRD-88P1',
+    batchCode: 'VRV-072',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pear', 'Tangerine', 'Bergamot'],
@@ -2831,9 +2831,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Intensitas bunga putih dan lumut kayu yang memberikan jejak wangi mewah tak terlupakan.',
     sillage: 'Enormous',
-    longevity: '11 – 14 Jam',
+    longevity: 'Rich & Enveloping · Haute Extrait',
     seasonality: 'Gala Night · Couture Statement · Cool Evening',
-    batchCode: 'PRD-89P4',
+    batchCode: 'VRV-073',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pear', 'Neroli'],
@@ -2870,9 +2870,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Pesona bunga gardenia putih yang manis, ceria, dan memancarkan kebahagiaan mewah.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Garden Party · Romantic Daytime · Italian Spring',
-    batchCode: 'GUC-44F2',
+    batchCode: 'VRV-074',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Pear Blossom', 'Red Berries'],
@@ -2905,9 +2905,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Karisma pria magnetis dengan perpaduan lavender aromatik, bunga jeruk, dan kayu cedar.',
     sillage: 'Moderate',
-    longevity: '7 – 9 Jam',
+    longevity: 'Crisp & Luminous · Versatile Elegance',
     seasonality: 'Evening Cocktail · Tailored Casual · Metropolitan',
-    batchCode: 'GUC-45G8',
+    batchCode: 'VRV-075',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Lavender', 'Amalfi Lemon'],
@@ -2944,9 +2944,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Aristokrasi modern kota Roma dengan kesegaran mineral asin, daun violet, dan vetiver berasap.',
     sillage: 'Strong',
-    longevity: '8 – 10 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Roman Night · Smart Tailoring · All-Season',
-    batchCode: 'VAL-91R1',
+    batchCode: 'VRV-076',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Mineral Notes', 'Violet Leaf', 'Salt'],
@@ -2979,9 +2979,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Energi taman sejuk Roma saat fajar dengan perpaduan bergamot segar dan kopi hangat yang berani.',
     sillage: 'Strong',
-    longevity: '8 – 11 Jam',
+    longevity: 'Warm & Commanding · Noble Presence',
     seasonality: 'Garden Rooftop · Modern Executive · Daytime & Evening',
-    batchCode: 'VAL-94G2',
+    batchCode: 'VRV-077',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Calabrian Bergamot'],
@@ -3014,9 +3014,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Aura malam perayaan di kota abadi dengan ledakan vanila bourbon dan lavender yang menghipnotis.',
     sillage: 'Enormous',
-    longevity: '11 – 14 Jam',
+    longevity: 'Opulent & Majestic · Royal Sillage',
     seasonality: 'Night Gala · VIP Lounge · Evening Statement',
-    batchCode: 'VAL-93N5',
+    batchCode: 'VRV-078',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Bourbon Vanilla'],
@@ -3049,9 +3049,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Langit senja keemasan Roma dalam harmoni apel merah segar dan daun tembakau yang karismatik.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Refined & Radiant · Signature Trail',
     seasonality: 'Golden Hour · Sunset Cocktail · Evening Date',
-    batchCode: 'VAL-92C8',
+    batchCode: 'VRV-079',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Red Apple', 'Cardamom'],
@@ -3084,9 +3084,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Konsentrasi ekstra intens dari vanila Madagaskar dan sentuhan rum hangat yang sangat glamor.',
     sillage: 'Enormous',
-    longevity: '12 – 16 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Haute Couture Night · Red Carpet · Ultimate Glamour',
-    batchCode: 'VAL-95X1',
+    batchCode: 'VRV-080',
     availabilityStatus: 'Limited Vault Stock',
     pyramid: {
       top: ['Blackcurrant'],
@@ -3119,9 +3119,9 @@ export const FRAGRANCE_CATALOG: FragranceItem[] = [
     editorialDescription:
       'Couture floriental modern yang memadukan melati mewah dengan vanila kayu kasmir yang sensual.',
     sillage: 'Strong',
-    longevity: '9 – 12 Jam',
+    longevity: 'Deep & Magnetic · Evening Presence',
     seasonality: 'Couture Soirée · Signature Femme · All-Season Luxury',
-    batchCode: 'VAL-90D4',
+    batchCode: 'VRV-081',
     availabilityStatus: 'Vault Allocation Ready',
     pyramid: {
       top: ['Blackcurrant', 'Pink Pepper'],
@@ -3151,25 +3151,25 @@ export const PRIVATE_INVOICES_SEED: Record<string, PrivateInvoice> = {
     shippingInsuranceIDR: 45000,
     woodenCratePackagingIDR: 0,
     notes:
-      'Tagihan resmi Parallel Import VORVAN. Unit lolos inspeksi fisik batch Eropa, segel hologram Vault, serta perlindungan klaim video unboxing utuh.',
+      'Tagihan resmi Parallel Import VORVAN. Unit lolos inspeksi fisik alokasi Eropa, segel hologram Vault, serta perlindungan klaim video unboxing utuh.',
     items: [
       {
-        sku: 'VRV-APX-540-70',
+        sku: 'VRV-036',
         house: 'Maison Francis Kurkdjian',
         fragranceName: 'Baccarat Rouge 540',
         concentration: 'Eau de Parfum',
         volume: '70 ml',
-        batchCode: 'MFK-25J04B',
+        batchCode: 'VRV-036',
         quantity: 1,
         unitPriceIDR: 4850000,
       },
       {
-        sku: 'VRV-URB-SVG-100',
+        sku: 'VRV-009',
         house: 'Dior',
         fragranceName: 'Sauvage',
         concentration: 'Eau de Parfum',
         volume: '100 ml',
-        batchCode: 'DIR-4B02',
+        batchCode: 'VRV-009',
         quantity: 1,
         unitPriceIDR: 2350000,
       },
@@ -3190,22 +3190,22 @@ export const PRIVATE_INVOICES_SEED: Record<string, PrivateInvoice> = {
       'Termasuk segel otentikasi Vault VORVAN, double-bubble thermal wrap, dan garansi klaim video unboxing utuh.',
     items: [
       {
-        sku: 'VRV-APX-540-70',
+        sku: 'VRV-036',
         house: 'Maison Francis Kurkdjian',
         fragranceName: 'Baccarat Rouge 540',
         concentration: 'Eau de Parfum',
         volume: '70 ml',
-        batchCode: 'MFK-25J04B',
+        batchCode: 'VRV-036',
         quantity: 1,
         unitPriceIDR: 4850000,
       },
       {
-        sku: 'VRV-URB-BDC-100',
+        sku: 'VRV-046',
         house: 'Chanel',
         fragranceName: 'Bleu de Chanel',
         concentration: 'Eau de Parfum',
         volume: '100 ml',
-        batchCode: 'CHN-9801',
+        batchCode: 'VRV-046',
         quantity: 1,
         unitPriceIDR: 2650000,
       },
@@ -3226,12 +3226,12 @@ export const PRIVATE_INVOICES_SEED: Record<string, PrivateInvoice> = {
       'Pengiriman luar kota menggunakan palet kayu pelindung (Wooden Crate) & asuransi penuh nilai barang.',
     items: [
       {
-        sku: 'VRV-APX-AVT-100',
+        sku: 'VRV-031',
         house: 'Creed',
         fragranceName: 'Aventus',
         concentration: 'Eau de Parfum Millésime',
         volume: '100 ml',
-        batchCode: 'CRD-F001942',
+        batchCode: 'VRV-031',
         quantity: 1,
         unitPriceIDR: 5250000,
       },
@@ -3254,12 +3254,12 @@ export const PRIVATE_INVOICES_SEED: Record<string, PrivateInvoice> = {
       'Lunas terverifikasi. Pesanan telah diserahkan ke armada pengiriman terasuransi (Resi: VRV-ID-994021).',
     items: [
       {
-        sku: 'VRV-APX-SNT-100',
+        sku: 'VRV-041',
         house: 'Le Labo',
         fragranceName: 'Santal 33',
         concentration: 'Eau de Parfum',
         volume: '100 ml',
-        batchCode: 'LLB-2509NY',
+        batchCode: 'VRV-041',
         quantity: 1,
         unitPriceIDR: 4450000,
       },
@@ -3275,7 +3275,7 @@ export const TRACKING_RECORDS_SEED: Record<string, TrackingRecord> = {
     destination: 'Dago Pakar, Bandung, Jawa Barat',
     courierService: 'Ekspedisi JNE',
     awbNumber: 'JNE-INS-88019420019',
-    fragranceSummary: 'Le Labo — Santal 33 EDP (100 ml · Batch LLB-2509NY)',
+    fragranceSummary: 'Le Labo — Santal 33 EDP (100 ml · Archive Ref VRV-041)',
     statusLabel: 'TAHAP 4 — DALAM PERJALANAN MENUJU LOKASI',
     estimatedArrival: '26 Okt 2026 · 13:00–16:00 WIB',
     vaultSealCode: 'SEAL-VRV-2026-0994A',
@@ -3287,7 +3287,7 @@ export const TRACKING_RECORDS_SEED: Record<string, TrackingRecord> = {
         location: 'VORVAN Climate-Controlled Vault',
         title: '1. Inspeksi Fisik Botol & Fungsi Sprayer (Lolos QC Vault VORVAN)',
         detail:
-          'Unit lolos pemeriksaan fisik botol kaca, batch code LLB-2509NY terverifikasi, dan tekanan sprayer normal.',
+          'Unit lolos pemeriksaan fisik botol kaca, kode arsip VRV-041 terverifikasi, dan tekanan sprayer normal.',
         completed: true,
       },
       {
@@ -3383,7 +3383,7 @@ export const TRACKING_RECORDS_SEED: Record<string, TrackingRecord> = {
         timestamp: '24 Okt 2026 · 19:20 WIB',
         location: 'VORVAN Climate-Controlled Vault',
         title: '1. Inspeksi Fisik Botol & Fungsi Sprayer (Lolos QC Vault VORVAN)',
-        detail: 'Xerjoff 1861 Naxos 100ml lolos QC fisik botol dan batch Eropa.',
+        detail: 'Xerjoff 1861 Naxos 100ml lolos QC fisik botol dan segel alokasi Eropa.',
         completed: true,
       },
       {

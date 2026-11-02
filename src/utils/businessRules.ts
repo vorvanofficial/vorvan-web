@@ -636,7 +636,7 @@ export function buildWhatsAppTrayInquiryUrl(
   const itemizedLines = items
     .map(
       (entry, idx) =>
-        `${idx + 1}. ${entry.fragrance.house} — ${entry.fragrance.name} (${entry.fragrance.concentration}, ${entry.volume}) × ${entry.quantity} flacon [Batch #${entry.fragrance.batchCode}]`
+        `${idx + 1}. ${entry.fragrance.house} — ${entry.fragrance.name} (${entry.fragrance.concentration}, ${entry.volume}) × ${entry.quantity} flacon [Archive Ref · ${resolveArchiveRefCode(entry.fragrance.name, entry.fragrance.batchCode)}]`
     )
     .join('\n');
 
@@ -933,13 +933,21 @@ export function resolveVorvanSkuPricing(
   );
   if (exactMatch) return exactMatch;
 
-  // Prefer catalog item whose name contains the query (e.g. "Baccarat Rouge 540 Extrait" -> "Baccarat Rouge 540 Extrait de Parfum")
-  const byCatalogContainsIdx = FRAGRANCE_CATALOG.findIndex(
+  // 1. Exact match in FRAGRANCE_CATALOG first (so "Donna Born in Roma" matches #81 instead of #80 "Donna Born in Roma Extradose")
+  const byCatalogExactIdx = FRAGRANCE_CATALOG.findIndex(
     (f) =>
       f.name.toLowerCase() === lower ||
+      f.id.toLowerCase() === lower ||
       `${f.house} - ${f.name}`.toLowerCase() === lower ||
-      `${f.house} — ${f.name}`.toLowerCase() === lower ||
-      f.name.toLowerCase().includes(lower)
+      `${f.house} — ${f.name}`.toLowerCase() === lower
+  );
+  if (byCatalogExactIdx >= 0 && VORVAN_81_CATALOG[byCatalogExactIdx]) {
+    return VORVAN_81_CATALOG[byCatalogExactIdx];
+  }
+
+  // 2. Substring match in FRAGRANCE_CATALOG (e.g. "Baccarat Rouge 540 Extrait" -> "Baccarat Rouge 540 Extrait de Parfum")
+  const byCatalogContainsIdx = FRAGRANCE_CATALOG.findIndex((f) =>
+    f.name.toLowerCase().includes(lower)
   );
   if (byCatalogContainsIdx >= 0 && VORVAN_81_CATALOG[byCatalogContainsIdx]) {
     return VORVAN_81_CATALOG[byCatalogContainsIdx];
@@ -955,6 +963,30 @@ export function resolveVorvanSkuPricing(
     lower.includes(p.name.toLowerCase())
   ).sort((a, b) => b.name.length - a.name.length);
   return reverseMatches[0] || null;
+}
+
+/**
+ * Resolves the canonical VORVAN Archive Reference code (`VRV-[NomorSKU]`, e.g. `VRV-001`..`VRV-081`)
+ * so legacy batch codes (such as `YSL-41M2`) are never displayed anywhere.
+ */
+export function resolveArchiveRefCode(
+  fragranceNameOrIdx?: string | number,
+  fallbackCode?: string
+): string {
+  const cleanFallback = (fallbackCode || '').trim().toUpperCase();
+  if (/^VRV-0[0-8]\d$/.test(cleanFallback)) {
+    return cleanFallback;
+  }
+  if (typeof fragranceNameOrIdx !== 'undefined' && fragranceNameOrIdx !== '') {
+    const sku = resolveVorvanSkuPricing(fragranceNameOrIdx);
+    if (sku && typeof sku.no === 'number') {
+      return `VRV-${String(sku.no).padStart(3, '0')}`;
+    }
+  }
+  if (/^VRV-\d{2,4}$/.test(cleanFallback)) {
+    return cleanFallback;
+  }
+  return 'VRV-001';
 }
 
 /**
@@ -1054,7 +1086,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
           let fragranceName = 'Afternoon Swim';
           let concentration = 'Eau de Parfum';
           let volume = '100ml';
-          let batchCode = `VRV-${invTrim}`;
+          let batchCode = 'VRV-001';
           let resolvedSku: VorvanSkuPricingEntry | null = null;
 
           if (fragField.startsWith('~')) {
@@ -1063,6 +1095,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             fragranceName = customParts[1] || 'Bespoke Fragrance';
             volume = customParts[2] || '100ml';
             resolvedSku = resolveVorvanSkuPricing(fragranceName);
+            batchCode = resolveArchiveRefCode(fragranceName);
           } else {
             const [idxPart, customVol] = fragField.split(':');
             const idx = parseInt(idxPart, 10);
@@ -1075,7 +1108,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
               fragranceName = item.name;
               concentration = item.concentration;
               volume = customVol || resolvedSku?.size || item.defaultVolume;
-              batchCode = item.batchCode;
+              batchCode = resolveArchiveRefCode(safeIdx, item.batchCode);
             }
           }
 
@@ -1343,12 +1376,12 @@ export function buildInvoiceFromCustomOrder(
     notes: shippingNoteText,
     items: [
       {
-        sku: `VRV-${order.invoiceId.toUpperCase()}`,
+        sku: resolveArchiveRefCode(order.fragranceName, order.batchCode),
         house: order.house,
         fragranceName: order.fragranceName,
         concentration: order.concentration || 'Eau de Parfum',
         volume: order.volume || skuPricing?.size || '100ml',
-        batchCode: order.batchCode || 'VRV-AUTH',
+        batchCode: resolveArchiveRefCode(order.fragranceName, order.batchCode),
         quantity: 1,
         unitPriceIDR: dealPrice,
       },
@@ -1536,8 +1569,8 @@ export function buildTrackingFromCustomOrder(
       {
         timestamp: tStage1,
         location: 'VORVAN Climate-Controlled Vault',
-        title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Batch Code)',
-        detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) telah melewati pemeriksaan fisik botol kaca, batch code, dan tekanan sprayer untuk penyerahan tatap muka.`,
+        title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Fungsi Sprayer)',
+        detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) telah melewati pemeriksaan fisik botol kaca, segel otentikasi Vault, dan tekanan sprayer untuk penyerahan tatap muka.`,
         completed: true,
         current: false,
       },
@@ -1574,7 +1607,7 @@ export function buildTrackingFromCustomOrder(
       estimatedArrival: COD_FACE_TO_FACE_STATUS_LABEL,
       vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
       boxInspectionNote:
-        'Transaksi COD / Serah Terima Tatap Muka Langsung: Pemeriksaan keaslian botol, batch code, dan fungsi sprayer dilakukan secara langsung saat pertemuan.',
+        'Transaksi COD / Serah Terima Tatap Muka Langsung: Pemeriksaan keaslian botol, segel otentikasi Vault, dan fungsi sprayer dilakukan secara langsung saat pertemuan.',
       milestones: codMilestones,
       createdAtTimestampMs: order.createdAtTimestampMs,
       courierOfficialUrl: courierMeta.officialTrackUrl,
@@ -1675,7 +1708,7 @@ export function buildTrackingFromCustomOrder(
       timestamp: tStage1,
       location: 'VORVAN Climate-Controlled Vault',
       title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Fungsi Sprayer)',
-      detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) lolos pemeriksaan fisik botol kaca, keaslian batch code, dan fungsi tekanan sprayer.`,
+      detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) lolos pemeriksaan fisik botol kaca, segel otentikasi Vault, dan fungsi tekanan sprayer.`,
       completed: stage >= 1,
       current: stage === 1,
     },
@@ -1844,15 +1877,18 @@ export function resolvePrivateInvoice(
     discountPct: discPct,
     shippingLabel: SHIPPING_ZONES.ZONA_1.label,
     notes:
-      'Tagihan privat terenkripsi VORVAN. Dilengkapi proteksi klaim video unboxing utuh & jaminan keaslian batch.',
+      'Tagihan privat terenkripsi VORVAN. Dilengkapi proteksi klaim video unboxing utuh & jaminan keaslian segel Vault.',
     items: [
       {
-        sku: `VRV-${sampleFragrance.id.toUpperCase()}`,
+        sku: resolveArchiveRefCode(sampleFragrance.name, sampleFragrance.batchCode),
         house: sampleFragrance.house,
         fragranceName: sampleFragrance.name,
         concentration: sampleFragrance.concentration,
         volume: sampleSku?.size || sampleFragrance.defaultVolume,
-        batchCode: sampleFragrance.batchCode,
+        batchCode: resolveArchiveRefCode(
+          sampleFragrance.name,
+          sampleFragrance.batchCode
+        ),
         quantity: 1,
         unitPriceIDR: basePrice,
       },

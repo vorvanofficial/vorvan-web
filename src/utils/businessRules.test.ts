@@ -1229,3 +1229,52 @@ test('reindexVisitorLeads enforces sequential 3-digit IDs (LEAD-VRV-001..N) with
   assert.equal(trackCod.binderbyteCourierCode, '');
 });
 
+test('All 81 fragrances use VRV-[NomorSKU] archive codes (VRV-001..VRV-081) and boutique Olfactory Sillage & Presence descriptions with zero hour claims ("... Jam")', async () => {
+  const { resolveArchiveRefCode, buildInvoiceFromCustomOrder } = await import(
+    './businessRules.ts'
+  );
+
+  assert.equal(FRAGRANCE_CATALOG.length, 81);
+  FRAGRANCE_CATALOG.forEach((frag, idx) => {
+    const expectedArchiveCode = `VRV-${String(idx + 1).padStart(3, '0')}`;
+    assert.equal(
+      frag.batchCode,
+      expectedArchiveCode,
+      `Fragrance #${idx + 1} (${frag.name}) should have archive code ${expectedArchiveCode}`
+    );
+    assert.equal(
+      resolveArchiveRefCode(frag.name, frag.batchCode),
+      expectedArchiveCode
+    );
+    assert.ok(
+      !/\bjam\b/i.test(frag.longevity),
+      `Fragrance #${idx + 1} (${frag.name}) must NOT contain hour claims ("Jam"): got "${frag.longevity}"`
+    );
+    assert.ok(
+      frag.longevity.includes('·'),
+      `Fragrance #${idx + 1} (${frag.name}) should have boutique Olfactory Sillage & Presence format: got "${frag.longevity}"`
+    );
+  });
+
+  // Legacy batch code (e.g. YSL-41M2 for MYSLF Eau de Parfum, SKU #28) automatically resolves to VRV-028 on Invoice
+  const legacyOrder = {
+    invoiceId: 'INV-VRV-5501',
+    trackingId: 'INV-VRV-5501',
+    createdAt: '01 Nov 2026 · 17:00 WIB',
+    buyerName: 'Bpk. Raka',
+    buyerCity: 'Jakarta Selatan',
+    house: 'Yves Saint Laurent',
+    fragranceName: 'MYSLF Eau de Parfum',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    batchCode: 'YSL-41M2',
+    dealPriceIDR: 2195000,
+    shippingMethod: 'JNE' as const,
+    awbNumber: '',
+    status: 'PENDING_PAYMENT' as const,
+  };
+  const inv = buildInvoiceFromCustomOrder(legacyOrder);
+  assert.equal(inv.items[0].sku, 'VRV-028');
+  assert.equal(inv.items[0].batchCode, 'VRV-028');
+});
+

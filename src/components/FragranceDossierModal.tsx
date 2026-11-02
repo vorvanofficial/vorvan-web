@@ -4,6 +4,7 @@ import { FragranceItem } from '../types/fragrance';
 import {
   buildTelegramInquiryUrl,
   buildWhatsAppInquiryUrl,
+  resolveArchiveRefCode,
 } from '../utils/businessRules';
 import { FlaconArt } from './FlaconArt';
 
@@ -60,13 +61,13 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
       <div className="relative w-full max-w-4xl bg-[#111114] border border-zinc-700/80 shadow-2xl overflow-hidden my-auto">
         {/* Top Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-          <div className="flex items-center gap-2 text-xs text-zinc-400 uppercase tracking-[0.22em]">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400 uppercase tracking-[0.22em]">
             <span>VORVAN Olfactory Dossier</span>
             <span aria-hidden="true">·</span>
             <span>{fragrance.gender}</span>
             <span aria-hidden="true">·</span>
-            <span className="font-mono-tabular text-zinc-300">
-              Batch {fragrance.batchCode}
+            <span className="font-mono-tabular text-[#E5C87E]">
+              ARCHIVE REF · {resolveArchiveRefCode(fragrance.name, fragrance.batchCode)}
             </span>
           </div>
           <button
@@ -96,10 +97,10 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
                 <span>Concentration</span>
                 <span className="text-zinc-200 font-medium">{fragrance.concentration}</span>
               </div>
-              <div className="flex items-center justify-between text-zinc-400">
-                <span>Longevity &amp; Projection</span>
-                <span className="text-zinc-200 font-medium">
-                  {fragrance.longevity} · {fragrance.sillage}
+              <div className="flex items-center justify-between gap-4 text-zinc-400">
+                <span>Olfactory Sillage &amp; Presence</span>
+                <span className="text-zinc-200 font-medium text-right">
+                  {fragrance.longevity}
                 </span>
               </div>
               <div className="flex items-center justify-between text-zinc-400">
@@ -204,7 +205,7 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
                   type="text"
                   value={clientNote}
                   onChange={(e) => setClientNote(e.target.value)}
-                  placeholder="Contoh: Mohon info batch terbaru & opsi pembuatan Private Invoice web..."
+                  placeholder="Contoh: Mohon info ketersediaan alokasi & opsi pembuatan Private Invoice web..."
                   className="w-full px-3.5 py-2.5 bg-[#0D0D0F] border border-zinc-800 focus:border-zinc-400 text-sm text-white placeholder:text-zinc-600 outline-none"
                 />
               </div>
@@ -238,7 +239,7 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
               <div className="flex flex-wrap items-center gap-4 text-[11px] text-zinc-400 pt-1">
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#E5C87E]" />
-                  100% Original Parallel Import Batch
+                  100% Original Parallel Import · European Vault Allocation
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#E5C87E]" />

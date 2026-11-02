@@ -38,6 +38,7 @@ import {
   loadCustomAdminOrders,
   loadPaymentProofsMap,
   loadVorvanSettings,
+  resolveArchiveRefCode,
   resolvePrivateInvoice,
   saveCustomAdminOrders,
   savePaymentProofRecord,
@@ -921,22 +922,24 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
             </div>
           </div>
 
-          {/* Itemized Flacon Table */}
-          <div className="p-6 sm:p-10 border-b border-zinc-800/90">
+          {/* Itemized Flacon Table — 100% Mobile-Friendly Without Horizontal Cutoff */}
+          <div className="p-5 sm:p-10 border-b border-zinc-800/90">
             <h3 className="text-xs uppercase tracking-[0.22em] text-[#E5C87E] font-semibold mb-4">
               Rincian Alokasi Flacon Parfum
             </h3>
 
-            <div className="overflow-x-auto -mx-2 px-2">
-              <table className="w-full min-w-[540px] text-left border-collapse">
+            <div className="w-full">
+              <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-400">
-                    <th className="py-3 pr-4 whitespace-nowrap">
-                      Deskripsi Koleksi
+                    <th className="py-3 pr-3">Deskripsi Koleksi</th>
+                    <th className="hidden sm:table-cell py-3 px-3 whitespace-nowrap">
+                      Ukuran
                     </th>
-                    <th className="py-3 px-3 whitespace-nowrap">Ukuran</th>
-                    <th className="py-3 px-3 whitespace-nowrap">Kode Batch</th>
-                    <th className="py-3 px-3 text-center whitespace-nowrap">
+                    <th className="hidden sm:table-cell py-3 px-3 whitespace-nowrap">
+                      Kode Arsip
+                    </th>
+                    <th className="hidden sm:table-cell py-3 px-3 text-center whitespace-nowrap">
                       Qty
                     </th>
                     <th className="py-3 pl-3 text-right whitespace-nowrap">
@@ -945,30 +948,43 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60 text-sm">
-                  {baseInvoice.items.map((item) => (
-                    <tr key={item.sku}>
-                      <td className="py-4 pr-4 min-w-[200px]">
-                        <p className="font-semibold text-white whitespace-nowrap">
-                          {item.house} — {item.fragranceName}
-                        </p>
-                        <p className="text-xs text-zinc-400 whitespace-nowrap">
-                          {item.concentration} · SKU: {item.sku}
-                        </p>
-                      </td>
-                      <td className="py-4 px-3 font-mono-tabular text-zinc-300 whitespace-nowrap">
-                        {item.volume}
-                      </td>
-                      <td className="py-4 px-3 font-mono-tabular text-xs text-[#E5C87E] whitespace-nowrap">
-                        {item.batchCode}
-                      </td>
-                      <td className="py-4 px-3 font-mono-tabular text-center text-zinc-300 whitespace-nowrap">
-                        {item.quantity}
-                      </td>
-                      <td className="py-4 pl-3 font-mono-tabular text-right text-white font-medium whitespace-nowrap">
-                        {formatIDRCurrency(item.unitPriceIDR * item.quantity)}
-                      </td>
-                    </tr>
-                  ))}
+                  {baseInvoice.items.map((item, idx) => {
+                    const archiveRef = resolveArchiveRefCode(
+                      item.fragranceName,
+                      item.batchCode || item.sku
+                    );
+                    return (
+                      <tr key={`${item.sku}-${idx}`}>
+                        <td className="py-4 pr-3 align-top">
+                          <p className="font-semibold text-white text-sm sm:text-base leading-snug break-words">
+                            {item.house} — {item.fragranceName}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+                            {item.concentration}
+                            <span className="sm:hidden">
+                              {' '}
+                              · {item.volume} · Qty: {item.quantity}
+                            </span>
+                          </p>
+                          <p className="mt-1 font-mono-tabular text-[11px] text-[#E5C87E] tracking-wider uppercase">
+                            KODE ARSIP: {archiveRef}
+                          </p>
+                        </td>
+                        <td className="hidden sm:table-cell py-4 px-3 font-mono-tabular text-zinc-300 whitespace-nowrap align-top">
+                          {item.volume}
+                        </td>
+                        <td className="hidden sm:table-cell py-4 px-3 font-mono-tabular text-xs text-[#E5C87E] whitespace-nowrap align-top">
+                          {archiveRef}
+                        </td>
+                        <td className="hidden sm:table-cell py-4 px-3 font-mono-tabular text-center text-zinc-300 whitespace-nowrap align-top">
+                          {item.quantity}
+                        </td>
+                        <td className="py-4 pl-3 font-mono-tabular text-right text-white font-semibold text-sm sm:text-base whitespace-nowrap align-top">
+                          {formatIDRCurrency(item.unitPriceIDR * item.quantity)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1493,7 +1509,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 <div className="pt-2 flex flex-wrap items-center gap-4 text-xs text-[#F5E6B8]">
                   <span className="inline-flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-[#E5C87E]" />
-                    Inspeksi Fisik Botol &amp; Batch Langsung di Tempat
+                    Inspeksi Fisik Botol &amp; Segel Vault Langsung di Tempat
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-[#E5C87E]" />

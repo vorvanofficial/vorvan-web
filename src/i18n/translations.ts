@@ -192,7 +192,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         '. Kami menghadirkan mahakarya wewangian dari rumah mode dan atelier niche paling dihormati di Eropa melalui skema kuotasi privat (',
       narrativePriceOnRequest: 'Price on Request',
       narrativeSuffix:
-        '), otentikasi batch berlapis, serta jaminan keaslian mutlak hingga ke tangan Anda.',
+        '), otentikasi segel Vault berlapis, serta jaminan keaslian mutlak hingga ke tangan Anda.',
       ctaExploreHouses: 'Eksplorasi 19 Rumah Parfum',
       ctaPrivateInvoice: 'Buka Private Invoice',
     },
@@ -212,10 +212,10 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         },
         {
           index: '02',
-          subtitle: 'BATCH KURASI PILIHAN',
-          title: 'Seleksi Batch Tanpa Kompromi',
+          subtitle: 'ALOKASI KURASI PILIHAN',
+          title: 'Seleksi Alokasi Tanpa Kompromi',
           description:
-            'Setiap flacon melewati verifikasi nomor batch produksi, segel pabrik, dan penyimpanan suhu terkontrol di dalam Vault VORVAN.',
+            'Setiap flacon melewati verifikasi kode arsip produksi, segel pabrik, dan penyimpanan suhu terkontrol di dalam Vault VORVAN.',
         },
         {
           index: '03',
@@ -295,7 +295,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       houseLabel: 'Brand / House *',
       variantLabel: 'Varian Parfum *',
       volumeLabel: 'Ukuran Botol',
-      notesLabel: 'Preferensi Batch / Catatan Khusus (Opsional)',
+      notesLabel: 'Catatan Khusus / Request Alokasi (Opsional)',
       submitBtn: 'Catat Permintaan Pre-Order',
       sendWaBtn: 'Kirim via WA',
     },
@@ -388,7 +388,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         '. We source iconic creations from Europe’s most revered couture houses and niche ateliers through bespoke private quotation (',
       narrativePriceOnRequest: 'Price on Request',
       narrativeSuffix:
-        '), multi-layer batch authentication, and absolute provenance guarantee.',
+        '), multi-layer Vault seal authentication, and absolute provenance guarantee.',
       ctaExploreHouses: 'Explore 19 Fragrance Houses',
       ctaPrivateInvoice: 'Open Private Invoice',
     },
@@ -408,10 +408,10 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         },
         {
           index: '02',
-          subtitle: 'CURATED PRODUCTION BATCHES',
-          title: 'Uncompromising Batch Selection',
+          subtitle: 'CURATED EUROPEAN ALLOCATIONS',
+          title: 'Uncompromising Vault Selection',
           description:
-            'Every flacon undergoes batch code verification, factory seal inspection, and climate-controlled storage inside the VORVAN Vault.',
+            'Every flacon undergoes archive reference verification, factory seal inspection, and climate-controlled storage inside the VORVAN Vault.',
         },
         {
           index: '03',
@@ -491,7 +491,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       houseLabel: 'Brand / House *',
       variantLabel: 'Fragrance Variant *',
       volumeLabel: 'Bottle Size',
-      notesLabel: 'Batch Preference / Special Notes (Optional)',
+      notesLabel: 'Special Notes / Allocation Request (Optional)',
       submitBtn: 'Log Pre-Order Request',
       sendWaBtn: 'Send via WA',
     },

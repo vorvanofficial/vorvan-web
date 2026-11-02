@@ -52,6 +52,7 @@ import {
   PENDING_AWB_STATUS_LABEL,
   reindexVisitorLeads,
   removePaymentProofRecord,
+  resolveArchiveRefCode,
   resolveCourierMetadata,
   resolveVorvanSkuPricing,
   validateConciergeEmail,
@@ -479,7 +480,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
         ? customFragranceText.trim() || 'Bespoke Fragrance'
         : catalogItem?.name || 'Afternoon Swim';
     const conc = catalogItem?.concentration || 'Eau de Parfum';
-    const batch = catalogItem?.batchCode || `VRV-${randomDigits}`;
+    const batch = resolveArchiveRefCode(perfumeName, catalogItem?.batchCode);
 
     const now = new Date();
     const formattedDate = now.toLocaleDateString('id-ID', {
