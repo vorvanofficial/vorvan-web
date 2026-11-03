@@ -1360,4 +1360,105 @@ test('Extra Closing Discount / VIP Voucher (extraDiscountIDR) preserves full cat
   assert.ok(decodedWa.includes('Rp 4.475.000'));
 });
 
+test('Public Invoice & Tracking Privacy: lookupPrivateInvoice and lookupTrackingOrder never leak other customers or match empty AWB', async () => {
+  const { lookupPrivateInvoice } = await import('./businessRules.ts');
 
+  const multiCustomerOrders = [
+    {
+      invoiceId: 'INV-VRV-7001',
+      trackingId: 'INV-VRV-7001',
+      createdAt: '03 Nov 2026 · 10:00 WIB',
+      buyerName: 'Bpk. Rahmat Darmawan',
+      buyerCity: 'Jakarta Selatan',
+      house: 'Louis Vuitton',
+      fragranceName: 'Afternoon Swim',
+      concentration: 'Eau de Parfum',
+      volume: '100ml',
+      batchCode: 'VRV-001',
+      dealPriceIDR: 4550000,
+      shippingMethod: 'JNE' as const,
+      awbNumber: '', // Deferred resi (empty string)
+      status: 'PENDING_PAYMENT' as const,
+    },
+    {
+      invoiceId: 'INV-VRV-7002',
+      trackingId: 'JNE99887766',
+      createdAt: '03 Nov 2026 · 11:00 WIB',
+      buyerName: 'Ibu Sinta Maharani',
+      buyerCity: 'Surabaya',
+      house: 'Creed',
+      fragranceName: 'Aventus EDP',
+      concentration: 'Eau de Parfum',
+      volume: '100ml',
+      batchCode: 'VRV-031',
+      dealPriceIDR: 4760000,
+      shippingMethod: 'JNE' as const,
+      awbNumber: 'JNE99887766',
+      status: 'PAID' as const,
+    },
+  ];
+
+  // 1. Empty query without smartOrder must NEVER match an order with empty awbNumber or fall back to INV-SAMPLE
+  assert.equal(lookupPrivateInvoice('', multiCustomerOrders, null), null);
+  assert.equal(lookupPrivateInvoice('   ', multiCustomerOrders, null), null);
+  assert.equal(lookupPrivateInvoice('INV-SAMPLE', multiCustomerOrders, null), null);
+  assert.equal(lookupTrackingOrder('', multiCustomerOrders, null), null);
+  assert.equal(lookupTrackingOrder('   ', multiCustomerOrders, null), null);
+
+  // 2. Random / unknown codes must return null (never synthesize fake invoice or return another customer)
+  assert.equal(
+    lookupPrivateInvoice('INV-TIDAK-ADA', multiCustomerOrders, null),
+    null
+  );
+  assert.equal(
+    lookupTrackingOrder('RESI-TIDAK-ADA', multiCustomerOrders, null),
+    null
+  );
+
+  // 3. Exact valid Invoice ID returns ONLY that 1 customer's invoice & tracking
+  const invCustomer1 = lookupPrivateInvoice(
+    'inv-vrv-7001',
+    multiCustomerOrders,
+    null
+  );
+  assert.ok(invCustomer1);
+  assert.equal(invCustomer1.invoiceId, 'INV-VRV-7001');
+  assert.equal(invCustomer1.buyerName, 'Bpk. Rahmat Darmawan');
+
+  const trkCustomer2 = lookupTrackingOrder(
+    'jne99887766',
+    multiCustomerOrders,
+    null
+  );
+  assert.ok(trkCustomer2);
+  assert.equal(trkCustomer2.invoiceId, 'INV-VRV-7002');
+  assert.equal(trkCustomer2.recipientName, 'Ibu Sinta Maharani');
+});
+
+test('SEO Meta Tags & JSON-LD Organization Schema in index.html include vorvanofficial and https://vorvanofficial.com', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const html = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+
+  assert.ok(
+    html.includes('VORVAN Official (vorvanofficial) — Fine Fragrances') &&
+      html.includes('Luxury Parfums</title>')
+  );
+  assert.ok(
+    html.includes(
+      'content="VORVAN Official (vorvanofficial.com) — Kurasi Independen 81 Parfum Full-Size Sealed dari 19 Rumah Mode Eropa melalui jalur Parallel Import. Valuasi 20%–30% di bawah ritel butik resmi."'
+    )
+  );
+  assert.ok(
+    html.includes(
+      'content="vorvanofficial, vorvan official, vorvan, vorvan parfum, vorvan luxury parfums, vorvanofficial.com, parallel import parfum indonesia"'
+    )
+  );
+  assert.ok(
+    html.includes('<link rel="canonical" href="https://vorvanofficial.com/" />')
+  );
+  assert.ok(html.includes('"@type": "Organization"'));
+  assert.ok(html.includes('"name": "VORVAN Official"'));
+  assert.ok(html.includes('"alternateName": "vorvanofficial"'));
+  assert.ok(html.includes('"url": "https://vorvanofficial.com"'));
+});

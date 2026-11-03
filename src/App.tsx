@@ -317,6 +317,56 @@ const CuratedHousesTicker: React.FC = React.memo(() => {
 
 export default function App() {
   const [route, setRoute] = useState<ActiveRoute>(() => parseCurrentLocation());
+  const [activeBuyerSession, setActiveBuyerSession] = useState<{
+    invoiceId: string;
+    trackingQuery: string;
+    smartOrder: CustomAdminOrder | null;
+  } | null>(() => {
+    const initial = parseCurrentLocation();
+    if (
+      initial.view === 'invoice' &&
+      (initial.invoiceId.trim() || initial.smartOrder)
+    ) {
+      const invId = (
+        initial.invoiceId ||
+        initial.smartOrder?.invoiceId ||
+        ''
+      )
+        .trim()
+        .toUpperCase();
+      const trk = (
+        initial.smartOrder?.awbNumber ||
+        initial.smartOrder?.trackingId ||
+        invId
+      ).trim();
+      return {
+        invoiceId: invId,
+        trackingQuery: trk,
+        smartOrder: initial.smartOrder || null,
+      };
+    }
+    if (
+      initial.view === 'track' &&
+      ((initial.query || '').trim() || initial.smartOrder)
+    ) {
+      const trk = (
+        initial.query ||
+        initial.smartOrder?.awbNumber ||
+        initial.smartOrder?.trackingId ||
+        initial.smartOrder?.invoiceId ||
+        ''
+      ).trim();
+      const invId = (initial.smartOrder?.invoiceId || trk)
+        .trim()
+        .toUpperCase();
+      return {
+        invoiceId: invId,
+        trackingQuery: trk,
+        smartOrder: initial.smartOrder || null,
+      };
+    }
+    return null;
+  });
   const [showSplash, setShowSplash] = useState<boolean>(() =>
     shouldShowSplashOnBoot()
   );
@@ -404,7 +454,45 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = () => {
-      setRoute(parseCurrentLocation());
+      const next = parseCurrentLocation();
+      setRoute(next);
+      if (
+        next.view === 'invoice' &&
+        (next.invoiceId.trim() || next.smartOrder)
+      ) {
+        const invId = (next.invoiceId || next.smartOrder?.invoiceId || '')
+          .trim()
+          .toUpperCase();
+        const trk = (
+          next.smartOrder?.awbNumber ||
+          next.smartOrder?.trackingId ||
+          invId
+        ).trim();
+        setActiveBuyerSession({
+          invoiceId: invId,
+          trackingQuery: trk,
+          smartOrder: next.smartOrder || null,
+        });
+      } else if (
+        next.view === 'track' &&
+        ((next.query || '').trim() || next.smartOrder)
+      ) {
+        const trk = (
+          next.query ||
+          next.smartOrder?.awbNumber ||
+          next.smartOrder?.trackingId ||
+          next.smartOrder?.invoiceId ||
+          ''
+        ).trim();
+        const invId = (next.smartOrder?.invoiceId || trk)
+          .trim()
+          .toUpperCase();
+        setActiveBuyerSession({
+          invoiceId: invId,
+          trackingQuery: trk,
+          smartOrder: next.smartOrder || null,
+        });
+      }
     };
     let rafId: number | null = null;
     const handleScroll = () => {
@@ -447,8 +535,13 @@ export default function App() {
 
     if (cloudData.orders.length > 0 || cloudData.deletedInvoiceIds.size > 0) {
       setCustomOrders((prev) => {
-        const merged = mergeCustomAdminOrders(
+        const latestLocal = mergeCustomAdminOrders(
           prev,
+          loadCustomAdminOrders(),
+          cloudData.deletedInvoiceIds
+        );
+        const merged = mergeCustomAdminOrders(
+          latestLocal,
           cloudData.orders,
           cloudData.deletedInvoiceIds
         );
@@ -582,22 +675,55 @@ export default function App() {
     invoiceId: string = '',
     smartOrder?: CustomAdminOrder | null
   ) => {
-    const cleanId = invoiceId.trim().toUpperCase();
-    const matchedOrder =
-      smartOrder ||
-      customOrders.find(
-        (o) =>
-          o.invoiceId.toUpperCase() === cleanId ||
-          o.awbNumber.toUpperCase() === cleanId ||
-          o.trackingId.toUpperCase() === cleanId
-      ) ||
-      null;
+    const explicitId = invoiceId.trim().toUpperCase();
+    const effectiveId =
+      explicitId ||
+      (smartOrder ? smartOrder.invoiceId.trim().toUpperCase() : '') ||
+      (activeBuyerSession ? activeBuyerSession.invoiceId : '');
+    const effectiveSmart =
+      smartOrder !== undefined
+        ? smartOrder
+        : !explicitId && activeBuyerSession
+        ? activeBuyerSession.smartOrder
+        : null;
+
+    const matchedOrder = effectiveId
+      ? effectiveSmart ||
+        customOrders.find((o) => {
+          const oInv = (o.invoiceId || '').trim().toUpperCase();
+          const oAwb = (o.awbNumber || '').trim().toUpperCase();
+          const oTrk = (o.trackingId || '').trim().toUpperCase();
+          return (
+            oInv === effectiveId ||
+            (oAwb.length > 0 && oAwb === effectiveId) ||
+            (oTrk.length > 0 && oTrk === effectiveId)
+          );
+        }) ||
+        null
+      : null;
+
+    if (effectiveId && matchedOrder) {
+      setActiveBuyerSession({
+        invoiceId: matchedOrder.invoiceId.trim().toUpperCase(),
+        trackingQuery: (
+          matchedOrder.awbNumber ||
+          matchedOrder.trackingId ||
+          matchedOrder.invoiceId
+        ).trim(),
+        smartOrder: matchedOrder,
+      });
+    }
+
     const token = matchedOrder ? encodeSmartOrderParam(matchedOrder) : '';
-    const nextUrl = cleanId
-      ? `/pay/${cleanId}${token ? `?v=${encodeURIComponent(token)}` : ''}`
+    const nextUrl = effectiveId
+      ? `/pay/${effectiveId}${token ? `?v=${encodeURIComponent(token)}` : ''}`
       : '/pay';
     window.history.pushState({}, '', nextUrl);
-    setRoute({ view: 'invoice', invoiceId: cleanId, smartOrder: matchedOrder });
+    setRoute({
+      view: 'invoice',
+      invoiceId: effectiveId,
+      smartOrder: matchedOrder,
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -605,24 +731,53 @@ export default function App() {
     trackingQuery: string = '',
     smartOrder?: CustomAdminOrder | null
   ) => {
-    const clean = trackingQuery.trim().toUpperCase();
-    const matchedOrder =
-      smartOrder ||
-      customOrders.find(
-        (o) =>
-          o.awbNumber.toUpperCase() === clean ||
-          o.invoiceId.toUpperCase() === clean ||
-          o.trackingId.toUpperCase() === clean
-      ) ||
-      null;
+    const explicitQuery = trackingQuery.trim().toUpperCase();
+    const effectiveQuery =
+      explicitQuery ||
+      (smartOrder
+        ? (
+            smartOrder.awbNumber ||
+            smartOrder.trackingId ||
+            smartOrder.invoiceId
+          )
+            .trim()
+            .toUpperCase()
+        : '') ||
+      (activeBuyerSession ? activeBuyerSession.trackingQuery.toUpperCase() : '');
+    const effectiveSmart =
+      smartOrder !== undefined
+        ? smartOrder
+        : !explicitQuery && activeBuyerSession
+        ? activeBuyerSession.smartOrder
+        : null;
+
+    const matchedOrder = effectiveQuery
+      ? effectiveSmart ||
+        customOrders.find((o) => {
+          const oAwb = (o.awbNumber || '').trim().toUpperCase();
+          const oInv = (o.invoiceId || '').trim().toUpperCase();
+          const oTrk = (o.trackingId || '').trim().toUpperCase();
+          return (
+            (oAwb.length > 0 && oAwb === effectiveQuery) ||
+            oInv === effectiveQuery ||
+            (oTrk.length > 0 && oTrk === effectiveQuery)
+          );
+        }) ||
+        null
+      : null;
+
     const token = matchedOrder ? encodeSmartOrderParam(matchedOrder) : '';
-    const nextUrl = clean
-      ? `/track/${encodeURIComponent(clean)}${
+    const nextUrl = effectiveQuery
+      ? `/track/${encodeURIComponent(effectiveQuery)}${
           token ? `?v=${encodeURIComponent(token)}` : ''
         }`
       : '/track';
     window.history.pushState({}, '', nextUrl);
-    setRoute({ view: 'track', query: clean, smartOrder: matchedOrder });
+    setRoute({
+      view: 'track',
+      query: effectiveQuery,
+      smartOrder: matchedOrder,
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

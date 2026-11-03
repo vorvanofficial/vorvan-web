@@ -72,9 +72,12 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   onBackToCatalog,
   onOpenInvoice,
 }) => {
-  const [searchInput, setSearchInput] = useState<string>(initialQuery || '');
+  const [searchInput, setSearchInput] = useState<string>(
+    initialQuery || smartOrder?.awbNumber || smartOrder?.invoiceId || ''
+  );
   const [submittedQuery, setSubmittedQuery] = useState<string>(
-    initialQuery?.trim() || (smartOrder ? smartOrder.awbNumber : '')
+    initialQuery?.trim() ||
+      (smartOrder ? smartOrder.awbNumber || smartOrder.invoiceId : '')
   );
   const [notFoundError, setNotFoundError] = useState<string | null>(null);
   const [, setAutoTick] = useState<number>(0);
@@ -98,22 +101,32 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
 
   useEffect(() => {
     if (initialQuery?.trim()) {
-      setSearchInput(initialQuery.trim());
-      setSubmittedQuery(initialQuery.trim());
-      setNotFoundError(null);
+      const clean = initialQuery.trim();
+      setSearchInput(clean);
+      const found = lookupTrackingOrder(clean, customOrders, smartOrder);
+      if (found) {
+        setSubmittedQuery(clean);
+        setNotFoundError(null);
+      } else {
+        setSubmittedQuery('');
+        setNotFoundError(
+          `Data pengiriman untuk kode "${clean.toUpperCase()}" tidak ditemukan. Pastikan Nomor Resi atau Kode Invoice sesuai dengan yang dikirimkan oleh Concierge VORVAN.`
+        );
+      }
     } else if (smartOrder) {
-      setSearchInput(smartOrder.awbNumber || smartOrder.invoiceId);
-      setSubmittedQuery(smartOrder.awbNumber || smartOrder.invoiceId);
+      const code = (smartOrder.awbNumber || smartOrder.invoiceId || '').trim();
+      setSearchInput(code);
+      setSubmittedQuery(code);
       setNotFoundError(null);
     } else {
       setSearchInput('');
       setSubmittedQuery('');
       setNotFoundError(null);
     }
-  }, [initialQuery, smartOrder]);
+  }, [initialQuery, smartOrder, customOrders]);
 
   const activeRecord: TrackingRecord | null =
-    submittedQuery || smartOrder
+    (submittedQuery || smartOrder) && !notFoundError
       ? lookupTrackingOrder(submittedQuery, customOrders, smartOrder)
       : null;
 

@@ -365,12 +365,16 @@ export function applyPaymentProofToOrders(
 
   const matchedIndexes = new Set<number>();
 
-  // Strict exact match by unique invoiceId (or exact AWB/trackingId of that order)
+  // Strict exact match by unique invoiceId (or exact non-empty AWB/trackingId of that order)
   orders.forEach((o, idx) => {
     const oInv = (o.invoiceId || '').trim().toUpperCase();
     const oAwb = (o.awbNumber || '').trim().toUpperCase();
     const oTrk = (o.trackingId || '').trim().toUpperCase();
-    if (oInv === cleanId || oAwb === cleanId || oTrk === cleanId) {
+    if (
+      oInv === cleanId ||
+      (oAwb.length > 0 && oAwb === cleanId) ||
+      (oTrk.length > 0 && oTrk === cleanId)
+    ) {
       matchedIndexes.add(idx);
     }
   });
@@ -1825,11 +1829,13 @@ export function resolvePrivateInvoice(
   };
 
   const ordersList = customOrders ?? loadCustomAdminOrders();
-  const matchedCustom = ordersList.find(
-    (o) =>
-      o.invoiceId.toUpperCase() === normalized ||
-      o.awbNumber.toUpperCase() === normalized
-  );
+  const matchedCustom = normalized
+    ? ordersList.find((o) => {
+        const oInv = (o.invoiceId || '').trim().toUpperCase();
+        const oAwb = (o.awbNumber || '').trim().toUpperCase();
+        return oInv === normalized || (oAwb.length > 0 && oAwb === normalized);
+      })
+    : undefined;
   if (matchedCustom) {
     return attachProof(buildInvoiceFromCustomOrder(matchedCustom));
   }
@@ -1923,6 +1929,118 @@ export function resolvePrivateInvoice(
 }
 
 /**
+ * Strictly looks up a single Private Invoice by exact Invoice ID, AWB Number, Tracking ID,
+ * or active URL smartOrder parameter for the public Invoice view.
+ * Returns `null` if no matching invoice exists — never falls back to `INV-SAMPLE` on empty input,
+ * never synthesizes fake invoices for unknown codes, and never exposes other customers' invoices.
+ */
+export function lookupPrivateInvoice(
+  rawInvoiceId: string,
+  customOrders?: CustomAdminOrder[],
+  smartOrder?: CustomAdminOrder | null
+): PrivateInvoice | null {
+  const normalized = (rawInvoiceId || '').trim().toUpperCase();
+
+  const attachProof = (inv: PrivateInvoice): PrivateInvoice => {
+    const invKey = inv.invoiceId.trim().toUpperCase();
+    const proofs = loadPaymentProofsMap();
+    const stored = proofs[invKey];
+    const existingProof = inv.paymentProof || inv.paymentProofUrl;
+    const finalProof = existingProof || stored?.proofUrl || undefined;
+    if (finalProof) {
+      return {
+        ...inv,
+        status: 'PAID',
+        paidAt: inv.paidAt || stored?.uploadedAt || inv.createdAt,
+        paymentMethodUsed:
+          inv.paymentMethodUsed || 'Terverifikasi Concierge VORVAN',
+        paymentProof: finalProof,
+        paymentProofUrl: finalProof,
+        paymentProofUploadedAt:
+          inv.paymentProofUploadedAt || stored?.uploadedAt,
+      };
+    }
+    return {
+      ...inv,
+      paymentProof: undefined,
+      paymentProofUrl: undefined,
+      paymentProofUploadedAt: undefined,
+    };
+  };
+
+  const ordersList = customOrders ?? loadCustomAdminOrders();
+
+  if (normalized) {
+    const matchedCustom = ordersList.find((o) => {
+      const oInv = (o.invoiceId || '').trim().toUpperCase();
+      const oAwb = (o.awbNumber || '').trim().toUpperCase();
+      const oTrk = (o.trackingId || '').trim().toUpperCase();
+      return (
+        oInv === normalized ||
+        (oAwb.length > 0 && oAwb === normalized) ||
+        (oTrk.length > 0 && oTrk === normalized)
+      );
+    });
+    if (matchedCustom) {
+      return attachProof(buildInvoiceFromCustomOrder(matchedCustom));
+    }
+  }
+
+  if (
+    smartOrder &&
+    (!normalized ||
+      (smartOrder.invoiceId || '').trim().toUpperCase() === normalized ||
+      ((smartOrder.awbNumber || '').trim().toUpperCase() === normalized &&
+        normalized.length > 0) ||
+      ((smartOrder.trackingId || '').trim().toUpperCase() === normalized &&
+        normalized.length > 0))
+  ) {
+    const updatedMatch = ordersList.find(
+      (o) =>
+        (o.invoiceId || '').trim().toUpperCase() ===
+        (smartOrder.invoiceId || '').trim().toUpperCase()
+    );
+    return attachProof(buildInvoiceFromCustomOrder(updatedMatch || smartOrder));
+  }
+
+  if (!normalized || normalized === 'INV-SAMPLE') {
+    return null;
+  }
+
+  if (PRIVATE_INVOICES_SEED[normalized]) {
+    const seed = PRIVATE_INVOICES_SEED[normalized];
+    const subtotal = seed.items.reduce(
+      (sum, item) => sum + item.unitPriceIDR * item.quantity,
+      0
+    );
+    const retailSum = seed.items.reduce((sum, item) => {
+      const sku = resolveVorvanSkuPricing(item.fragranceName);
+      const itemRetail =
+        sku && sku.retail > item.unitPriceIDR
+          ? sku.retail
+          : Math.round(item.unitPriceIDR / 0.72);
+      return sum + itemRetail * item.quantity;
+    }, 0);
+    const discPct =
+      retailSum > subtotal
+        ? Math.round(((retailSum - subtotal) / retailSum) * 100)
+        : 28;
+    const detectedZone = autoDetectShippingZoneByCity(seed.buyerCity);
+    return attachProof({
+      ...seed,
+      retailPriceTotalIDR: seed.retailPriceTotalIDR ?? retailSum,
+      discountPct: seed.discountPct ?? discPct,
+      shippingLabel:
+        seed.shippingLabel ||
+        detectedZone?.label ||
+        'Pengiriman Berasuransi & Double-Wall Thermal Box',
+    });
+  }
+
+  return null;
+}
+
+/**
  * Looks up a shipment tracking record by Tracking ID, AWB Number, or Invoice ID.
  * Prioritizes customOrders (including follow-up AWB updates by Admin) before smartOrder fallback.
  */
@@ -1931,7 +2049,7 @@ export function lookupTrackingOrder(
   customOrders?: CustomAdminOrder[],
   smartOrder?: CustomAdminOrder | null
 ): TrackingRecord | null {
-  const clean = query.trim().toUpperCase();
+  const clean = (query || '').trim().toUpperCase();
 
   const ordersList = customOrders ?? loadCustomAdminOrders();
   if (clean) {

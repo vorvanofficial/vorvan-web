@@ -38,6 +38,7 @@ import {
   loadCustomAdminOrders,
   loadPaymentProofsMap,
   loadVorvanSettings,
+  lookupPrivateInvoice,
   resolveArchiveRefCode,
   resolvePrivateInvoice,
   saveCustomAdminOrders,
@@ -470,9 +471,21 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 }) => {
   const activeSettings = settings || loadVorvanSettings();
 
-  const [customIdInput, setCustomIdInput] = useState<string>(invoiceId || '');
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(
-    Boolean(invoiceId?.trim() || smartOrder)
+  const [customIdInput, setCustomIdInput] = useState<string>(
+    invoiceId || smartOrder?.invoiceId || ''
+  );
+  const [submittedInvoiceId, setSubmittedInvoiceId] = useState<string>(
+    invoiceId?.trim() || smartOrder?.invoiceId || ''
+  );
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() =>
+    Boolean(
+      (invoiceId?.trim() || smartOrder) &&
+        lookupPrivateInvoice(
+          invoiceId || smartOrder?.invoiceId || '',
+          customOrders,
+          smartOrder
+        )
+    )
   );
   const [activePaymentTab, setActivePaymentTab] = useState<
     'bank_transfer' | 'cod_hand_delivery' | 'international_paypal'
@@ -493,26 +506,41 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
   useEffect(() => {
     if (invoiceId?.trim() || smartOrder) {
-      setCustomIdInput(invoiceId || smartOrder?.invoiceId || '');
-      setIsUnlocked(true);
+      const targetCode = (invoiceId || smartOrder?.invoiceId || '').trim();
+      const matched = lookupPrivateInvoice(targetCode, customOrders, smartOrder);
+      setCustomIdInput(targetCode);
+      if (matched) {
+        setSubmittedInvoiceId(matched.invoiceId);
+        setInputError(null);
+        setIsUnlocked(true);
+      } else {
+        setSubmittedInvoiceId('');
+        setIsUnlocked(false);
+        setInputError(
+          `Dokumen tagihan untuk kode "${targetCode.toUpperCase()}" tidak ditemukan. Demi privasi pelanggan VORVAN, hanya dokumen dengan tautan atau Kode Private Invoice resmi yang valid yang dapat dibuka.`
+        );
+      }
     } else {
       setCustomIdInput('');
+      setSubmittedInvoiceId('');
+      setInputError(null);
       setIsUnlocked(false);
     }
-  }, [invoiceId, smartOrder]);
+  }, [invoiceId, smartOrder, customOrders]);
 
   useEffect(() => {
     setPaypalImgFailed(false);
   }, [activeSettings.paypalQrUrl]);
 
-  const effectiveCode =
-    customIdInput.trim() || invoiceId.trim() || smartOrder?.invoiceId || 'INV-SAMPLE';
+  const matchedInvoice: PrivateInvoice | null =
+    (submittedInvoiceId || smartOrder) && !inputError
+      ? lookupPrivateInvoice(submittedInvoiceId, customOrders, smartOrder)
+      : null;
 
-  const baseInvoice: PrivateInvoice = resolvePrivateInvoice(
-    effectiveCode,
-    customOrders,
-    smartOrder
-  );
+  const baseInvoice: PrivateInvoice =
+    matchedInvoice || resolvePrivateInvoice('INV-SAMPLE');
+
+  const isInvoiceVisible = isUnlocked && Boolean(matchedInvoice);
 
   // Force full reset of legal checkbox, proof preview, and modal whenever switching invoices
   useEffect(() => {
@@ -520,20 +548,30 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     setLegalAgreedTimestamp('');
     setProofError(null);
     setIsProofModalOpen(false);
-  }, [effectiveCode, baseInvoice.invoiceId, invoiceId, smartOrder?.invoiceId]);
+  }, [submittedInvoiceId, baseInvoice.invoiceId, invoiceId, smartOrder?.invoiceId]);
 
   // Synchronize payment proof strictly by the exact unique baseInvoice.invoiceId
   useEffect(() => {
-    const exactInvKey = baseInvoice.invoiceId.trim().toUpperCase();
+    if (!matchedInvoice) {
+      setPaymentProofUrl('');
+      setPaymentProofUploadedAt('');
+      setIsLegalAgreed(false);
+      setLegalAgreedTimestamp('');
+      setProofError(null);
+      setIsProofModalOpen(false);
+      return;
+    }
+
+    const exactInvKey = matchedInvoice.invoiceId.trim().toUpperCase();
     const proofsMap = loadPaymentProofsMap();
     const stored = proofsMap[exactInvKey];
     const resolvedProof =
-      baseInvoice.paymentProof ||
-      baseInvoice.paymentProofUrl ||
+      matchedInvoice.paymentProof ||
+      matchedInvoice.paymentProofUrl ||
       stored?.proofUrl ||
       '';
     const resolvedUploadedAt =
-      baseInvoice.paymentProofUploadedAt || stored?.uploadedAt || '';
+      matchedInvoice.paymentProofUploadedAt || stored?.uploadedAt || '';
 
     if (resolvedProof) {
       setPaymentProofUrl(resolvedProof);
@@ -547,7 +585,8 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
       setIsProofModalOpen(false);
     }
   }, [
-    effectiveCode,
+    submittedInvoiceId,
+    matchedInvoice,
     baseInvoice.invoiceId,
     baseInvoice.paymentProof,
     baseInvoice.paymentProofUrl,
@@ -563,8 +602,18 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
       setInputError('Mohon masukkan Kode Tagihan Privat Anda terlebih dahulu.');
       return;
     }
+    const found = lookupPrivateInvoice(cleaned, customOrders, smartOrder);
+    if (!found) {
+      setSubmittedInvoiceId('');
+      setIsUnlocked(false);
+      setInputError(
+        `Dokumen tagihan untuk kode "${cleaned}" tidak ditemukan. Demi privasi pelanggan VORVAN, hanya dokumen dengan Kode Private Invoice resmi yang valid yang dapat dibuka.`
+      );
+      return;
+    }
     setInputError(null);
-    onSelectInvoiceId(cleaned);
+    setSubmittedInvoiceId(found.invoiceId);
+    onSelectInvoiceId(found.invoiceId);
     setIsUnlocked(true);
   };
 
@@ -821,7 +870,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
       </div>
 
       {/* LOCKED PLACEHOLDER STATE vs UNLOCKED INVOICE DOSSIER */}
-      {!isUnlocked ? (
+      {!isInvoiceVisible ? (
         <div
           className="mt-8 p-10 sm:p-14 rounded-2xl bg-[#0E0D14]/90 border border-[#D4AF37]/25 text-center space-y-4"
           data-testid="invoice-locked-placeholder"
