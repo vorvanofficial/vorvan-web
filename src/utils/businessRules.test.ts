@@ -783,7 +783,7 @@ test('Tab 1 Admin: Buyer Email, Buyer Phone, 1-Click WhatsApp URL, and Email Web
   assert.ok(decodedMsg.includes('https://vorvan-official.vercel.app/pay/INV-VRV-9011?v='));
   assert.ok(decodedMsg.includes('https://vorvan-official.vercel.app/track/JNE881920194?v='));
 
-  // 4. Official Google Apps Script Webhook
+  // 4. Official Google Apps Script Webhook & Admin Backup Email (Anti-Spam: Clean https://vorvanofficial.com domain, zero ?v= query strings)
   assert.equal(
     VORVAN_EMAIL_WEBHOOK,
     'https://script.google.com/macros/s/AKfycbwZnH1EY8q-hV0o-E-Gz0DsbGQAOKs7v4VqwOiSYvEIjKykV_80TCzroPM95yVMEpwlCw/exec'
@@ -808,7 +808,7 @@ test('Tab 1 Admin: Buyer Email, Buyer Phone, 1-Click WhatsApp URL, and Email Web
       buyerEmail: 'hendra.wijaya@gmail.com',
       buyerName: 'Bpk. Hendra Wijaya',
       invNo: 'INV-VRV-9011',
-      itemName: 'Afternoon Swim (100ml)',
+      itemName: 'Louis Vuitton — Afternoon Swim (100ml)',
       totalPrice: 'Rp 4.575.000',
       invoiceUrl: 'https://vorvan-official.vercel.app/pay/INV-VRV-9011?v=' + token,
     });
@@ -818,8 +818,21 @@ test('Tab 1 Admin: Buyer Email, Buyer Phone, 1-Click WhatsApp URL, and Email Web
     assert.equal(interceptedBody.buyerEmail, 'hendra.wijaya@gmail.com');
     assert.equal(interceptedBody.buyerName, 'Bpk. Hendra Wijaya');
     assert.equal(interceptedBody.invNo, 'INV-VRV-9011');
-    assert.equal(interceptedBody.itemName, 'Afternoon Swim (100ml)');
+    assert.equal(interceptedBody.itemName, 'Louis Vuitton — Afternoon Swim (100ml)');
     assert.equal(interceptedBody.totalPrice, 'Rp 4.575.000');
+    // Must NEVER contain ?v= encrypted query string in email payload; must strictly be https://vorvanofficial.com
+    assert.equal(interceptedBody.invoiceUrl, 'https://vorvanofficial.com');
+    assert.equal(interceptedBody.websiteUrl, 'https://vorvanofficial.com');
+    assert.ok(!JSON.stringify(interceptedBody).includes('?v='));
+
+    const { sendAdminOrderBackupToGmail } = await import('./cloudSync.ts');
+    const adminBackupOk = await sendAdminOrderBackupToGmail(orderWithContact);
+    assert.equal(adminBackupOk, true);
+    assert.equal(interceptedBody.Nomor_Invoice_Resmi, 'INV-VRV-9011');
+    assert.equal(interceptedBody.Parfum, 'Louis Vuitton — Afternoon Swim (100ml)');
+    assert.equal(interceptedBody.Total_Tagihan, 'Rp 4.575.000');
+    assert.equal(interceptedBody.Website_Resmi, 'https://vorvanofficial.com');
+    assert.ok(!JSON.stringify(interceptedBody).includes('?v='));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1462,3 +1475,115 @@ test('SEO Meta Tags & JSON-LD Organization Schema in index.html include vorvanof
   assert.ok(html.includes('"alternateName": "vorvanofficial"'));
   assert.ok(html.includes('"url": "https://vorvanofficial.com"'));
 });
+
+test('Admin Tab 1 Real-Time Two-Way Sync Calculator: Discount (%), Deal Price, Retail Price, Qty, Extra Discount, and Ongkir synchronize accurately', async () => {
+  const {
+    calculateAdminTab1PricingFromDiscount,
+    calculateAdminTab1PricingFromDealPrice,
+    calculateAdminTab1PricingFromRetailPrice,
+    encodeSmartOrderParam,
+    decodeSmartOrderParam,
+    buildInvoiceFromCustomOrder,
+    calculateInvoiceTotals,
+  } = await import('./businessRules.ts');
+
+  // 1. Changing Diskon (%) recalculates Nominal Potongan (Rp 5.000 rounding), Harga Jual VORVAN, and Grand Total
+  const fromDisc20 = calculateAdminTab1PricingFromDiscount({
+    retailPriceIDR: 6500000,
+    discountPct: 20,
+    quantity: 1,
+    extraDiscountIDR: 0,
+    shippingCostIDR: 25000,
+  });
+  assert.equal(fromDisc20.unitCutIDR, 1300000);
+  assert.equal(fromDisc20.dealPriceIDR, 5200000);
+  assert.equal(fromDisc20.subtotalIDR, 5200000);
+  assert.equal(fromDisc20.grandTotalIDR, 5225000);
+
+  // Test Rp 5.000 rounding: 3.350.000 * 22% = 737.000 -> rounded to Rp 5.000 = 735.000 -> dealPrice = 2.615.000
+  const fromDisc22 = calculateAdminTab1PricingFromDiscount({
+    retailPriceIDR: 3350000,
+    discountPct: 22,
+    quantity: 2,
+    extraDiscountIDR: 100000,
+    shippingCostIDR: 45000,
+  });
+  assert.equal(fromDisc22.unitCutIDR, 735000);
+  assert.equal(fromDisc22.dealPriceIDR, 2615000);
+  assert.equal(fromDisc22.totalCutIDR, 1470000);
+  assert.equal(fromDisc22.subtotalIDR, 5230000);
+  assert.equal(fromDisc22.grandTotalIDR, 5230000 - 100000 + 45000);
+
+  // 2. Changing Harga Jual / Harga Deal manually recalculates Nominal Potongan and Diskon (%)
+  const fromDeal = calculateAdminTab1PricingFromDealPrice({
+    retailPriceIDR: 6500000,
+    dealPriceIDR: 4875000,
+    quantity: 2,
+    extraDiscountIDR: 50000,
+    shippingCostIDR: 25000,
+  });
+  assert.equal(fromDeal.unitCutIDR, 1625000);
+  assert.equal(fromDeal.discountPct, 25);
+  assert.equal(fromDeal.subtotalIDR, 9750000);
+  assert.equal(fromDeal.grandTotalIDR, 9725000);
+
+  // 3. Changing Harga Resmi Ritel recalculates Nominal Potongan, Harga Jual, Subtotal, and Total Akhir
+  const fromRetail = calculateAdminTab1PricingFromRetailPrice({
+    retailPriceIDR: 7000000,
+    discountPct: 30,
+    quantity: 2,
+    extraDiscountIDR: 150000,
+    shippingCostIDR: 25000,
+  });
+  assert.equal(fromRetail.unitCutIDR, 2100000);
+  assert.equal(fromRetail.dealPriceIDR, 4900000);
+  assert.equal(fromRetail.totalCutIDR, 4200000);
+  assert.equal(fromRetail.subtotalIDR, 9800000);
+  assert.equal(fromRetail.grandTotalIDR, 9675000);
+
+  // 4. Smart URL & Invoice preserve custom retailPriceIDR, discountPct, and quantity
+  const customOrder = {
+    invoiceId: 'INV-VRV-SYNC99',
+    trackingId: 'INV-VRV-SYNC99',
+    createdAt: '03 Nov 2026 · 10:00 WIB',
+    buyerName: 'Bpk. Darmawan',
+    buyerCity: 'Jakarta Selatan',
+    house: 'Louis Vuitton',
+    fragranceName: 'Afternoon Swim',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    quantity: 2,
+    batchCode: 'VRV-001',
+    dealPriceIDR: 4900000,
+    retailPriceIDR: 7000000,
+    discountPct: 30,
+    extraDiscountIDR: 150000,
+    shippingCostIDR: 25000,
+    shippingMethod: 'JNE' as const,
+    awbNumber: '',
+    status: 'PENDING_PAYMENT' as const,
+  };
+
+  const token = encodeSmartOrderParam(customOrder);
+  const decoded = decodeSmartOrderParam(token);
+  assert.ok(decoded);
+  assert.equal(decoded.dealPriceIDR, 4900000);
+  assert.equal(decoded.retailPriceIDR, 7000000);
+  assert.equal(decoded.discountPct, 30);
+  assert.equal(decoded.quantity, 2);
+  assert.equal(decoded.extraDiscountIDR, 150000);
+  assert.equal(decoded.shippingCostIDR, 25000);
+
+  const invoice = buildInvoiceFromCustomOrder(decoded);
+  assert.equal(invoice.retailPriceTotalIDR, 14000000);
+  assert.equal(invoice.discountPct, 30);
+  assert.equal(invoice.items[0].quantity, 2);
+  assert.equal(invoice.items[0].unitPriceIDR, 4900000);
+
+  const totals = calculateInvoiceTotals(invoice);
+  assert.equal(totals.itemsSubtotalIDR, 9800000);
+  assert.equal(totals.extraDiscountIDR, 150000);
+  assert.equal(totals.protectionTotalIDR, 25000);
+  assert.equal(totals.grandTotalIDR, 9675000);
+});
+

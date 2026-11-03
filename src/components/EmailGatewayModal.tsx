@@ -39,6 +39,9 @@ import {
   buildBuyerInvoiceWhatsAppUrl,
   buildConciergeRecommendationWaText,
   buildSmartShareUrl,
+  calculateAdminTab1PricingFromDealPrice,
+  calculateAdminTab1PricingFromDiscount,
+  calculateAdminTab1PricingFromRetailPrice,
   COD_FACE_TO_FACE_STATUS_LABEL,
   computeAutoShippingStage,
   filterConciergeGuide81,
@@ -242,6 +245,7 @@ interface AdminEmailRegistryModalProps {
     shippingMethod: ShippingMethodType,
     awbNumber: string
   ) => void;
+  onUpdateCustomOrderPricing?: (updatedOrder: CustomAdminOrder) => void;
   onDeleteCustomOrder: (invoiceId: string) => void;
   onDeleteLead?: (email: string) => void;
   onOpenInvoicePreview: (invoiceId: string, smartOrder?: CustomAdminOrder) => void;
@@ -260,6 +264,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   onUpdateCustomOrderStage,
   onUpdateCustomOrderStatus,
   onUpdateCustomOrderResi,
+  onUpdateCustomOrderPricing,
   onDeleteCustomOrder,
   onDeleteLead,
   onOpenInvoicePreview,
@@ -298,6 +303,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   );
   const [customFragranceText, setCustomFragranceText] = useState<string>('');
   const [volume, setVolume] = useState<string>(initialSku?.size || '100ml');
+  const [quantity, setQuantity] = useState<string>('1');
   const [dealPriceIDR, setDealPriceIDR] = useState<string>(
     String(initialSku?.price || 4550000)
   );
@@ -366,6 +372,87 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
           selectedCatalogIndex >= 0 ? selectedCatalogIndex : selectedFragranceId
         );
 
+  // Live Real-Time Derived Pricing & Totals (Two-Way Sync Calculator)
+  const liveRetailUnit = Math.max(
+    0,
+    Number(retailPriceIDR.replace(/\D/g, '')) || 0
+  );
+  const liveDealUnit = Math.max(
+    0,
+    Number(dealPriceIDR.replace(/\D/g, '')) || 0
+  );
+  const liveDiscPct = Math.max(
+    0,
+    Math.min(99, Number(discountPct.replace(/[^\d.]/g, '')) || 0)
+  );
+  const liveQty = Math.max(
+    1,
+    parseInt(quantity.replace(/\D/g, ''), 10) || 1
+  );
+  const liveExtraDisc = Math.max(
+    0,
+    Number(extraDiscountIDR.replace(/\D/g, '')) || 0
+  );
+  const liveShippingCost = Math.max(
+    0,
+    Number(shippingCostIDR.replace(/\D/g, '')) || 0
+  );
+  const liveUnitCut = Math.max(0, liveRetailUnit - liveDealUnit);
+  const liveTotalRetail = liveRetailUnit * liveQty;
+  const liveTotalCut = liveUnitCut * liveQty;
+  const liveSubtotal = liveDealUnit * liveQty;
+  const liveNetAfterExtra = Math.max(0, liveSubtotal - liveExtraDisc);
+  const liveGrandTotal = Math.max(
+    0,
+    liveSubtotal - liveExtraDisc + liveShippingCost
+  );
+
+  const syncActiveOrderWithPricing = (patch: {
+    dealPriceIDR?: number;
+    retailPriceIDR?: number;
+    discountPct?: number;
+    quantity?: number;
+    extraDiscountIDR?: number;
+    shippingCostIDR?: number;
+    shippingLabel?: string;
+  }) => {
+    setCreatedOrderResult((prev) => {
+      if (!prev) return null;
+      if (
+        buyerName.trim() &&
+        prev.buyerName.toLowerCase() !== buyerName.trim().toLowerCase()
+      ) {
+        return prev;
+      }
+      const updated: CustomAdminOrder = {
+        ...prev,
+        dealPriceIDR:
+          patch.dealPriceIDR !== undefined ? patch.dealPriceIDR : prev.dealPriceIDR,
+        retailPriceIDR:
+          patch.retailPriceIDR !== undefined
+            ? patch.retailPriceIDR
+            : prev.retailPriceIDR,
+        discountPct:
+          patch.discountPct !== undefined ? patch.discountPct : prev.discountPct,
+        quantity: patch.quantity !== undefined ? patch.quantity : prev.quantity,
+        extraDiscountIDR:
+          patch.extraDiscountIDR !== undefined
+            ? patch.extraDiscountIDR
+            : prev.extraDiscountIDR,
+        shippingCostIDR:
+          patch.shippingCostIDR !== undefined
+            ? patch.shippingCostIDR
+            : prev.shippingCostIDR,
+        shippingLabel:
+          patch.shippingLabel !== undefined
+            ? patch.shippingLabel
+            : prev.shippingLabel,
+      };
+      onUpdateCustomOrderPricing?.(updated);
+      return updated;
+    });
+  };
+
   const handleSelectPerfumeByIdOrIndex = (idOrIdx: string | number) => {
     if (idOrIdx === 'CUSTOM') {
       setSelectedFragranceId('CUSTOM');
@@ -387,6 +474,14 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       setRetailPriceIDR(String(skuEntry.retail));
       setDiscountPct(String(skuEntry.disc));
       setVolume(skuEntry.size);
+      syncActiveOrderWithPricing({
+        dealPriceIDR: skuEntry.price,
+        retailPriceIDR: skuEntry.retail,
+        discountPct: skuEntry.disc,
+        quantity: liveQty,
+        extraDiscountIDR: liveExtraDisc,
+        shippingCostIDR: liveShippingCost,
+      });
     }
   };
 
@@ -396,6 +491,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     setSelectedShippingZone(zoneKey);
     setShippingCostIDR(String(zone.cost));
     setShippingLabel(zone.label);
+    syncActiveOrderWithPricing({
+      shippingCostIDR: zone.cost,
+      shippingLabel: zone.label,
+    });
   };
 
   const handleBuyerCityChange = (nextCity: string) => {
@@ -406,6 +505,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
         setSelectedShippingZone(detected.zoneKey);
         setShippingCostIDR(String(detected.cost));
         setShippingLabel(detected.label);
+        syncActiveOrderWithPricing({
+          shippingCostIDR: detected.cost,
+          shippingLabel: detected.label,
+        });
       }
     }
   };
@@ -459,14 +562,18 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       rawRetail > numericPrice
         ? rawRetail
         : activeSkuPricing?.retail || Math.round(numericPrice / 0.72);
-    const rawDisc = Number(discountPct.replace(/\D/g, ''));
+    const rawDisc = Number(discountPct.replace(/[^\d.]/g, ''));
     const numericDisc =
-      rawDisc > 0 && rawDisc < 95
-        ? rawDisc
+      rawDisc > 0 && rawDisc < 99
+        ? Math.round(rawDisc)
         : Math.max(
-            1,
+            0,
             Math.round(((numericRetail - numericPrice) / numericRetail) * 100)
           );
+    const numericQty = Math.max(
+      1,
+      parseInt(quantity.replace(/\D/g, ''), 10) || 1
+    );
     const numericShipCost = Math.max(
       0,
       Number(shippingCostIDR.replace(/\D/g, '')) || 0
@@ -525,6 +632,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       fragranceName: perfumeName,
       concentration: conc,
       volume: volume.trim() || '100ml',
+      quantity: numericQty,
       batchCode: batch,
       dealPriceIDR: numericPrice,
       retailPriceIDR: numericRetail,
@@ -548,37 +656,24 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     setCreatedOrderResult(newOrder);
 
     // Auto-dispatch email directly to buyer's inbox via official Google Apps Script webhook
+    // Anti-Spam: Only send Official Invoice Number, Perfume Name, Total, and clean https://vorvanofficial.com domain (no long ?v= query string)
     if (cleanBuyerEmail) {
       setAutoEmailStatus('sending');
       setAutoEmailRecipient(cleanBuyerEmail);
       const grandTotalNum = Math.max(
         0,
-        numericPrice - numericExtraDiscount + numericShipCost
+        numericPrice * numericQty - numericExtraDiscount + numericShipCost
       );
       const formattedGrandTotal = formatIDRCurrency(grandTotalNum);
-      const baseDomain =
-        typeof window !== 'undefined' &&
-        (window.location.hostname.includes('aistudio') ||
-          window.location.hostname.includes('googleusercontent') ||
-          window.location.hostname === 'localhost')
-          ? 'https://vorvan-official.vercel.app'
-          : typeof window !== 'undefined'
-          ? window.location.origin
-          : 'https://vorvan-official.vercel.app';
-
-      const generatedShareableInvoiceUrl = buildSmartShareUrl(
-        newOrder,
-        'invoice',
-        baseDomain
-      );
+      const qtySuffix = numericQty > 1 ? ` × ${numericQty} Flacon` : '';
 
       sendBuyerInvoiceEmailWebhook({
         buyerEmail: cleanBuyerEmail,
         buyerName: buyerName.trim(),
         invNo: invoiceId,
-        itemName: `${perfumeName} (${volume.trim() || '100ml'})`,
+        itemName: `${houseName} — ${perfumeName} (${volume.trim() || '100ml'})${qtySuffix}`,
         totalPrice: formattedGrandTotal,
-        invoiceUrl: generatedShareableInvoiceUrl,
+        invoiceUrl: 'https://vorvanofficial.com',
       })
         .then((ok) => {
           setAutoEmailStatus(ok ? 'sent' : 'failed');
@@ -873,8 +968,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="sm:col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                    <div className="sm:col-span-7">
                       <label
                         htmlFor="admin-perfume-select"
                         className="block text-xs text-zinc-400 mb-1"
@@ -904,7 +999,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         </option>
                       </select>
                     </div>
-                    <div>
+                    <div className="sm:col-span-3">
                       <label
                         htmlFor="admin-bottle-size"
                         className="block text-xs text-zinc-400 mb-1"
@@ -920,34 +1015,107 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
                       />
                     </div>
+                    <div className="sm:col-span-2">
+                      <label
+                        htmlFor="admin-qty-input"
+                        className="block text-xs text-[#E5C87E] font-medium mb-1"
+                      >
+                        Qty (Botol)
+                      </label>
+                      <input
+                        id="admin-qty-input"
+                        data-testid="admin-qty-input"
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={quantity}
+                        onChange={(e) => {
+                          const rawQty = e.target.value.replace(/\D/g, '');
+                          setQuantity(rawQty);
+                          const qNum = Math.max(1, parseInt(rawQty, 10) || 1);
+                          syncActiveOrderWithPricing({
+                            dealPriceIDR: liveDealUnit,
+                            retailPriceIDR: liveRetailUnit,
+                            discountPct: liveDiscPct,
+                            quantity: qNum,
+                            extraDiscountIDR: liveExtraDisc,
+                            shippingCostIDR: liveShippingCost,
+                          });
+                        }}
+                        placeholder="1"
+                        className="w-full px-3 py-2.5 rounded-xl bg-[#14131A] border border-[#D4AF37]/50 focus:border-[#E5C87E] text-sm font-mono-tabular font-bold text-center text-[#F5E6B8] outline-none"
+                      />
+                    </div>
                   </div>
 
-                  {/* POIN 2: LIVE AUTO-FILL PRICE & DISCOUNT BADGE */}
-                  {activeSkuPricing && (
-                    <div
-                      id="admin-auto-price-badge"
-                      className="p-3 rounded-xl bg-[#14121D] border border-[#D4AF37]/40 text-xs leading-relaxed text-zinc-200"
-                    >
-                      ✅{' '}
+                  {/* POIN 2: LIVE REAL-TIME TWO-WAY SYNC PRICE & DISCOUNT BADGE */}
+                  <div
+                    id="admin-auto-price-badge"
+                    data-testid="admin-auto-price-badge"
+                    className="p-3.5 rounded-xl bg-[#14121D] border border-[#D4AF37]/45 text-xs leading-relaxed text-zinc-200 space-y-1.5"
+                  >
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span>✅</span>
                       <strong className="text-[#E5C87E]">
-                        {activeSkuPricing.brand} — {activeSkuPricing.name} (
-                        {activeSkuPricing.size})
-                      </strong>{' '}
-                      | Ritel Resmi:{' '}
-                      <del className="text-zinc-400">
-                        Rp {activeSkuPricing.retail.toLocaleString('id-ID')}
-                      </del>{' '}
-                      | Diskon VORVAN:{' '}
-                      <span className="text-emerald-400 font-semibold">
-                        {activeSkuPricing.disc}% (Hemat Rp{' '}
-                        {activeSkuPricing.cut.toLocaleString('id-ID')})
-                      </span>{' '}
-                      | Harga Jual:{' '}
-                      <strong className="text-white font-mono-tabular">
-                        Rp {activeSkuPricing.price.toLocaleString('id-ID')}
+                        {activeSkuPricing
+                          ? `${activeSkuPricing.brand} — ${activeSkuPricing.name}`
+                          : customFragranceText.trim() ||
+                            'VORVAN Private Selection'}{' '}
+                        ({volume || '100ml'}
+                        {liveQty > 1 ? ` × ${liveQty} Flacon` : ''})
                       </strong>
+                      <span className="text-zinc-600">|</span>
+                      <span>
+                        Ritel Resmi:{' '}
+                        <del
+                          className="text-zinc-400 font-mono-tabular"
+                          data-testid="admin-live-retail-display"
+                        >
+                          Rp {liveTotalRetail.toLocaleString('id-ID')}
+                        </del>
+                      </span>
+                      <span className="text-zinc-600">|</span>
+                      <span>
+                        Diskon VORVAN:{' '}
+                        <span
+                          className="text-emerald-400 font-semibold font-mono-tabular"
+                          data-testid="admin-live-cut-display"
+                        >
+                          {liveDiscPct}% (Hemat Rp{' '}
+                          {liveTotalCut.toLocaleString('id-ID')})
+                        </span>
+                      </span>
                     </div>
-                  )}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-zinc-800/80">
+                      <span>
+                        Harga Jual VORVAN:{' '}
+                        <strong
+                          className="text-white font-mono-tabular"
+                          data-testid="admin-live-deal-display"
+                        >
+                          Rp {liveDealUnit.toLocaleString('id-ID')}
+                        </strong>
+                        {liveQty > 1 && (
+                          <span
+                            className="text-[#F5E6B8] font-mono-tabular ml-1.5"
+                            data-testid="admin-live-subtotal-display"
+                          >
+                            (Subtotal ×{liveQty}: Rp{' '}
+                            {liveSubtotal.toLocaleString('id-ID')})
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[#F5E6B8] font-semibold">
+                        Total Tagihan Akhir:{' '}
+                        <strong
+                          className="text-emerald-400 font-mono-tabular text-sm"
+                          data-testid="admin-live-grand-total-display"
+                        >
+                          Rp {liveGrandTotal.toLocaleString('id-ID')}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
 
                   {selectedFragranceId === 'CUSTOM' && (
                     <div>
@@ -964,75 +1132,186 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                     </div>
                   )}
 
-                  {/* AUTO-FILLED PRICING FIELDS (DEAL PRICE, RETAIL PRICE, DISCOUNT %, STATUS) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                    <div>
-                      <label
-                        htmlFor="admin-deal-price"
-                        className="block text-xs text-[#E5C87E] font-medium mb-1"
-                      >
-                        Harga Jual VORVAN (Rp) *
-                      </label>
-                      <input
-                        id="admin-deal-price"
-                        type="text"
-                        value={dealPriceIDR}
-                        onChange={(e) => {
-                          const nextDeal = e.target.value;
-                          setDealPriceIDR(nextDeal);
-                          const dNum = Number(nextDeal.replace(/\D/g, ''));
-                          const rNum = Number(retailPriceIDR.replace(/\D/g, ''));
-                          if (dNum > 0 && rNum > dNum) {
-                            setDiscountPct(
-                              String(Math.round(((rNum - dNum) / rNum) * 100))
+                  {/* REAL-TIME TWO-WAY SYNC PRICING FIELDS (DEAL PRICE, RETAIL PRICE, DISCOUNT %, NOMINAL HEMAT) */}
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      <div>
+                        <label
+                          htmlFor="admin-deal-price"
+                          className="block text-xs text-[#E5C87E] font-medium mb-1"
+                        >
+                          Harga Jual VORVAN (Rp) *
+                        </label>
+                        <input
+                          id="admin-deal-price"
+                          data-testid="admin-deal-price"
+                          type="text"
+                          inputMode="numeric"
+                          value={dealPriceIDR}
+                          onChange={(e) => {
+                            const nextDeal = e.target.value.replace(/\D/g, '');
+                            setDealPriceIDR(nextDeal);
+                            const dNum = Number(nextDeal) || 0;
+                            const rNum =
+                              Number(retailPriceIDR.replace(/\D/g, '')) || 0;
+                            if (nextDeal !== '' && rNum > 0) {
+                              const calc =
+                                calculateAdminTab1PricingFromDealPrice({
+                                  retailPriceIDR: rNum,
+                                  dealPriceIDR: dNum,
+                                  quantity: liveQty,
+                                  extraDiscountIDR: liveExtraDisc,
+                                  shippingCostIDR: liveShippingCost,
+                                });
+                              setDiscountPct(String(calc.discountPct));
+                              syncActiveOrderWithPricing({
+                                dealPriceIDR: calc.dealPriceIDR,
+                                retailPriceIDR: calc.retailPriceIDR,
+                                discountPct: calc.discountPct,
+                                quantity: calc.quantity,
+                                extraDiscountIDR: calc.extraDiscountIDR,
+                                shippingCostIDR: calc.shippingCostIDR,
+                              });
+                            }
+                          }}
+                          placeholder="4550000"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-[#D4AF37]/50 focus:border-[#E5C87E] text-sm font-mono-tabular font-semibold text-[#F5E6B8] outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="admin-retail-price"
+                          className="block text-xs text-zinc-400 mb-1"
+                        >
+                          Harga Ritel Resmi (Rp)
+                        </label>
+                        <input
+                          id="admin-retail-price"
+                          data-testid="admin-retail-price"
+                          type="text"
+                          inputMode="numeric"
+                          value={retailPriceIDR}
+                          onChange={(e) => {
+                            const nextRetail = e.target.value.replace(
+                              /\D/g,
+                              ''
                             );
-                          }
-                        }}
-                        placeholder="4550000"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-[#D4AF37]/50 focus:border-[#E5C87E] text-sm font-mono-tabular font-semibold text-[#F5E6B8] outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="admin-retail-price"
-                        className="block text-xs text-zinc-400 mb-1"
-                      >
-                        Harga Ritel Resmi (Rp)
-                      </label>
-                      <input
-                        id="admin-retail-price"
-                        type="text"
-                        value={retailPriceIDR}
-                        onChange={(e) => {
-                          const nextRetail = e.target.value;
-                          setRetailPriceIDR(nextRetail);
-                          const rNum = Number(nextRetail.replace(/\D/g, ''));
-                          const dNum = Number(dealPriceIDR.replace(/\D/g, ''));
-                          if (dNum > 0 && rNum > dNum) {
-                            setDiscountPct(
-                              String(Math.round(((rNum - dNum) / rNum) * 100))
+                            setRetailPriceIDR(nextRetail);
+                            const rNum = Number(nextRetail) || 0;
+                            const discNum =
+                              Number(discountPct.replace(/[^\d.]/g, '')) || 0;
+                            const dNum =
+                              Number(dealPriceIDR.replace(/\D/g, '')) || 0;
+                            if (nextRetail !== '' && rNum > 0) {
+                              const calc =
+                                calculateAdminTab1PricingFromRetailPrice({
+                                  retailPriceIDR: rNum,
+                                  discountPct: discNum,
+                                  currentDealPriceIDR: dNum,
+                                  quantity: liveQty,
+                                  extraDiscountIDR: liveExtraDisc,
+                                  shippingCostIDR: liveShippingCost,
+                                });
+                              setDealPriceIDR(String(calc.dealPriceIDR));
+                              setDiscountPct(String(calc.discountPct));
+                              syncActiveOrderWithPricing({
+                                dealPriceIDR: calc.dealPriceIDR,
+                                retailPriceIDR: calc.retailPriceIDR,
+                                discountPct: calc.discountPct,
+                                quantity: calc.quantity,
+                                extraDiscountIDR: calc.extraDiscountIDR,
+                                shippingCostIDR: calc.shippingCostIDR,
+                              });
+                            }
+                          }}
+                          placeholder="6500000"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-zinc-300 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="admin-discount-pct"
+                          className="block text-xs text-emerald-400 font-medium mb-1"
+                        >
+                          Diskon Parallel Import (%)
+                        </label>
+                        <input
+                          id="admin-discount-pct"
+                          data-testid="admin-discount-pct"
+                          type="text"
+                          inputMode="numeric"
+                          value={discountPct}
+                          onChange={(e) => {
+                            const rawDisc = e.target.value.replace(
+                              /[^\d.]/g,
+                              ''
                             );
-                          }
-                        }}
-                        placeholder="6500000"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-zinc-300 outline-none"
-                      />
+                            setDiscountPct(rawDisc);
+                            const rNum =
+                              Number(retailPriceIDR.replace(/\D/g, '')) || 0;
+                            const discNum = Number(rawDisc);
+                            if (
+                              rawDisc !== '' &&
+                              !Number.isNaN(discNum) &&
+                              rNum > 0
+                            ) {
+                              const calc =
+                                calculateAdminTab1PricingFromDiscount({
+                                  retailPriceIDR: rNum,
+                                  discountPct: discNum,
+                                  quantity: liveQty,
+                                  extraDiscountIDR: liveExtraDisc,
+                                  shippingCostIDR: liveShippingCost,
+                                });
+                              setDealPriceIDR(String(calc.dealPriceIDR));
+                              syncActiveOrderWithPricing({
+                                dealPriceIDR: calc.dealPriceIDR,
+                                retailPriceIDR: calc.retailPriceIDR,
+                                discountPct: calc.discountPct,
+                                quantity: calc.quantity,
+                                extraDiscountIDR: calc.extraDiscountIDR,
+                                shippingCostIDR: calc.shippingCostIDR,
+                              });
+                            }
+                          }}
+                          placeholder="30"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-emerald-500/45 focus:border-emerald-400 text-sm font-mono-tabular font-bold text-emerald-400 outline-none"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label
-                        htmlFor="admin-discount-pct"
-                        className="block text-xs text-zinc-400 mb-1"
-                      >
-                        Diskon Parallel Import (%)
-                      </label>
-                      <input
-                        id="admin-discount-pct"
-                        type="text"
-                        value={discountPct}
-                        onChange={(e) => setDiscountPct(e.target.value)}
-                        placeholder="30"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm font-mono-tabular text-emerald-400 outline-none"
-                      />
+
+                    {/* Baris Indikator Real-Time Nominal Potongan (Hemat) & Subtotal */}
+                    <div
+                      className="px-3.5 py-2 rounded-xl bg-[#12111A] border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2 text-xs"
+                      data-testid="admin-nominal-potongan-box"
+                    >
+                      <span className="text-zinc-300">
+                        ⚡ Nominal Potongan (Hemat{' '}
+                        <strong className="text-emerald-400">
+                          {liveDiscPct}%
+                        </strong>
+                        ):{' '}
+                        <strong
+                          className="font-mono-tabular text-emerald-400"
+                          data-testid="admin-unit-cut-value"
+                        >
+                          - {formatIDRCurrency(liveTotalCut)}
+                        </strong>
+                        {liveQty > 1 && (
+                          <span className="text-zinc-400 ml-1">
+                            ({formatIDRCurrency(liveUnitCut)} / botol)
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-zinc-300">
+                        Subtotal ({liveQty} Botol):{' '}
+                        <strong
+                          className="font-mono-tabular text-[#F5E6B8]"
+                          data-testid="admin-subtotal-value"
+                        >
+                          {formatIDRCurrency(liveSubtotal)}
+                        </strong>
+                      </span>
                     </div>
                   </div>
 
@@ -1059,16 +1338,17 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                       aria-label="Pilihan Cepat Ekstra Diskon Closing"
                     >
                       {EXTRA_CLOSING_DISCOUNT_BUTTONS.map((btn) => {
-                        const currentExtraNum =
-                          Number(extraDiscountIDR.replace(/\D/g, '')) || 0;
-                        const isSelected = currentExtraNum === btn.amount;
+                        const isSelected = liveExtraDisc === btn.amount;
                         return (
                           <button
                             key={btn.amount}
                             type="button"
-                            onClick={() =>
-                              setExtraDiscountIDR(String(btn.amount))
-                            }
+                            onClick={() => {
+                              setExtraDiscountIDR(String(btn.amount));
+                              syncActiveOrderWithPricing({
+                                extraDiscountIDR: btn.amount,
+                              });
+                            }}
                             data-testid={`extra-discount-btn-${btn.amount}`}
                             className={`px-3 py-2 rounded-lg text-xs font-mono-tabular transition-all cursor-pointer border text-center whitespace-nowrap ${
                               isSelected
@@ -1097,7 +1377,11 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           value={extraDiscountIDR}
                           onChange={(e) => {
                             const digitsOnly = e.target.value.replace(/\D/g, '');
-                            setExtraDiscountIDR(digitsOnly || '0');
+                            const nextVal = digitsOnly || '0';
+                            setExtraDiscountIDR(nextVal);
+                            syncActiveOrderWithPricing({
+                              extraDiscountIDR: Number(nextVal) || 0,
+                            });
                           }}
                           placeholder="Contoh: 140000"
                           data-testid="admin-extra-discount-input"
@@ -1113,14 +1397,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           className="font-mono-tabular font-bold text-[#F5E6B8]"
                           data-testid="admin-net-after-extra-preview"
                         >
-                          {formatIDRCurrency(
-                            Math.max(
-                              0,
-                              (Number(dealPriceIDR.replace(/\D/g, '')) || 0) -
-                                (Number(extraDiscountIDR.replace(/\D/g, '')) ||
-                                  0)
-                            )
-                          )}
+                          {formatIDRCurrency(liveNetAfterExtra)}
                         </span>
                       </div>
                     </div>
@@ -1183,9 +1460,17 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         </label>
                         <input
                           id="admin-shipping-cost"
+                          data-testid="admin-shipping-cost"
                           type="text"
+                          inputMode="numeric"
                           value={shippingCostIDR}
-                          onChange={(e) => setShippingCostIDR(e.target.value)}
+                          onChange={(e) => {
+                            const nextShip = e.target.value.replace(/\D/g, '');
+                            setShippingCostIDR(nextShip);
+                            syncActiveOrderWithPricing({
+                              shippingCostIDR: Number(nextShip) || 0,
+                            });
+                          }}
                           placeholder="0"
                           className="w-full px-3 py-2 rounded-lg bg-[#0B0A0E] border border-zinc-700 focus:border-[#E5C87E] text-xs font-mono-tabular text-white outline-none"
                         />
@@ -1201,7 +1486,12 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           id="admin-shipping-label"
                           type="text"
                           value={shippingLabel}
-                          onChange={(e) => setShippingLabel(e.target.value)}
+                          onChange={(e) => {
+                            setShippingLabel(e.target.value);
+                            syncActiveOrderWithPricing({
+                              shippingLabel: e.target.value,
+                            });
+                          }}
                           placeholder="COMPLIMENTARY (Free VIP Insured Shipping)"
                           className="w-full px-3 py-2 rounded-lg bg-[#0B0A0E] border border-zinc-700 focus:border-[#E5C87E] text-xs text-white outline-none"
                         />
@@ -1368,25 +1658,59 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             {createdOrderResult.house} —{' '}
                             {createdOrderResult.fragranceName} (
                             {createdOrderResult.volume})
+                            {(createdOrderResult.quantity || 1) > 1
+                              ? ` × ${createdOrderResult.quantity} Flacon`
+                              : ''}
                           </span>
                         </div>
                         {createdOrderResult.retailPriceIDR &&
                           createdOrderResult.retailPriceIDR >
                             createdOrderResult.dealPriceIDR && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-zinc-400">Harga Ritel Resmi:</span>
-                              <span className="font-mono-tabular text-zinc-400 line-through">
-                                {formatIDRCurrency(createdOrderResult.retailPriceIDR)}
-                              </span>
-                            </div>
+                            <>
+                              <div className="flex items-center justify-between">
+                                <span className="text-zinc-400">
+                                  Harga Ritel Resmi
+                                  {(createdOrderResult.quantity || 1) > 1
+                                    ? ` (×${createdOrderResult.quantity})`
+                                    : ''}
+                                  :
+                                </span>
+                                <span className="font-mono-tabular text-zinc-400 line-through">
+                                  {formatIDRCurrency(
+                                    createdOrderResult.retailPriceIDR *
+                                      Math.max(1, createdOrderResult.quantity || 1)
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-zinc-400">
+                                  Nominal Hemat (Diskon{' '}
+                                  {createdOrderResult.discountPct || 25}%):
+                                </span>
+                                <span className="font-mono-tabular text-emerald-400 font-semibold">
+                                  -{' '}
+                                  {formatIDRCurrency(
+                                    Math.max(
+                                      0,
+                                      (createdOrderResult.retailPriceIDR -
+                                        createdOrderResult.dealPriceIDR) *
+                                        Math.max(1, createdOrderResult.quantity || 1)
+                                    )
+                                  )}
+                                </span>
+                              </div>
+                            </>
                           )}
                         <div className="flex items-center justify-between">
                           <span className="text-zinc-400">
-                            Harga VORVAN (Diskon {createdOrderResult.discountPct || 25}
-                            %):
+                            Subtotal Harga VORVAN (Diskon{' '}
+                            {createdOrderResult.discountPct || 25}%):
                           </span>
                           <span className="font-mono-tabular font-semibold text-emerald-400">
-                            {formatIDRCurrency(createdOrderResult.dealPriceIDR)}
+                            {formatIDRCurrency(
+                              createdOrderResult.dealPriceIDR *
+                                Math.max(1, createdOrderResult.quantity || 1)
+                            )}
                           </span>
                         </div>
                         {(createdOrderResult.extraDiscountIDR || 0) > 0 && (
@@ -1418,7 +1742,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             {formatIDRCurrency(
                               Math.max(
                                 0,
-                                createdOrderResult.dealPriceIDR -
+                                createdOrderResult.dealPriceIDR *
+                                  Math.max(1, createdOrderResult.quantity || 1) -
                                   (createdOrderResult.extraDiscountIDR || 0) +
                                   (createdOrderResult.shippingCostIDR || 0)
                               )
@@ -1452,7 +1777,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             </p>
                             <p className="text-[10px] opacity-80 mt-0.5">
                               {autoEmailStatus === 'sent'
-                                ? 'Pembeli menerima rincian invoice & link https://vorvan-official.vercel.app langsung di email.'
+                                ? 'Pembeli menerima Nomor Invoice Resmi, rincian singkat pesanan (Nama Parfum & Total), dan domain bersih https://vorvanofficial.com di email (bebas spam).'
                                 : 'Google Apps Script Webhook VORVAN.'}
                             </p>
                           </div>
@@ -2200,13 +2525,17 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                               <td className="py-3 px-3">
                                 <div className="text-[#E5C87E]">
                                   {ord.house} — {ord.fragranceName}
+                                  {(ord.quantity || 1) > 1
+                                    ? ` (×${ord.quantity})`
+                                    : ''}
                                 </div>
                                 <div className="font-mono-tabular text-emerald-400 flex items-center flex-wrap gap-1.5 mt-1">
                                   <span>
                                     {formatIDRCurrency(
                                       Math.max(
                                         0,
-                                        ord.dealPriceIDR -
+                                        ord.dealPriceIDR *
+                                          Math.max(1, ord.quantity || 1) -
                                           (ord.extraDiscountIDR || 0) +
                                           (ord.shippingCostIDR || 0)
                                       )

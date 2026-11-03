@@ -26,7 +26,6 @@ import {
 } from './types/fragrance';
 import {
   applyPaymentProofToOrders,
-  buildSmartShareUrl,
   buildTelegramInquiryUrl,
   buildWhatsAppInquiryUrl,
   decodeSmartOrderParam,
@@ -836,16 +835,13 @@ export default function App() {
       // ignore
     }
 
-    // 1. Real HTTP POST to vorvanlifestyle@gmail.com via FormSubmit AJAX
+    // 1. Real HTTP POST to vorvanlifestyle@gmail.com via FormSubmit AJAX (clean domain without query string)
     void sendVisitorLeadToGmail({
       leadId: assignedLead.id,
       visitorEmail: normalizedEmail,
       triggeredByFragrance: fragranceContext,
       waktuDaftar,
-      sumberWeb:
-        typeof window !== 'undefined'
-          ? window.location.href
-          : 'https://vorvan-official.vercel.app',
+      sumberWeb: 'https://vorvanofficial.com',
     });
 
     // 2. Sync to Fixed Shared Cloud Key-Value Endpoints & Cloud Stream so Admin Tab 3 sees it across devices & Incognito tabs
@@ -915,10 +911,8 @@ export default function App() {
       ts: Date.now(),
     });
 
-    // Send real backup notification to vorvanlifestyle@gmail.com
-    const invUrl = buildSmartShareUrl(cleanNewOrder, 'invoice');
-    const trkUrl = buildSmartShareUrl(cleanNewOrder, 'track');
-    void sendAdminOrderBackupToGmail(cleanNewOrder, invUrl, trkUrl);
+    // Send real backup notification to vorvanlifestyle@gmail.com (clean domain https://vorvanofficial.com, no encrypted query strings)
+    void sendAdminOrderBackupToGmail(cleanNewOrder);
   };
 
   const handleUpdateCustomOrderStage = (
@@ -990,6 +984,28 @@ export default function App() {
         ts: Date.now(),
       });
     }
+  };
+
+  const handleUpdateCustomOrderPricing = (updatedOrder: CustomAdminOrder) => {
+    const cleanTargetId = updatedOrder.invoiceId.trim().toUpperCase();
+    setCustomOrders((prev) => {
+      const next = prev.map((o) =>
+        o.invoiceId.trim().toUpperCase() === cleanTargetId
+          ? {
+              ...o,
+              dealPriceIDR: updatedOrder.dealPriceIDR,
+              retailPriceIDR: updatedOrder.retailPriceIDR,
+              discountPct: updatedOrder.discountPct,
+              quantity: updatedOrder.quantity,
+              extraDiscountIDR: updatedOrder.extraDiscountIDR,
+              shippingCostIDR: updatedOrder.shippingCostIDR,
+              shippingLabel: updatedOrder.shippingLabel,
+            }
+          : o
+      );
+      saveCustomAdminOrders(next);
+      return next;
+    });
   };
 
   const handleUploadPaymentProof = (
@@ -2002,6 +2018,7 @@ export default function App() {
         onUpdateCustomOrderStage={handleUpdateCustomOrderStage}
         onUpdateCustomOrderStatus={handleUpdateCustomOrderStatus}
         onUpdateCustomOrderResi={handleUpdateCustomOrderResi}
+        onUpdateCustomOrderPricing={handleUpdateCustomOrderPricing}
         onDeleteCustomOrder={handleDeleteCustomOrder}
         onDeleteLead={handleDeleteEmailLead}
         onOpenInvoicePreview={(invId, smartOrd) =>

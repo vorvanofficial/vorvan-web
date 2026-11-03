@@ -268,6 +268,7 @@ export interface CustomAdminOrder {
   fragranceName: string;
   concentration: string;
   volume: string;
+  quantity?: number;
   batchCode: string;
   dealPriceIDR: number;
   retailPriceIDR?: number;

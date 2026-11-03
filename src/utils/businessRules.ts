@@ -744,6 +744,153 @@ export function formatIDRCurrency(amount: number): string {
   return rounded < 0 ? `-Rp ${formatted}` : `Rp ${formatted}`;
 }
 
+export interface AdminTab1PricingResult {
+  retailPriceIDR: number;
+  discountPct: number;
+  unitCutIDR: number;
+  dealPriceIDR: number;
+  quantity: number;
+  totalRetailIDR: number;
+  totalCutIDR: number;
+  subtotalIDR: number;
+  extraDiscountIDR: number;
+  shippingCostIDR: number;
+  grandTotalIDR: number;
+}
+
+/**
+ * 1. Real-time calculation when Admin changes "Diskon (%)" in Tab 1:
+ * - Nominal Potongan (Hemat) = Math.round((Harga_Resmi_Ritel * (Diskon_Persen / 100)) / 5000) * 5000
+ * - Harga Jual / Harga Deal VORVAN = Harga_Resmi_Ritel - Nominal_Potongan
+ * - Total Tagihan Akhir (Grand Total) = (Harga_Jual_VORVAN * Qty) - Ekstra_Diskon_Closing + Ongkir
+ */
+export function calculateAdminTab1PricingFromDiscount(params: {
+  retailPriceIDR: number;
+  discountPct: number;
+  quantity?: number;
+  extraDiscountIDR?: number;
+  shippingCostIDR?: number;
+}): AdminTab1PricingResult {
+  const retailPriceIDR = Math.max(0, Math.round(params.retailPriceIDR || 0));
+  const discountPct = Math.max(
+    0,
+    Math.min(99, Number.isFinite(params.discountPct) ? params.discountPct : 0)
+  );
+  const quantity = Math.max(1, Math.round(params.quantity || 1));
+  const extraDiscountIDR = Math.max(
+    0,
+    Math.round(params.extraDiscountIDR || 0)
+  );
+  const shippingCostIDR = Math.max(0, Math.round(params.shippingCostIDR || 0));
+
+  const unitCutIDR =
+    Math.round((retailPriceIDR * (discountPct / 100)) / 5000) * 5000;
+  const dealPriceIDR = Math.max(0, retailPriceIDR - unitCutIDR);
+  const totalRetailIDR = retailPriceIDR * quantity;
+  const totalCutIDR = unitCutIDR * quantity;
+  const subtotalIDR = dealPriceIDR * quantity;
+  const grandTotalIDR = Math.max(
+    0,
+    subtotalIDR - extraDiscountIDR + shippingCostIDR
+  );
+
+  return {
+    retailPriceIDR,
+    discountPct,
+    unitCutIDR,
+    dealPriceIDR,
+    quantity,
+    totalRetailIDR,
+    totalCutIDR,
+    subtotalIDR,
+    extraDiscountIDR,
+    shippingCostIDR,
+    grandTotalIDR,
+  };
+}
+
+/**
+ * 2. Real-time calculation when Admin changes "Harga Jual / Harga Deal (Rp)" manually in Tab 1:
+ * - Nominal Potongan = Harga_Resmi_Ritel - Harga_Deal
+ * - Diskon (%) = Math.round(((Harga_Resmi_Ritel - Harga_Deal) / Harga_Resmi_Ritel) * 100)
+ * - Total Tagihan Akhir (Grand Total) = (Harga_Jual_VORVAN * Qty) - Ekstra_Diskon_Closing + Ongkir
+ */
+export function calculateAdminTab1PricingFromDealPrice(params: {
+  retailPriceIDR: number;
+  dealPriceIDR: number;
+  quantity?: number;
+  extraDiscountIDR?: number;
+  shippingCostIDR?: number;
+}): AdminTab1PricingResult {
+  const retailPriceIDR = Math.max(0, Math.round(params.retailPriceIDR || 0));
+  const dealPriceIDR = Math.max(0, Math.round(params.dealPriceIDR || 0));
+  const quantity = Math.max(1, Math.round(params.quantity || 1));
+  const extraDiscountIDR = Math.max(
+    0,
+    Math.round(params.extraDiscountIDR || 0)
+  );
+  const shippingCostIDR = Math.max(0, Math.round(params.shippingCostIDR || 0));
+
+  const unitCutIDR = Math.max(0, retailPriceIDR - dealPriceIDR);
+  const discountPct =
+    retailPriceIDR > 0 && retailPriceIDR > dealPriceIDR
+      ? Math.round(((retailPriceIDR - dealPriceIDR) / retailPriceIDR) * 100)
+      : 0;
+  const totalRetailIDR = retailPriceIDR * quantity;
+  const totalCutIDR = unitCutIDR * quantity;
+  const subtotalIDR = dealPriceIDR * quantity;
+  const grandTotalIDR = Math.max(
+    0,
+    subtotalIDR - extraDiscountIDR + shippingCostIDR
+  );
+
+  return {
+    retailPriceIDR,
+    discountPct,
+    unitCutIDR,
+    dealPriceIDR,
+    quantity,
+    totalRetailIDR,
+    totalCutIDR,
+    subtotalIDR,
+    extraDiscountIDR,
+    shippingCostIDR,
+    grandTotalIDR,
+  };
+}
+
+/**
+ * 3. Real-time calculation when Admin changes "Harga Resmi Ritel" in Tab 1:
+ * Automatically recalculates Nominal Potongan (Rp 5.000 rounding), Harga Jual VORVAN,
+ * Subtotal (Harga Jual * Qty), and Total Tagihan Akhir without needing to re-select the perfume.
+ */
+export function calculateAdminTab1PricingFromRetailPrice(params: {
+  retailPriceIDR: number;
+  discountPct: number;
+  currentDealPriceIDR?: number;
+  quantity?: number;
+  extraDiscountIDR?: number;
+  shippingCostIDR?: number;
+}): AdminTab1PricingResult {
+  const disc = Number(params.discountPct) || 0;
+  if (disc > 0 && disc < 100) {
+    return calculateAdminTab1PricingFromDiscount({
+      retailPriceIDR: params.retailPriceIDR,
+      discountPct: disc,
+      quantity: params.quantity,
+      extraDiscountIDR: params.extraDiscountIDR,
+      shippingCostIDR: params.shippingCostIDR,
+    });
+  }
+  return calculateAdminTab1PricingFromDealPrice({
+    retailPriceIDR: params.retailPriceIDR,
+    dealPriceIDR: params.currentDealPriceIDR || 0,
+    quantity: params.quantity,
+    extraDiscountIDR: params.extraDiscountIDR,
+    shippingCostIDR: params.shippingCostIDR,
+  });
+}
+
 /**
  * Calculates itemized subtotal, extra closing discount, and grand total for a Private Invoice.
  */
@@ -847,8 +994,7 @@ function decodeCourierShort(code: string): ShippingMethodType {
 
 /**
  * Encodes a CustomAdminOrder into an ultra-short pipe-delimited Base64url string for `?v=...`
- * Format: `invShort|fragIdx|priceInThousands|statusDigit|courierShort|awb|buyerName|buyerCity`
- * Example: `9750|0|3850|0|JNE|AWB|Nama|Kota`
+ * Format: `invShort|fragField|priceField|statusDigit|courierShort|awb|buyerName|buyerCity|buyerEmail|buyerPhone`
  */
 export function encodeSmartOrderParam(order: CustomAdminOrder): string {
   const sanitize = (val: string) => (val || '').replace(/\|/g, '/').trim();
@@ -892,12 +1038,30 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
       ? Math.max(0, Math.round(order.shippingCostIDR / 1000))
       : undefined;
   const extraDisc = Math.max(0, Math.round(order.extraDiscountIDR || 0));
-  const priceField =
-    extraDisc > 0
-      ? `${priceK}:${shipK ?? 0}:${extraDisc}`
-      : shipK !== undefined
-      ? `${priceK}:${shipK}`
-      : String(priceK);
+  const retailK =
+    order.retailPriceIDR && order.retailPriceIDR > 0
+      ? Math.max(0, Math.round(order.retailPriceIDR / 1000))
+      : 0;
+  const discPct =
+    order.discountPct && order.discountPct > 0
+      ? Math.max(0, Math.round(order.discountPct))
+      : 0;
+  const qty = Math.max(1, Math.round(order.quantity || 1));
+
+  const defaultSku =
+    catalogIdx >= 0 ? resolveVorvanSkuPricing(catalogIdx) : null;
+  const hasCustomRetailOrDiscOrQty =
+    qty > 1 ||
+    (retailK > 0 && (!defaultSku || retailK * 1000 !== defaultSku.retail)) ||
+    (discPct > 0 && (!defaultSku || discPct !== defaultSku.disc));
+
+  const priceField = hasCustomRetailOrDiscOrQty
+    ? `${priceK}:${shipK ?? 0}:${extraDisc}:${retailK}:${discPct}:${qty}`
+    : extraDisc > 0
+    ? `${priceK}:${shipK ?? 0}:${extraDisc}`
+    : shipK !== undefined
+    ? `${priceK}:${shipK}`
+    : String(priceK);
   const statusDigit = order.status === 'PAID' ? '1' : '0';
   const courierCode = encodeCourierShort(order.shippingMethod);
   const awb = isCodShippingMethod(order.shippingMethod, order.awbNumber)
@@ -1129,11 +1293,27 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             }
           }
 
-          const [dealKPart, shipKPart, extraDiscPart] = (priceKStr || '').split(':');
+          const [
+            dealKPart,
+            shipKPart,
+            extraDiscPart,
+            retailKPart,
+            discPctPart,
+            qtyPart,
+          ] = (priceKStr || '').split(':');
           const dealPriceIDR = Math.round((Number(dealKPart) || 0) * 1000);
           const extraDiscountIDR = extraDiscPart
             ? Math.max(0, Math.round(Number(extraDiscPart) || 0))
             : 0;
+          const decodedRetailIDR = retailKPart
+            ? Math.max(0, Math.round((Number(retailKPart) || 0) * 1000))
+            : 0;
+          const decodedDiscPct = discPctPart
+            ? Math.max(0, Math.round(Number(discPctPart) || 0))
+            : 0;
+          const quantity = qtyPart
+            ? Math.max(1, Math.round(Number(qtyPart) || 1))
+            : 1;
           const status: 'PENDING_PAYMENT' | 'PAID' =
             statusDigit === '1' ? 'PAID' : 'PENDING_PAYMENT';
           const shippingMethod = decodeCourierShort(courierCode);
@@ -1165,11 +1345,17 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
               ? dealPriceIDR
               : resolvedSku?.price || 3850000;
           const retailPriceIDR =
-            resolvedSku && resolvedSku.retail > finalDealPrice
+            decodedRetailIDR > finalDealPrice
+              ? decodedRetailIDR
+              : resolvedSku && resolvedSku.retail > finalDealPrice
               ? resolvedSku.retail
               : Math.round(finalDealPrice / 0.72);
           const discountPct =
-            resolvedSku && resolvedSku.price === finalDealPrice
+            decodedDiscPct > 0 && decodedDiscPct < 100
+              ? decodedDiscPct
+              : resolvedSku &&
+                resolvedSku.price === finalDealPrice &&
+                resolvedSku.retail === retailPriceIDR
               ? resolvedSku.disc
               : Math.max(
                   1,
@@ -1190,6 +1376,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             fragranceName,
             concentration,
             volume,
+            quantity,
             batchCode,
             dealPriceIDR: finalDealPrice,
             retailPriceIDR,
@@ -1290,10 +1477,11 @@ export function buildBuyerInvoiceWhatsAppUrl(
   const baseDomain = originOverride || getVorvanBaseDomain();
   const invoiceUrl = buildSmartShareUrl(order, 'invoice', baseDomain);
   const trackUrl = buildSmartShareUrl(order, 'track', baseDomain);
+  const qty = Math.max(1, Math.round(order.quantity || 1));
   const extraDisc = Math.max(0, Math.round(order.extraDiscountIDR || 0));
   const grandTotal = Math.max(
     0,
-    order.dealPriceIDR - extraDisc + (order.shippingCostIDR || 0)
+    order.dealPriceIDR * qty - extraDisc + (order.shippingCostIDR || 0)
   );
   const formattedTotal = formatIDRCurrency(grandTotal);
 
@@ -1310,13 +1498,14 @@ export function buildBuyerInvoiceWhatsAppUrl(
     extraDisc > 0
       ? `• Ekstra Privilese Hari Ini (VIP Voucher): - ${formatIDRCurrency(extraDisc)}\n`
       : '';
+  const qtySuffix = qty > 1 ? ` × ${qty} Flacon` : '';
 
   const message =
     `Yth. ${order.buyerName},\n\n` +
     `Terima kasih telah mempercayakan alokasi parfum niche & koleksi eksklusif Anda kepada VORVAN.\n\n` +
     `Berikut rincian Tagihan Resmi Privat & Pengiriman Anda:\n` +
     `• Nomor Tagihan: #${order.invoiceId}\n` +
-    `• Flacon Parfum: ${order.house} — ${order.fragranceName} (${order.volume})\n` +
+    `• Flacon Parfum: ${order.house} — ${order.fragranceName} (${order.volume})${qtySuffix}\n` +
     extraDiscLine +
     `• Total Tagihan: ${formattedTotal}\n` +
     `${shippingSummaryLine}\n\n` +
@@ -1336,21 +1525,25 @@ export function buildInvoiceFromCustomOrder(
   order: CustomAdminOrder
 ): PrivateInvoice {
   const skuPricing = resolveVorvanSkuPricing(order.fragranceName);
+  const qty = Math.max(1, Math.round(order.quantity || 1));
   const dealPrice = order.dealPriceIDR || skuPricing?.price || 3850000;
-  const retailPriceTotalIDR =
+  const unitRetailPriceIDR =
     order.retailPriceIDR && order.retailPriceIDR > dealPrice
       ? order.retailPriceIDR
       : skuPricing && skuPricing.retail > dealPrice
       ? skuPricing.retail
       : Math.round(dealPrice / 0.72);
+  const retailPriceTotalIDR = unitRetailPriceIDR * qty;
   const discountPct =
     order.discountPct && order.discountPct > 0
       ? order.discountPct
-      : skuPricing && skuPricing.price === dealPrice
+      : skuPricing &&
+        skuPricing.price === dealPrice &&
+        skuPricing.retail === unitRetailPriceIDR
       ? skuPricing.disc
       : Math.max(
           1,
-          Math.round(((retailPriceTotalIDR - dealPrice) / retailPriceTotalIDR) * 100)
+          Math.round(((unitRetailPriceIDR - dealPrice) / unitRetailPriceIDR) * 100)
         );
 
   const isCod = isCodShippingMethod(order.shippingMethod, order.awbNumber);
@@ -1412,7 +1605,7 @@ export function buildInvoiceFromCustomOrder(
         concentration: order.concentration || 'Eau de Parfum',
         volume: order.volume || skuPricing?.size || '100ml',
         batchCode: resolveArchiveRefCode(order.fragranceName, order.batchCode),
-        quantity: 1,
+        quantity: qty,
         unitPriceIDR: dealPrice,
       },
     ],

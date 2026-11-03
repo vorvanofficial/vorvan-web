@@ -70,9 +70,12 @@ export type CloudVaultPacket =
       ts: number;
     };
 
+export const VORVAN_CLEAN_OFFICIAL_DOMAIN = 'https://vorvanofficial.com';
+
 /**
  * 1. Sends a new visitor email registration directly to VORVAN's official Gmail
  * (`vorvanlifestyle@gmail.com`) via FormSubmit AJAX HTTP POST.
+ * Strips any query strings so Gmail spam filters never flag encrypted parameters.
  */
 export async function sendVisitorLeadToGmail(params: {
   leadId: string;
@@ -85,11 +88,10 @@ export async function sendVisitorLeadToGmail(params: {
   const leadId = params.leadId.trim();
   const waktuDaftar =
     params.waktuDaftar || new Date().toLocaleString('id-ID');
-  const sumberWeb =
-    params.sumberWeb ||
-    (typeof window !== 'undefined'
-      ? window.location.href
-      : 'https://vorvan-official.vercel.app');
+  const rawSumber = (params.sumberWeb || VORVAN_CLEAN_OFFICIAL_DOMAIN).trim();
+  const cleanSumberWeb = rawSumber.includes('?')
+    ? rawSumber.split('?')[0]
+    : rawSumber;
 
   try {
     const response = await fetch(FORMSUBMIT_GMAIL_ENDPOINT, {
@@ -105,7 +107,7 @@ export async function sendVisitorLeadToGmail(params: {
         Waktu_Daftar: waktuDaftar,
         Parfum_Diminati:
           params.triggeredByFragrance || 'Katalog Umum VORVAN',
-        Sumber_Web: sumberWeb,
+        Sumber_Web: cleanSumberWeb,
       }),
     });
     return response.ok;
@@ -117,12 +119,22 @@ export async function sendVisitorLeadToGmail(params: {
 /**
  * Sends an automatic backup of a newly created Admin Invoice & Resi to VORVAN's Gmail
  * (`vorvanlifestyle@gmail.com`) via FormSubmit AJAX.
+ * Never includes long encrypted `?v=` URLs so Gmail spam filters never block the email;
+ * displays only the Official Invoice Number, concise order summary (Perfume Name & Total),
+ * and the clean official domain `https://vorvanofficial.com`.
  */
 export async function sendAdminOrderBackupToGmail(
   order: CustomAdminOrder,
-  invoiceSmartUrl: string,
-  trackingSmartUrl: string
+  _invoiceSmartUrl?: string,
+  _trackingSmartUrl?: string
 ): Promise<boolean> {
+  const qty = Math.max(1, Math.round(order.quantity || 1));
+  const extraDisc = Math.max(0, Math.round(order.extraDiscountIDR || 0));
+  const grandTotal = Math.max(
+    0,
+    order.dealPriceIDR * qty - extraDisc + (order.shippingCostIDR || 0)
+  );
+  const qtySuffix = qty > 1 ? ` × ${qty} Flacon` : '';
   try {
     const response = await fetch(FORMSUBMIT_GMAIL_ENDPOINT, {
       method: 'POST',
@@ -131,18 +143,12 @@ export async function sendAdminOrderBackupToGmail(
         Accept: 'application/json',
       },
       body: JSON.stringify({
-        _subject: `🧾 Invoice & Resi Baru VORVAN: ${order.invoiceId} (${order.buyerName})`,
-        Kode_Invoice: order.invoiceId,
-        Nomor_Resi_AWB: order.awbNumber,
-        Kurir_Ekspedisi: order.shippingMethod,
+        _subject: `🧾 Invoice Resmi VORVAN: ${order.invoiceId} (${order.buyerName})`,
+        Nomor_Invoice_Resmi: order.invoiceId,
         Nama_Pembeli: order.buyerName,
-        Kota_Tujuan: order.buyerCity,
-        Parfum: `${order.house} — ${order.fragranceName} (${order.volume})`,
-        Harga_VORVAN: `Rp ${order.dealPriceIDR.toLocaleString('id-ID')}`,
-        Ongkir: `Rp ${(order.shippingCostIDR || 0).toLocaleString('id-ID')}`,
-        Status_Bayar: order.status,
-        Link_Tagihan_Pembeli: invoiceSmartUrl,
-        Link_Cek_Resi_Pembeli: trackingSmartUrl,
+        Parfum: `${order.house} — ${order.fragranceName} (${order.volume})${qtySuffix}`,
+        Total_Tagihan: `Rp ${grandTotal.toLocaleString('id-ID')}`,
+        Website_Resmi: VORVAN_CLEAN_OFFICIAL_DOMAIN,
         Waktu_Terbit: order.createdAt,
       }),
     });
@@ -155,6 +161,9 @@ export async function sendAdminOrderBackupToGmail(
 /**
  * Fires an automatic HTTP POST to the official VORVAN Google Apps Script webhook
  * to immediately dispatch the luxury invoice email directly to the buyer's inbox.
+ * Anti-Spam Guaranteed: Never sends long encrypted query-string URLs (`?v=...`) in the email;
+ * includes only the Official Invoice Number, concise order details (Perfume Name & Total),
+ * and the clean short domain `https://vorvanofficial.com`.
  */
 export async function sendBuyerInvoiceEmailWebhook(params: {
   buyerEmail: string;
@@ -162,10 +171,15 @@ export async function sendBuyerInvoiceEmailWebhook(params: {
   invNo: string;
   itemName: string;
   totalPrice: string;
-  invoiceUrl: string;
+  invoiceUrl?: string;
 }): Promise<boolean> {
   const buyerEmail = params.buyerEmail.trim();
   if (!buyerEmail) return false;
+
+  const cleanInvNo = params.invNo.trim();
+  const cleanBuyerName = params.buyerName.trim();
+  const cleanItemName = params.itemName.trim();
+  const cleanTotalPrice = params.totalPrice.trim();
 
   try {
     await fetch(VORVAN_EMAIL_WEBHOOK, {
@@ -176,11 +190,17 @@ export async function sendBuyerInvoiceEmailWebhook(params: {
       },
       body: JSON.stringify({
         buyerEmail,
-        buyerName: params.buyerName.trim(),
-        invNo: params.invNo.trim(),
-        itemName: params.itemName.trim(),
-        totalPrice: params.totalPrice.trim(),
-        invoiceUrl: params.invoiceUrl.trim(),
+        buyerName: cleanBuyerName,
+        invNo: cleanInvNo,
+        itemName: cleanItemName,
+        totalPrice: cleanTotalPrice,
+        invoiceUrl: VORVAN_CLEAN_OFFICIAL_DOMAIN,
+        websiteUrl: VORVAN_CLEAN_OFFICIAL_DOMAIN,
+        emailSummary:
+          `Nomor Invoice Resmi: #${cleanInvNo}\n` +
+          `Pesanan Parfum: ${cleanItemName}\n` +
+          `Total Tagihan: ${cleanTotalPrice}\n` +
+          `Website Resmi: ${VORVAN_CLEAN_OFFICIAL_DOMAIN} (Masukkan Nomor Invoice #${cleanInvNo} pada menu INVOICE)`,
       }),
     });
     return true;
