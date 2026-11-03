@@ -502,6 +502,9 @@
    VORVAN LEGAL SHIELD — MANDATORY CLICKWRAP AGREEMENT & ANTI-DISPUTE MODULE
    ============================================================================ */
 #vorvan-legal-shield {
+  position: relative;
+  z-index: 40;
+  pointer-events: auto;
   margin-top: 20px;
   border: 1px solid #d4af37;
   border-radius: 8px;
@@ -529,6 +532,10 @@
 }
 
 #btn-toggle-legal {
+  position: relative;
+  z-index: 50;
+  pointer-events: auto;
+  touch-action: manipulation;
   background: none;
   border: 1px solid #d4af37;
   color: #92400e;
@@ -542,6 +549,7 @@
 #vorvan-legal-clauses {
   max-height: 135px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   font-size: 11.5px;
   line-height: 1.55;
   color: #374151;
@@ -565,11 +573,16 @@
 }
 
 .vorvan-clickwrap-label {
+  position: relative;
+  z-index: 50;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(212, 175, 55, 0.25);
   display: flex;
   align-items: flex-start;
   gap: 10px;
   cursor: pointer;
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: #fef3c7;
   border: 1px solid #f59e0b;
   border-radius: 6px;
@@ -578,9 +591,13 @@
 }
 
 #vorvan-agree-checkbox {
+  position: relative;
+  z-index: 50;
+  pointer-events: auto;
+  touch-action: manipulation;
   margin-top: 3px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   accent-color: #b45309;
   cursor: pointer;
   flex-shrink: 0;
@@ -591,6 +608,7 @@
   font-weight: 700;
   line-height: 1.45;
   color: #78350f;
+  pointer-events: none;
 }
 
 #vorvan-legal-timestamp-log {

@@ -494,7 +494,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const [paypalImgFailed, setPaypalImgFailed] = useState<boolean>(false);
   const [inputError, setInputError] = useState<string | null>(null);
   const [isLegalDetailOpen, setIsLegalDetailOpen] = useState<boolean>(false);
-  const [isLegalAgreed, setIsLegalAgreed] = useState<boolean>(false);
+  const [isAgreed, setIsAgreed] = useState<boolean>(false);
   const [legalAgreedTimestamp, setLegalAgreedTimestamp] = useState<string>('');
 
   // Tahap 2 & 3: Upload Bukti Pembayaran state
@@ -542,36 +542,41 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
   const isInvoiceVisible = isUnlocked && Boolean(matchedInvoice);
 
-  // Force full reset of legal checkbox, proof preview, and modal whenever switching invoices
+  const activeInvoiceKey = (
+    matchedInvoice?.invoiceId ||
+    submittedInvoiceId ||
+    invoiceId ||
+    smartOrder?.invoiceId ||
+    ''
+  )
+    .trim()
+    .toUpperCase();
+
+  // Force full reset of legal checkbox, proof preview, and modal ONLY when switching to a different invoice ID
   useEffect(() => {
-    setIsLegalAgreed(false);
+    setIsAgreed(false);
     setLegalAgreedTimestamp('');
     setProofError(null);
     setIsProofModalOpen(false);
-  }, [submittedInvoiceId, baseInvoice.invoiceId, invoiceId, smartOrder?.invoiceId]);
+  }, [activeInvoiceKey]);
 
-  // Synchronize payment proof strictly by the exact unique baseInvoice.invoiceId
+  // Synchronize payment proof strictly by the exact unique activeInvoiceKey (without resetting local isAgreed state)
   useEffect(() => {
-    if (!matchedInvoice) {
+    if (!activeInvoiceKey) {
       setPaymentProofUrl('');
       setPaymentProofUploadedAt('');
-      setIsLegalAgreed(false);
-      setLegalAgreedTimestamp('');
-      setProofError(null);
-      setIsProofModalOpen(false);
       return;
     }
 
-    const exactInvKey = matchedInvoice.invoiceId.trim().toUpperCase();
     const proofsMap = loadPaymentProofsMap();
-    const stored = proofsMap[exactInvKey];
+    const stored = proofsMap[activeInvoiceKey];
     const resolvedProof =
-      matchedInvoice.paymentProof ||
-      matchedInvoice.paymentProofUrl ||
+      matchedInvoice?.paymentProof ||
+      matchedInvoice?.paymentProofUrl ||
       stored?.proofUrl ||
       '';
     const resolvedUploadedAt =
-      matchedInvoice.paymentProofUploadedAt || stored?.uploadedAt || '';
+      matchedInvoice?.paymentProofUploadedAt || stored?.uploadedAt || '';
 
     if (resolvedProof) {
       setPaymentProofUrl(resolvedProof);
@@ -579,18 +584,12 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     } else {
       setPaymentProofUrl('');
       setPaymentProofUploadedAt('');
-      setIsLegalAgreed(false);
-      setLegalAgreedTimestamp('');
-      setProofError(null);
-      setIsProofModalOpen(false);
     }
   }, [
-    submittedInvoiceId,
-    matchedInvoice,
-    baseInvoice.invoiceId,
-    baseInvoice.paymentProof,
-    baseInvoice.paymentProofUrl,
-    baseInvoice.paymentProofUploadedAt,
+    activeInvoiceKey,
+    matchedInvoice?.paymentProof,
+    matchedInvoice?.paymentProofUrl,
+    matchedInvoice?.paymentProofUploadedAt,
   ]);
 
   const totals = calculateInvoiceTotals(baseInvoice);
@@ -628,12 +627,10 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   };
 
   const handleToggleLegalAgree = (checked: boolean) => {
+    setIsAgreed(checked);
     if (checked) {
-      const nowWIB = formatLegalTimestampWIB(new Date());
-      setIsLegalAgreed(true);
-      setLegalAgreedTimestamp(nowWIB);
+      setLegalAgreedTimestamp(formatLegalTimestampWIB(new Date()));
     } else {
-      setIsLegalAgreed(false);
       setLegalAgreedTimestamp('');
     }
   };
@@ -760,13 +757,13 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   // Tahap 1: isPaymentUnlocked = false (Klausul belum dicentang -> Semua terkunci)
   // Tahap 2: isPaymentUnlocked = true, hasProof = false (Klausul dicentang, tapi bukti belum diupload -> Tab rekening & kotak upload terbuka, tombol konfirmasi TERKUNCI)
   // Tahap 3: isConfirmationUnlocked = true (Bukti terupload / status PAID -> Tombol konfirmasi AKTIF)
-  const isPaymentUnlocked = baseInvoice.status === 'PAID' || isLegalAgreed;
+  const isPaymentUnlocked = baseInvoice.status === 'PAID' || isAgreed;
   const hasProof = Boolean(paymentProofUrl) || baseInvoice.status === 'PAID';
   const isConfirmationUnlocked = isPaymentUnlocked && hasProof;
 
   return (
     <section
-      className="py-12 sm:py-16 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8"
+      className="py-12 sm:py-16 pb-[120px] sm:pb-[120px] max-w-5xl mx-auto px-4 sm:px-6 lg:px-8"
       aria-labelledby="private-invoice-heading"
     >
       {/* Top Bar */}
@@ -1237,27 +1234,40 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   </p>
                 </div>
 
-                {/* Kotak Centang Persetujuan Wajib (Clickwrap) */}
-                <label
-                  htmlFor="vorvan-agree-checkbox"
-                  className="vorvan-clickwrap-label"
+                {/* Kotak Centang Persetujuan Wajib (Clickwrap) — Full Touch Target for iOS Safari & Android */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={isAgreed}
+                  data-testid="vorvan-clickwrap-box"
+                  onClick={() => handleToggleLegalAgree(!isAgreed)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleToggleLegalAgree(!isAgreed);
+                    }
+                  }}
+                  className="vorvan-clickwrap-label relative z-50 cursor-pointer pointer-events-auto select-none"
                 >
                   <input
                     type="checkbox"
                     id="vorvan-agree-checkbox"
-                    checked={isLegalAgreed}
+                    data-testid="vorvan-agree-checkbox"
+                    checked={isAgreed}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={(e) => handleToggleLegalAgree(e.target.checked)}
+                    className="relative z-50 cursor-pointer pointer-events-auto"
                   />
-                  <span className="vorvan-clickwrap-text">
+                  <span className="vorvan-clickwrap-text pointer-events-none">
                     SAYA TELAH MEMBACA, MEMAHAMI, DAN MENYETUJUI SECARA SADAR
                     SELURUH KETENTUAN FINAL SALE, KEBIJAKAN NON-RETUR, SERTA
                     PELEPASAN KLAIM SUBJEKTIF AROMA &amp; PERSPEKTIF PRIBADI
                     VORVAN DI ATAS.
                   </span>
-                </label>
+                </div>
 
                 {/* Log Timestamp Persetujuan */}
-                {isLegalAgreed && legalAgreedTimestamp && (
+                {isAgreed && legalAgreedTimestamp && (
                   <div id="vorvan-legal-timestamp-log">
                     ✓ Persetujuan Layanan Elektronik Tercatat:{' '}
                     {legalAgreedTimestamp}
