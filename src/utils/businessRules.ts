@@ -1063,10 +1063,17 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
     ? `${priceK}:${shipK}`
     : String(priceK);
   const statusDigit = order.status === 'PAID' ? '1' : '0';
-  const courierCode = encodeCourierShort(order.shippingMethod);
-  const awb = isCodShippingMethod(order.shippingMethod, order.awbNumber)
-    ? ''
-    : sanitize(order.awbNumber || '');
+  const isCod =
+    typeof order.isCOD === 'boolean'
+      ? order.isCOD
+      : isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const rawCourierCode = encodeCourierShort(order.shippingMethod);
+  const courierCode = isCod
+    ? 'COD'
+    : rawCourierCode === 'COD'
+    ? 'JNE'
+    : rawCourierCode;
+  const awb = isCod ? '' : sanitize(order.awbNumber || '');
   const buyer = sanitize(order.buyerName);
   const city = sanitize(order.buyerCity);
 
@@ -1385,6 +1392,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             shippingCostIDR,
             shippingLabel,
             shippingMethod,
+            isCOD: isCod,
             awbNumber,
             status,
           };
@@ -1404,7 +1412,14 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
     const json = decodeURIComponent(decodedUri);
     const parsed = JSON.parse(json) as CustomAdminOrder;
     if (parsed && parsed.invoiceId && parsed.buyerName) {
-      return parsed;
+      const parsedIsCod =
+        typeof parsed.isCOD === 'boolean'
+          ? parsed.isCOD
+          : isCodShippingMethod(parsed.shippingMethod, parsed.awbNumber);
+      return {
+        ...parsed,
+        isCOD: parsedIsCod,
+      };
     }
     return null;
   } catch {
@@ -1514,6 +1529,29 @@ export function parseAutoOpenInvoiceUrl(
     };
   }
 
+  const rawCodParam = (
+    searchParams.get('cod') ||
+    searchParams.get('isCOD') ||
+    hashParams.get('cod') ||
+    hashParams.get('isCOD') ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+
+  if (decodedSmartOrder && (rawCodParam === '1' || rawCodParam === 'true' || rawCodParam === '0' || rawCodParam === 'false')) {
+    const explicitCod = rawCodParam === '1' || rawCodParam === 'true';
+    decodedSmartOrder = {
+      ...decodedSmartOrder,
+      isCOD: explicitCod,
+      shippingMethod: explicitCod
+        ? 'COD / Tatap Muka'
+        : isCodShippingMethod(decodedSmartOrder.shippingMethod)
+        ? 'JNE'
+        : decodedSmartOrder.shippingMethod,
+    };
+  }
+
   const finalInvoiceId = (
     explicitId ||
     decodedSmartOrder?.invoiceId ||
@@ -1539,7 +1577,7 @@ export function parseAutoOpenInvoiceUrl(
 }
 
 /**
- * Generates an Auto-Open Smart Shareable URL (`?v=...&inv=...&id=...`) for Email & WhatsApp/Telegram.
+ * Generates an Auto-Open Smart Shareable URL (`?v=...&inv=...&id=...&cod=...`) for Email & WhatsApp/Telegram.
  * Uses dynamic domain detection so moving to custom domains (.com / .id) works seamlessly.
  */
 export function buildSmartShareUrl(
@@ -1547,16 +1585,24 @@ export function buildSmartShareUrl(
   mode: 'invoice' | 'track',
   originOverride?: string
 ): string {
-  const token = encodeSmartOrderParam(order);
+  const isCod =
+    typeof order.isCOD === 'boolean'
+      ? order.isCOD
+      : isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const normalizedOrder: CustomAdminOrder = {
+    ...order,
+    isCOD: isCod,
+  };
+  const token = encodeSmartOrderParam(normalizedOrder);
   const origin = originOverride || getVorvanBaseDomain();
   if (mode === 'invoice') {
     const cleanInvId = order.invoiceId.trim().toUpperCase();
     return `${origin}/pay/${cleanInvId}?v=${token}&inv=${token}&id=${encodeURIComponent(
       cleanInvId
-    )}`;
+    )}&cod=${isCod ? '1' : '0'}`;
   }
   const trackCode = (order.awbNumber || order.trackingId || order.invoiceId).trim();
-  return `${origin}/track/${encodeURIComponent(trackCode)}?v=${token}`;
+  return `${origin}/track/${encodeURIComponent(trackCode)}?v=${token}&cod=${isCod ? '1' : '0'}`;
 }
 
 
@@ -1597,7 +1643,10 @@ export function buildBuyerInvoiceWhatsAppUrl(
 
   const normalizedPhone = normalizeIndonesianPhoneNumber(order.buyerPhone || '');
 
-  const isCod = isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const isCod =
+    typeof order.isCOD === 'boolean'
+      ? order.isCOD
+      : isCodShippingMethod(order.shippingMethod, order.awbNumber);
   const hasAwb = hasValidCourierAwb(order);
   const shippingSummaryLine = isCod
     ? `• Metode Serah Terima: 🤝 COD / Serah Terima Tatap Muka Langsung (Tanpa Resi Ekspedisi)`
@@ -1631,6 +1680,56 @@ export function buildBuyerInvoiceWhatsAppUrl(
   return `https://wa.me/${phoneTarget}?text=${encodeURIComponent(message)}`;
 }
 
+/**
+ * Formats the complete buyer & package shipping data string for 1-click clipboard copying by Admin
+ * when preparing courier labels / AWB input:
+ * `Penerima: [Nama] | WA: [No_WA] | Email: [Email] | Alamat: [Alamat Lengkap] | Item: [Parfum] (#[No_Invoice])`
+ */
+export function buildAdminPackageCopyText(order: CustomAdminOrder): string {
+  const buyerName = (order.buyerName || '-').trim() || '-';
+  const buyerPhone = (order.buyerPhone || '-').trim() || '-';
+  const buyerEmail = (order.buyerEmail || '-').trim() || '-';
+  const fullAddress = (order.buyerCity || '-').trim() || '-';
+  const qty = Math.max(1, Math.round(order.quantity || 1));
+  const volume = (order.volume || '100ml').trim();
+  const qtyPart = qty > 1 ? ` × ${qty} Botol` : ` (${qty} Botol)`;
+  const itemSummary = `${order.house} — ${order.fragranceName} ${volume}${qtyPart}`;
+  const invId = (order.invoiceId || '').trim().toUpperCase();
+
+  return `Penerima: ${buyerName} | WA: ${buyerPhone} | Email: ${buyerEmail} | Alamat: ${fullAddress} | Item: ${itemSummary} (#${invId})`;
+}
+
+/**
+ * Builds a direct WhatsApp chat URL to the buyer's phone number so Admin can quickly message
+ * the buyer regarding shipping / AWB / order updates.
+ */
+export function buildDirectBuyerWhatsAppUrl(order: CustomAdminOrder): string {
+  const normalizedPhone = normalizeIndonesianPhoneNumber(order.buyerPhone || '');
+  const phoneTarget = normalizedPhone || VORVAN_WHATSAPP_NUMBER;
+  const qty = Math.max(1, Math.round(order.quantity || 1));
+  const volume = (order.volume || '100ml').trim();
+  const isCod =
+    typeof order.isCOD === 'boolean'
+      ? order.isCOD
+      : isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const hasAwb = hasValidCourierAwb(order);
+
+  const resiLine = isCod
+    ? `Metode Pengiriman: COD / Serah Terima Tatap Muka Langsung`
+    : hasAwb
+    ? `Kurir & No. Resi: ${order.shippingMethod} — ${order.awbNumber}`
+    : `Kurir Pengiriman: ${order.shippingMethod}`;
+
+  const message =
+    `Halo ${order.buyerName}, kami dari VORVAN Official Concierge menghubungi Anda terkait pesanan #${order.invoiceId}:\n\n` +
+    `• Item: ${order.house} — ${order.fragranceName} (${volume}) × ${qty}\n` +
+    `• Alamat Tujuan: ${order.buyerCity}\n` +
+    `• ${resiLine}\n\n` +
+    `Terima kasih atas kepercayaan Anda pada VORVAN.`;
+
+  return `https://wa.me/${phoneTarget}?text=${encodeURIComponent(message)}`;
+}
+
 export function buildInvoiceFromCustomOrder(
   order: CustomAdminOrder
 ): PrivateInvoice {
@@ -1656,8 +1755,16 @@ export function buildInvoiceFromCustomOrder(
           Math.round(((unitRetailPriceIDR - dealPrice) / unitRetailPriceIDR) * 100)
         );
 
-  const isCod = isCodShippingMethod(order.shippingMethod, order.awbNumber);
-  const hasAwb = hasValidCourierAwb(order);
+  const isCod =
+    typeof order.isCOD === 'boolean'
+      ? order.isCOD
+      : isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const effectiveShippingMethod: ShippingMethodType = isCod
+    ? 'COD / Tatap Muka'
+    : isCodShippingMethod(order.shippingMethod)
+    ? 'JNE'
+    : order.shippingMethod;
+  const hasAwb = !isCod && hasValidCourierAwb(order);
   const detectedZone = autoDetectShippingZoneByCity(order.buyerCity);
   const shippingInsuranceIDR =
     typeof order.shippingCostIDR === 'number'
@@ -1679,8 +1786,8 @@ export function buildInvoiceFromCustomOrder(
   const shippingNoteText = isCod
     ? `Metode Penyerahan: ${COD_FACE_TO_FACE_STATUS_LABEL}.`
     : hasAwb
-    ? `Metode Pengiriman: ${order.shippingMethod} (Resi: ${order.awbNumber}). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`
-    : `Metode Pengiriman: ${order.shippingMethod} (Resi diisi menyusul setelah pembayaran lunas & barang dikirim). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`;
+    ? `Metode Pengiriman: ${effectiveShippingMethod} (Resi: ${order.awbNumber}). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`
+    : `Metode Pengiriman: ${effectiveShippingMethod} (Resi diisi menyusul setelah pembayaran lunas & barang dikirim). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`;
 
   return {
     invoiceId: order.invoiceId.toUpperCase(),
@@ -1703,6 +1810,8 @@ export function buildInvoiceFromCustomOrder(
     discountPct,
     extraDiscountIDR: Math.max(0, Math.round(order.extraDiscountIDR || 0)),
     shippingLabel,
+    shippingMethod: effectiveShippingMethod,
+    isCOD: isCod,
     paymentProof: resolvedProof,
     paymentProofUrl: resolvedProof,
     paymentProofUploadedAt: order.paymentProofUploadedAt,
@@ -2285,6 +2394,27 @@ export function lookupPrivateInvoice(
       );
     });
     if (matchedCustom) {
+      if (
+        smartOrder &&
+        (smartOrder.invoiceId || '').trim().toUpperCase() ===
+          (matchedCustom.invoiceId || '').trim().toUpperCase()
+      ) {
+        const mergedOrder: CustomAdminOrder = {
+          ...matchedCustom,
+          ...smartOrder,
+          status:
+            matchedCustom.status === 'PAID' || smartOrder.status === 'PAID'
+              ? 'PAID'
+              : smartOrder.status,
+          paymentProof: matchedCustom.paymentProof || smartOrder.paymentProof,
+          paymentProofUrl:
+            matchedCustom.paymentProofUrl || smartOrder.paymentProofUrl,
+          paymentProofUploadedAt:
+            matchedCustom.paymentProofUploadedAt ||
+            smartOrder.paymentProofUploadedAt,
+        };
+        return attachProof(buildInvoiceFromCustomOrder(mergedOrder));
+      }
       return attachProof(buildInvoiceFromCustomOrder(matchedCustom));
     }
   }
@@ -2303,7 +2433,23 @@ export function lookupPrivateInvoice(
         (o.invoiceId || '').trim().toUpperCase() ===
         (smartOrder.invoiceId || '').trim().toUpperCase()
     );
-    return attachProof(buildInvoiceFromCustomOrder(updatedMatch || smartOrder));
+    const mergedOrder: CustomAdminOrder = updatedMatch
+      ? {
+          ...updatedMatch,
+          ...smartOrder,
+          status:
+            updatedMatch.status === 'PAID' || smartOrder.status === 'PAID'
+              ? 'PAID'
+              : smartOrder.status,
+          paymentProof: updatedMatch.paymentProof || smartOrder.paymentProof,
+          paymentProofUrl:
+            updatedMatch.paymentProofUrl || smartOrder.paymentProofUrl,
+          paymentProofUploadedAt:
+            updatedMatch.paymentProofUploadedAt ||
+            smartOrder.paymentProofUploadedAt,
+        }
+      : smartOrder;
+    return attachProof(buildInvoiceFromCustomOrder(mergedOrder));
   }
 
   if (!normalized || normalized === 'INV-SAMPLE') {
@@ -2331,6 +2477,7 @@ export function lookupPrivateInvoice(
     const detectedZone = autoDetectShippingZoneByCity(seed.buyerCity);
     return attachProof({
       ...seed,
+      isCOD: Boolean(seed.isCOD),
       retailPriceTotalIDR: seed.retailPriceTotalIDR ?? retailSum,
       discountPct: seed.discountPct ?? discPct,
       shippingLabel:

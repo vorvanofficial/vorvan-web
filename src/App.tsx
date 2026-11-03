@@ -594,8 +594,8 @@ export default function App() {
                   o.status === 'PAID' ||
                   smartOrd.status === 'PAID';
                 return {
-                  ...smartOrd,
                   ...o,
+                  ...smartOrd,
                   status: isPaid ? ('PAID' as const) : smartOrd.status,
                   paymentProof: proofImg,
                   paymentProofUrl: proofImg,
@@ -980,6 +980,7 @@ export default function App() {
       const nextOrder: CustomAdminOrder = {
         ...o,
         shippingMethod,
+        isCOD: isCod,
         awbNumber: cleanAwb,
         trackingId: cleanAwb || o.invoiceId,
         shippingStage: nextStage,
@@ -1015,6 +1016,9 @@ export default function App() {
               extraDiscountIDR: updatedOrder.extraDiscountIDR,
               shippingCostIDR: updatedOrder.shippingCostIDR,
               shippingLabel: updatedOrder.shippingLabel,
+              shippingMethod: updatedOrder.shippingMethod,
+              isCOD: updatedOrder.isCOD,
+              awbNumber: updatedOrder.awbNumber,
             }
           : o
       );

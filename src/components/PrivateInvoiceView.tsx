@@ -35,6 +35,7 @@ import {
   compressPaymentProofImage,
   formatIDRCurrency,
   formatLegalTimestampWIB,
+  isCodShippingMethod,
   loadCustomAdminOrders,
   loadPaymentProofsMap,
   loadVorvanSettings,
@@ -491,7 +492,31 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   });
   const [activePaymentTab, setActivePaymentTab] = useState<
     'bank_transfer' | 'cod_hand_delivery' | 'international_paypal'
-  >('bank_transfer');
+  >(() => {
+    const targetCode = (invoiceId || smartOrder?.invoiceId || '').trim();
+    const initialInv =
+      targetCode || smartOrder
+        ? lookupPrivateInvoice(targetCode, customOrders, smartOrder) ||
+          (isDirectLink && targetCode
+            ? resolvePrivateInvoice(targetCode, customOrders, smartOrder)
+            : null)
+        : null;
+    const initialCod =
+      typeof initialInv?.isCOD === 'boolean'
+        ? initialInv.isCOD
+        : Boolean(
+            (initialInv?.shippingMethod &&
+              isCodShippingMethod(initialInv.shippingMethod)) ||
+              (smartOrder &&
+                (typeof smartOrder.isCOD === 'boolean'
+                  ? smartOrder.isCOD
+                  : isCodShippingMethod(
+                      smartOrder.shippingMethod,
+                      smartOrder.awbNumber
+                    )))
+          );
+    return initialCod ? 'cod_hand_delivery' : 'bank_transfer';
+  });
   const [copiedAccountKey, setCopiedAccountKey] = useState<string | null>(null);
   const [paypalImgFailed, setPaypalImgFailed] = useState<boolean>(false);
   const [inputError, setInputError] = useState<string | null>(null);
@@ -553,6 +578,29 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const baseInvoice: PrivateInvoice =
     matchedInvoice || resolvePrivateInvoice('INV-SAMPLE');
 
+  const isCodOrder =
+    typeof baseInvoice.isCOD === 'boolean'
+      ? baseInvoice.isCOD
+      : Boolean(
+          (baseInvoice.shippingMethod &&
+            isCodShippingMethod(baseInvoice.shippingMethod)) ||
+            (smartOrder &&
+              (typeof smartOrder.isCOD === 'boolean'
+                ? smartOrder.isCOD
+                : isCodShippingMethod(
+                    smartOrder.shippingMethod,
+                    smartOrder.awbNumber
+                  )))
+        );
+
+  const effectivePaymentTab:
+    | 'bank_transfer'
+    | 'cod_hand_delivery'
+    | 'international_paypal' =
+    !isCodOrder && activePaymentTab === 'cod_hand_delivery'
+      ? 'bank_transfer'
+      : activePaymentTab;
+
   const isInvoiceVisible = isUnlocked && Boolean(matchedInvoice);
 
   const activeInvoiceKey = (
@@ -565,13 +613,25 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     .trim()
     .toUpperCase();
 
+  // Auto-select TAB 2 (COD) when isCodOrder is true, or force TAB 1 (Bank Transfer & QRIS) when isCodOrder is false
+  useEffect(() => {
+    if (isCodOrder) {
+      setActivePaymentTab('cod_hand_delivery');
+    } else {
+      setActivePaymentTab((prev) =>
+        prev === 'cod_hand_delivery' ? 'bank_transfer' : prev
+      );
+    }
+  }, [activeInvoiceKey, isCodOrder]);
+
   // Force full reset of legal checkbox, proof preview, and modal ONLY when switching to a different invoice ID
   useEffect(() => {
     setIsAgreed(false);
     setLegalAgreedTimestamp('');
     setProofError(null);
     setIsProofModalOpen(false);
-  }, [activeInvoiceKey]);
+    setActivePaymentTab(isCodOrder ? 'cod_hand_delivery' : 'bank_transfer');
+  }, [activeInvoiceKey, isCodOrder]);
 
   // Synchronize payment proof strictly by the exact unique activeInvoiceKey (without resetting local isAgreed state)
   useEffect(() => {
@@ -656,9 +716,9 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     activeSettings.telegramUsername.replace(/^@/, '') || 'vorvanofficial';
 
   const paymentMethodLabel =
-    activePaymentTab === 'bank_transfer'
-      ? 'Transfer Bank Resmi (Mandiri / BNI / BRI)'
-      : activePaymentTab === 'cod_hand_delivery'
+    effectivePaymentTab === 'bank_transfer'
+      ? 'Transfer Bank Resmi & QRIS (Mandiri / BNI / BRI)'
+      : effectivePaymentTab === 'cod_hand_delivery'
       ? 'COD / Private Hand-Delivery'
       : 'International Payment (PayPal / SWIFT)';
 
@@ -1302,31 +1362,22 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               <button
                 type="button"
                 role="tab"
-                disabled={!isPaymentUnlocked}
-                aria-selected={activePaymentTab === 'bank_transfer'}
-                onClick={() =>
-                  isPaymentUnlocked && setActivePaymentTab('bank_transfer')
-                }
+                aria-selected={effectivePaymentTab === 'bank_transfer'}
+                onClick={() => setActivePaymentTab('bank_transfer')}
                 className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                  !isPaymentUnlocked
-                    ? 'bg-zinc-900/80 text-zinc-400 border-zinc-700 cursor-not-allowed opacity-75'
-                    : activePaymentTab === 'bank_transfer'
+                  effectivePaymentTab === 'bank_transfer'
                     ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
                     : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
                 }`}
                 data-testid="payment-tab-bank"
               >
-                {!isPaymentUnlocked ? (
-                  <Lock className="w-5 h-5 shrink-0 mt-0.5 text-zinc-400" />
-                ) : (
-                  <Building2 className="w-5 h-5 shrink-0 mt-0.5" />
-                )}
+                <Building2 className="w-5 h-5 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 1 · INDONESIA {!isPaymentUnlocked && '(TERKUNCI)'}
+                    TAB 1 · TRANSFER BANK RESMI &amp; QRIS
                   </p>
                   <p className="text-xs sm:text-sm font-semibold mt-0.5">
-                    TRANSFER BANK RESMI (INDONESIA)
+                    TRANSFER BANK RESMI &amp; QRIS (INDONESIA)
                   </p>
                 </div>
               </button>
@@ -1334,62 +1385,68 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               <button
                 type="button"
                 role="tab"
-                disabled={!isPaymentUnlocked}
-                aria-selected={activePaymentTab === 'cod_hand_delivery'}
-                onClick={() =>
-                  isPaymentUnlocked && setActivePaymentTab('cod_hand_delivery')
+                disabled={!isCodOrder}
+                aria-disabled={!isCodOrder}
+                aria-selected={
+                  isCodOrder && effectivePaymentTab === 'cod_hand_delivery'
                 }
+                onClick={() => {
+                  if (isCodOrder) {
+                    setActivePaymentTab('cod_hand_delivery');
+                  }
+                }}
                 className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                  !isPaymentUnlocked
-                    ? 'bg-zinc-900/80 text-zinc-400 border-zinc-700 cursor-not-allowed opacity-75'
-                    : activePaymentTab === 'cod_hand_delivery'
+                  !isCodOrder
+                    ? 'bg-zinc-900/85 text-zinc-400 border-zinc-700/90 cursor-not-allowed opacity-80'
+                    : effectivePaymentTab === 'cod_hand_delivery'
                     ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
                     : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
                 }`}
                 data-testid="payment-tab-cod"
               >
-                {!isPaymentUnlocked ? (
-                  <Lock className="w-5 h-5 shrink-0 mt-0.5 text-zinc-400" />
+                {!isCodOrder ? (
+                  <Lock className="w-5 h-5 shrink-0 mt-0.5 text-amber-400/80" />
                 ) : (
                   <Truck className="w-5 h-5 shrink-0 mt-0.5" />
                 )}
                 <div>
                   <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 2 · PRIVATE COURIER {!isPaymentUnlocked && '(TERKUNCI)'}
+                    TAB 2 · PRIVATE COURIER — COD / PRIVATE HAND-DELIVERY
                   </p>
-                  <p className="text-xs sm:text-sm font-semibold mt-0.5">
-                    COD / PRIVATE HAND-DELIVERY (AREA TERDEKAT)
-                  </p>
+                  {!isCodOrder ? (
+                    <p
+                      className="text-xs font-semibold mt-1 text-amber-300/90"
+                      data-testid="cod-tab-locked-badge"
+                    >
+                      🔒 Terkunci — Khusus Area COD yang Disetujui Concierge
+                    </p>
+                  ) : (
+                    <p
+                      className="text-xs sm:text-sm font-semibold mt-0.5"
+                      data-testid="cod-tab-unlocked-badge"
+                    >
+                      COD / PRIVATE HAND-DELIVERY (AREA TERDEKAT)
+                    </p>
+                  )}
                 </div>
               </button>
 
               <button
                 type="button"
                 role="tab"
-                disabled={!isPaymentUnlocked}
-                aria-selected={activePaymentTab === 'international_paypal'}
-                onClick={() =>
-                  isPaymentUnlocked &&
-                  setActivePaymentTab('international_paypal')
-                }
+                aria-selected={effectivePaymentTab === 'international_paypal'}
+                onClick={() => setActivePaymentTab('international_paypal')}
                 className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                  !isPaymentUnlocked
-                    ? 'bg-zinc-900/80 text-zinc-400 border-zinc-700 cursor-not-allowed opacity-75'
-                    : activePaymentTab === 'international_paypal'
+                  effectivePaymentTab === 'international_paypal'
                     ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
                     : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
                 }`}
                 data-testid="payment-tab-international"
               >
-                {!isPaymentUnlocked ? (
-                  <Lock className="w-5 h-5 shrink-0 mt-0.5 text-zinc-400" />
-                ) : (
-                  <Globe className="w-5 h-5 shrink-0 mt-0.5" />
-                )}
+                <Globe className="w-5 h-5 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 3 · GLOBAL SETTLEMENT{' '}
-                    {!isPaymentUnlocked && '(TERKUNCI)'}
+                    TAB 3 · GLOBAL SETTLEMENT
                   </p>
                   <p className="text-xs sm:text-sm font-semibold mt-0.5">
                     INTERNATIONAL PAYMENT (PAYPAL QR &amp; SWIFT WIRE)
@@ -1398,7 +1455,8 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </button>
             </div>
 
-            {!isPaymentUnlocked ? (
+            {!isPaymentUnlocked &&
+            !(isCodOrder && effectivePaymentTab === 'cod_hand_delivery') ? (
               <div
                 id="vorvan-bank-locked-overlay"
                 className="px-6 py-7 sm:px-10 sm:py-9 rounded-2xl bg-[#14131B] border border-dashed border-[#D4AF37]/45 text-center space-y-3"
@@ -1414,16 +1472,15 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   Silakan centang kotak persetujuan Syarat &amp; Ketentuan di
                   atas terlebih dahulu untuk membuka{' '}
                   <strong className="text-[#F5E6B8]">
-                    Tab 1, Tab 2 &amp; Tab 3
+                    Rincian Rekening Resmi, QRIS &amp; International Payment
                   </strong>{' '}
-                  (Nomor Rekening Resmi, QRIS, COD &amp; International Payment)
                   serta Tombol Konfirmasi Pembayaran.
                 </p>
               </div>
             ) : (
               <>
                 {/* TAB 1 CONTENT: TRANSFER BANK RESMI (INDONESIA) */}
-                {activePaymentTab === 'bank_transfer' && (
+                {effectivePaymentTab === 'bank_transfer' && (
               <div
                 className="space-y-5 animate-fade-up"
                 data-testid="payment-content-bank"
@@ -1585,7 +1642,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
             )}
 
             {/* TAB 2 CONTENT: COD / PRIVATE HAND-DELIVERY (AREA TERDEKAT) */}
-            {activePaymentTab === 'cod_hand_delivery' && (
+            {isCodOrder && effectivePaymentTab === 'cod_hand_delivery' && (
               <div
                 className="p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-[#171622] to-[#100F16] border border-[#D4AF37]/45 space-y-4 animate-fade-up"
                 data-testid="payment-content-cod"
@@ -1617,7 +1674,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
             )}
 
             {/* TAB 3 CONTENT: INTERNATIONAL PAYMENT (PAYPAL QR & SWIFT WIRE) */}
-            {activePaymentTab === 'international_paypal' && (
+            {effectivePaymentTab === 'international_paypal' && (
               <div
                 className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-up"
                 data-testid="payment-content-international"

@@ -36,8 +36,10 @@ import {
 } from '../types/fragrance';
 import {
   autoDetectShippingZoneByCity,
+  buildAdminPackageCopyText,
   buildBuyerInvoiceWhatsAppUrl,
   buildConciergeRecommendationWaText,
+  buildDirectBuyerWhatsAppUrl,
   buildSmartShareUrl,
   calculateAdminTab1PricingFromDealPrice,
   calculateAdminTab1PricingFromDiscount,
@@ -82,7 +84,7 @@ const SHIPPING_ZONE_BUTTONS: {
   shortTitle: string;
   subText: string;
 }[] = [
-  { key: 'FREE_VIP', shortTitle: 'FREE VIP / COD', subText: 'Rp 0 (Gratis)' },
+  { key: 'FREE_VIP', shortTitle: 'FREE VIP Ekspedisi', subText: 'Rp 0 (Gratis)' },
   { key: 'ZONA_1', shortTitle: 'Zona 1 · Jawa & Jabodetabek', subText: 'Rp 25.000' },
   { key: 'ZONA_2', shortTitle: 'Zona 2 · Bali, Sumatera, Kal', subText: 'Rp 45.000' },
   { key: 'ZONA_3', shortTitle: 'Zona 3 · Sulawesi, NTB, NTT', subText: 'Rp 65.000' },
@@ -415,6 +417,9 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     extraDiscountIDR?: number;
     shippingCostIDR?: number;
     shippingLabel?: string;
+    shippingMethod?: ShippingMethodType;
+    isCOD?: boolean;
+    awbNumber?: string;
   }) => {
     setCreatedOrderResult((prev) => {
       if (!prev) return null;
@@ -424,6 +429,18 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       ) {
         return prev;
       }
+      const nextMethod =
+        patch.shippingMethod !== undefined
+          ? patch.shippingMethod
+          : prev.shippingMethod;
+      const nextIsCod =
+        patch.isCOD !== undefined
+          ? patch.isCOD
+          : patch.shippingMethod !== undefined
+          ? isCodShippingMethod(patch.shippingMethod)
+          : typeof prev.isCOD === 'boolean'
+          ? prev.isCOD
+          : isCodShippingMethod(prev.shippingMethod, prev.awbNumber);
       const updated: CustomAdminOrder = {
         ...prev,
         dealPriceIDR:
@@ -447,6 +464,14 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
           patch.shippingLabel !== undefined
             ? patch.shippingLabel
             : prev.shippingLabel,
+        shippingMethod: nextMethod,
+        isCOD: nextIsCod,
+        awbNumber:
+          patch.awbNumber !== undefined
+            ? patch.awbNumber
+            : nextIsCod
+            ? ''
+            : prev.awbNumber,
       };
       onUpdateCustomOrderPricing?.(updated);
       return updated;
@@ -491,9 +516,35 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     setSelectedShippingZone(zoneKey);
     setShippingCostIDR(String(zone.cost));
     setShippingLabel(zone.label);
+    const nextExpeditionMethod: ShippingMethodType = isCodShippingMethod(
+      shippingMethod
+    )
+      ? 'JNE'
+      : shippingMethod;
+    if (isCodShippingMethod(shippingMethod)) {
+      setShippingMethod('JNE');
+    }
     syncActiveOrderWithPricing({
       shippingCostIDR: zone.cost,
       shippingLabel: zone.label,
+      shippingMethod: nextExpeditionMethod,
+      isCOD: false,
+    });
+  };
+
+  const handleApplyCodHandDelivery = () => {
+    const codLabel = 'COD / Private Hand-Delivery (Area Terdekat — Rp 0)';
+    setSelectedShippingZone('FREE_VIP');
+    setShippingCostIDR('0');
+    setShippingLabel(codLabel);
+    setShippingMethod('COD / Tatap Muka');
+    setAwbNumber('');
+    syncActiveOrderWithPricing({
+      shippingCostIDR: 0,
+      shippingLabel: codLabel,
+      shippingMethod: 'COD / Tatap Muka',
+      isCOD: true,
+      awbNumber: '',
     });
   };
 
@@ -641,6 +692,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       shippingCostIDR: numericShipCost,
       shippingLabel: cleanShipLabel,
       shippingMethod,
+      isCOD: isCodOrder,
       awbNumber: cleanAwb,
       shippingStage: isCodOrder ? 2 : cleanAwb ? 2 : 1,
       status: 'PENDING_PAYMENT',
@@ -1421,12 +1473,14 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                     </div>
 
                     <div
-                      className="grid grid-cols-2 sm:grid-cols-5 gap-2"
+                      className="grid grid-cols-2 sm:grid-cols-6 gap-2"
                       role="group"
                       aria-label="Pilih Zona Ongkir Pintar"
                     >
                       {SHIPPING_ZONE_BUTTONS.map((zBtn) => {
-                        const isZoneSelected = selectedShippingZone === zBtn.key;
+                        const isZoneSelected =
+                          selectedShippingZone === zBtn.key &&
+                          !isCodShippingMethod(shippingMethod);
                         return (
                           <button
                             key={zBtn.key}
@@ -1454,6 +1508,30 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           </button>
                         );
                       })}
+
+                      <button
+                        type="button"
+                        onClick={handleApplyCodHandDelivery}
+                        data-testid="shipping-zone-cod"
+                        className={`p-2 rounded-lg text-left transition-all cursor-pointer border ${
+                          isCodShippingMethod(shippingMethod)
+                            ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] font-bold'
+                            : 'bg-[#0B0A0E] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/60'
+                        }`}
+                      >
+                        <span className="block text-[10px] font-semibold truncate">
+                          COD / Private Hand-Delivery
+                        </span>
+                        <span
+                          className={`block text-[11px] font-mono-tabular mt-0.5 ${
+                            isCodShippingMethod(shippingMethod)
+                              ? 'text-zinc-950 font-bold'
+                              : 'text-[#E5C87E]'
+                          }`}
+                        >
+                          Area Terdekat (Rp 0)
+                        </span>
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
@@ -1537,15 +1615,21 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                       >
                         {ADMIN_COURIER_OPTIONS.map((courierOpt) => {
                           const isSelected = shippingMethod === courierOpt;
+                          const isCodOpt = isCodShippingMethod(courierOpt);
                           return (
                             <button
                               key={courierOpt}
                               type="button"
                               onClick={() => {
                                 setShippingMethod(courierOpt);
-                                if (isCodShippingMethod(courierOpt)) {
+                                if (isCodOpt) {
                                   setAwbNumber('');
                                 }
+                                syncActiveOrderWithPricing({
+                                  shippingMethod: courierOpt,
+                                  isCOD: isCodOpt,
+                                  awbNumber: isCodOpt ? '' : awbNumber,
+                                });
                               }}
                               data-testid={`courier-option-${courierOpt
                                 .toLowerCase()
@@ -1556,7 +1640,9 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                   : 'bg-[#0B0A0E] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/60'
                               }`}
                             >
-                              {courierOpt}
+                              {isCodOpt
+                                ? 'COD / Private Hand-Delivery (Area Terdekat)'
+                                : courierOpt}
                             </button>
                           );
                         })}
@@ -2420,12 +2506,17 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 </div>
               </div>
 
-              {/* Created Custom Orders Table */}
-              <div className="p-5 rounded-2xl bg-[#0B0A0E] border border-zinc-800 space-y-4">
+              {/* Created Custom Orders Card List (Responsive Desktop & Mobile) */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#0B0A0E] border border-zinc-800 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <h3 className="font-serif-luxury text-xl font-semibold text-white">
-                    Daftar Invoice &amp; Resi Otomatis yang Dibuat Admin ({customOrders.length})
-                  </h3>
+                  <div>
+                    <h3 className="font-serif-luxury text-xl font-semibold text-white">
+                      Daftar Invoice &amp; Resi Otomatis yang Dibuat Admin ({customOrders.length})
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Menampilkan data lengkap penerima, kontak WA/Email, alamat pengiriman utuh, detail pesanan, serta tombol salin data paket &amp; chat WA langsung.
+                    </p>
+                  </div>
                   {onSyncCloud && (
                     <button
                       type="button"
@@ -2438,7 +2529,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         }
                       }}
                       data-testid="admin-sync-cloud-btn"
-                      className="px-3.5 py-1.5 rounded-lg bg-[#161521] hover:bg-[#1F1D2E] border border-[#D4AF37]/45 text-[11px] font-semibold text-[#F5E6B8] cursor-pointer self-start sm:self-auto"
+                      className="px-3.5 py-2 rounded-lg bg-[#161521] hover:bg-[#1F1D2E] border border-[#D4AF37]/45 text-[11px] font-semibold text-[#F5E6B8] cursor-pointer self-start sm:self-auto shrink-0"
                     >
                       {isSyncingCloud
                         ? '⏳ Menyinkronkan Cloud...'
@@ -2452,270 +2543,402 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                     untuk menerbitkan resi sekali input (otomatis terlacak).
                   </p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-zinc-800 text-zinc-400 uppercase">
-                          <th className="py-2.5 px-3">Invoice / Resi AWB</th>
-                          <th className="py-2.5 px-3">Pembeli</th>
-                          <th className="py-2.5 px-3">Parfum &amp; Nilai</th>
-                          <th className="py-2.5 px-3">Bukti Transfer</th>
-                          <th className="py-2.5 px-3">Kurir &amp; Status Otomatis</th>
-                          <th className="py-2.5 px-3">Aksi &amp; Smart Link</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-800/70">
-                        {customOrders.map((ord) => {
-                          const proofsMap = loadPaymentProofsMap();
-                          const storedProof =
-                            proofsMap[ord.invoiceId.trim().toUpperCase()];
-                          const resolvedProof =
-                            ord.paymentProof ||
-                            ord.paymentProofUrl ||
-                            storedProof?.proofUrl;
-                          const resolvedUploadedAt =
-                            ord.paymentProofUploadedAt ||
-                            storedProof?.uploadedAt;
-                          const isPaid =
-                            Boolean(resolvedProof) || ord.status === 'PAID';
-                          const effectiveOrder: CustomAdminOrder = resolvedProof
-                            ? {
-                                ...ord,
-                                status: 'PAID',
-                                paymentProof: resolvedProof,
-                                paymentProofUrl: resolvedProof,
-                                paymentProofUploadedAt: resolvedUploadedAt,
-                                shippingStage: Math.min(
-                                  4,
-                                  Math.max(ord.shippingStage || 2, 3)
-                                ) as 1 | 2 | 3 | 4,
-                              }
-                            : ord;
-                          const autoStage =
-                            computeAutoShippingStage(effectiveOrder);
-                          const courierMeta = resolveCourierMetadata(
-                            effectiveOrder.shippingMethod,
-                            effectiveOrder.awbNumber
-                          );
-                          const isCod = isCodShippingMethod(
-                            effectiveOrder.shippingMethod,
-                            effectiveOrder.awbNumber
-                          );
-                          const hasAwb = hasValidCourierAwb(effectiveOrder);
-                          return (
-                            <tr key={ord.invoiceId}>
-                              <td className="py-3 px-3 font-mono-tabular">
-                                <div className="font-bold text-[#F5E6B8]">
-                                  {ord.invoiceId}
+                  <div className="space-y-4">
+                    {customOrders.map((ord) => {
+                      const proofsMap = loadPaymentProofsMap();
+                      const storedProof =
+                        proofsMap[ord.invoiceId.trim().toUpperCase()];
+                      const resolvedProof =
+                        ord.paymentProof ||
+                        ord.paymentProofUrl ||
+                        storedProof?.proofUrl;
+                      const resolvedUploadedAt =
+                        ord.paymentProofUploadedAt ||
+                        storedProof?.uploadedAt;
+                      const isPaid =
+                        Boolean(resolvedProof) || ord.status === 'PAID';
+                      const effectiveOrder: CustomAdminOrder = resolvedProof
+                        ? {
+                            ...ord,
+                            status: 'PAID',
+                            paymentProof: resolvedProof,
+                            paymentProofUrl: resolvedProof,
+                            paymentProofUploadedAt: resolvedUploadedAt,
+                            shippingStage: Math.min(
+                              4,
+                              Math.max(ord.shippingStage || 2, 3)
+                            ) as 1 | 2 | 3 | 4,
+                          }
+                        : ord;
+                      const autoStage =
+                        computeAutoShippingStage(effectiveOrder);
+                      const courierMeta = resolveCourierMetadata(
+                        effectiveOrder.shippingMethod,
+                        effectiveOrder.awbNumber
+                      );
+                      const isCod =
+                        typeof effectiveOrder.isCOD === 'boolean'
+                          ? effectiveOrder.isCOD
+                          : isCodShippingMethod(
+                              effectiveOrder.shippingMethod,
+                              effectiveOrder.awbNumber
+                            );
+                      const hasAwb = hasValidCourierAwb(effectiveOrder);
+                      const orderQty = Math.max(
+                        1,
+                        Math.round(effectiveOrder.quantity || 1)
+                      );
+                      const orderExtraDisc = Math.max(
+                        0,
+                        Math.round(effectiveOrder.extraDiscountIDR || 0)
+                      );
+                      const orderShipCost = Math.max(
+                        0,
+                        Math.round(effectiveOrder.shippingCostIDR || 0)
+                      );
+                      const orderGrandTotal = Math.max(
+                        0,
+                        effectiveOrder.dealPriceIDR * orderQty -
+                          orderExtraDisc +
+                          orderShipCost
+                      );
+                      const resolvedZoneLabel =
+                        effectiveOrder.shippingLabel ||
+                        (isCod
+                          ? 'COD / Private Hand-Delivery (Area Terdekat)'
+                          : autoDetectShippingZoneByCity(effectiveOrder.buyerCity)
+                              ?.label ||
+                            (orderShipCost === 0
+                              ? SHIPPING_ZONES.FREE_VIP.label
+                              : 'Ekspedisi Reguler Berasuransi'));
+                      const packageCopyKey = `pkg-${ord.invoiceId}`;
+
+                      return (
+                        <div
+                          key={ord.invoiceId}
+                          data-testid={`admin-order-card-${ord.invoiceId}`}
+                          className="p-4 sm:p-5 rounded-2xl bg-[#111018] border border-[#D4AF37]/40 hover:border-[#D4AF37]/75 transition-all space-y-4 shadow-lg"
+                        >
+                          {/* CARD HEADER: INVOICE ID, TIMESTAMP, RESI BADGE & PAYMENT STATUS */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-zinc-800/90 pb-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono-tabular font-bold text-sm sm:text-base text-[#F5E6B8] bg-[#1A1826] border border-[#D4AF37]/45 px-2.5 py-1 rounded-lg">
+                                #{ord.invoiceId}
+                              </span>
+                              {isCod ? (
+                                <span className="px-2.5 py-1 rounded-lg bg-amber-950/70 border border-[#D4AF37]/60 text-[11px] font-semibold text-[#F5E6B8]">
+                                  🤝 COD Tatap Muka (Tanpa Resi)
+                                </span>
+                              ) : hasAwb ? (
+                                <span className="px-2.5 py-1 rounded-lg bg-emerald-950/75 border border-emerald-500/50 text-[11px] font-mono-tabular font-semibold text-emerald-300">
+                                  📦 Resi {courierMeta.displayName}: {effectiveOrder.awbNumber}
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/50 text-[11px] font-semibold text-amber-300">
+                                  ⏳ Resi Belum Diinput ({courierMeta.displayName})
+                                </span>
+                              )}
+                              <span className="text-[11px] font-mono-tabular text-zinc-400">
+                                {ord.createdAt}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-start sm:self-auto">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onUpdateCustomOrderStatus(
+                                    ord.invoiceId,
+                                    isPaid ? 'PENDING_PAYMENT' : 'PAID'
+                                  )
+                                }
+                                data-testid={`admin-order-status-${ord.invoiceId}`}
+                                className={`px-3 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider cursor-pointer border transition-colors ${
+                                  isPaid
+                                    ? 'bg-emerald-950/90 border-emerald-500/70 text-emerald-300'
+                                    : 'bg-amber-950/70 border-amber-500/60 text-amber-300 underline'
+                                }`}
+                              >
+                                {isPaid ? '✅ PAID / LUNAS' : '⏳ PENDING_PAYMENT'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDeleteCustomOrder(ord.invoiceId)}
+                                className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 cursor-pointer transition-colors"
+                                title={`Hapus Invoice ${ord.invoiceId}`}
+                                aria-label={`Hapus Invoice ${ord.invoiceId}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* CARD BODY: 2-COLUMN RESPONSIVE GRID (BUYER DATA + ORDER DETAILS) */}
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                            {/* LEFT BOX: DATA LENGKAP PEMBELI & ALAMAT PENGIRIMAN */}
+                            <div className="p-3.5 sm:p-4 rounded-xl bg-[#0B0A0E] border border-zinc-800/90 space-y-2.5">
+                              <div className="font-brand text-[10px] uppercase tracking-[0.18em] text-[#E5C87E] font-bold border-b border-zinc-800/80 pb-1.5">
+                                👤 Data Lengkap Penerima &amp; Kontak Pengiriman
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
+                                <span className="text-zinc-400">Nama Lengkap Pembeli:</span>
+                                <span
+                                  className="sm:col-span-2 text-white font-semibold break-words"
+                                  data-testid={`admin-order-buyer-name-${ord.invoiceId}`}
+                                >
+                                  {effectiveOrder.buyerName}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
+                                <span className="text-zinc-400">Nomor WhatsApp / HP:</span>
+                                <span
+                                  className="sm:col-span-2 font-mono-tabular font-semibold text-emerald-400 break-all"
+                                  data-testid={`admin-order-buyer-phone-${ord.invoiceId}`}
+                                >
+                                  {effectiveOrder.buyerPhone || 'Belum diisi'}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
+                                <span className="text-zinc-400">Alamat Email Pembeli:</span>
+                                <span
+                                  className="sm:col-span-2 font-mono-tabular text-[#F5E6B8] break-all"
+                                  data-testid={`admin-order-buyer-email-${ord.invoiceId}`}
+                                >
+                                  {effectiveOrder.buyerEmail || 'Belum diisi'}
+                                </span>
+                              </div>
+
+                              <div className="space-y-1 pt-1">
+                                <span className="text-zinc-400 block">
+                                  Alamat Pengiriman Lengkap (Jalan, Kel/Kec, Kota/Kab, Kode Pos):
+                                </span>
+                                <div
+                                  className="p-2.5 rounded-lg bg-[#14131D] border border-[#D4AF37]/30 text-zinc-100 font-medium leading-relaxed whitespace-pre-wrap break-words"
+                                  data-testid={`admin-order-buyer-address-${ord.invoiceId}`}
+                                >
+                                  {effectiveOrder.buyerCity}
                                 </div>
-                                {isCod ? (
-                                  <div className="text-[11px] text-amber-300 font-sans mt-0.5">
-                                    🤝 COD Tatap Muka (Tanpa Resi)
-                                  </div>
-                                ) : hasAwb ? (
-                                  <div className="text-emerald-300 mt-0.5">
-                                    Resi: {effectiveOrder.awbNumber}
-                                  </div>
-                                ) : (
-                                  <div className="text-amber-400/90 italic font-sans text-[11px] mt-0.5">
-                                    ⏳ Resi Belum Diinput
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="text-white font-medium">
-                                  {ord.buyerName}
+                              </div>
+                            </div>
+
+                            {/* RIGHT BOX: DETAIL PESANAN, JENIS PENGIRIMAN, ONGKIR, TOTAL & BUKTI BAYAR */}
+                            <div className="p-3.5 sm:p-4 rounded-xl bg-[#0B0A0E] border border-zinc-800/90 space-y-2.5 flex flex-col justify-between">
+                              <div className="space-y-2">
+                                <div className="font-brand text-[10px] uppercase tracking-[0.18em] text-[#E5C87E] font-bold border-b border-zinc-800/80 pb-1.5">
+                                  📦 Detail Pesanan, Pengiriman &amp; Rincian Nominal
                                 </div>
-                                <div className="text-zinc-400">{ord.buyerCity}</div>
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="text-[#E5C87E]">
-                                  {ord.house} — {ord.fragranceName}
-                                  {(ord.quantity || 1) > 1
-                                    ? ` (×${ord.quantity})`
-                                    : ''}
-                                </div>
-                                <div className="font-mono-tabular text-emerald-400 flex items-center flex-wrap gap-1.5 mt-1">
-                                  <span>
-                                    {formatIDRCurrency(
-                                      Math.max(
-                                        0,
-                                        ord.dealPriceIDR *
-                                          Math.max(1, ord.quantity || 1) -
-                                          (ord.extraDiscountIDR || 0) +
-                                          (ord.shippingCostIDR || 0)
-                                      )
-                                    )}
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
+                                  <span className="text-zinc-400">Nama Parfum:</span>
+                                  <span className="sm:col-span-2 text-[#E5C87E] font-semibold break-words">
+                                    {effectiveOrder.house} — {effectiveOrder.fragranceName}
                                   </span>
-                                  {(ord.extraDiscountIDR || 0) > 0 && (
-                                    <span className="text-[10px] text-[#F5E6B8]">
-                                      (Voucher -{formatIDRCurrency(ord.extraDiscountIDR || 0)})
-                                    </span>
-                                  )}
-                                  <span>·</span>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      onUpdateCustomOrderStatus(
-                                        ord.invoiceId,
-                                        isPaid ? 'PENDING_PAYMENT' : 'PAID'
-                                      )
-                                    }
-                                    data-testid={`admin-order-status-${ord.invoiceId}`}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer border transition-colors ${
-                                      isPaid
-                                        ? 'bg-emerald-950/90 border-emerald-500/70 text-emerald-300'
-                                        : 'bg-amber-950/60 border-amber-500/50 text-amber-300 underline'
-                                    }`}
-                                  >
-                                    {isPaid ? 'PAID / LUNAS' : 'PENDING_PAYMENT'}
-                                  </button>
                                 </div>
-                              </td>
-                              <td
-                                className="py-3 px-3"
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
+                                  <span className="text-zinc-400">Ukuran (ml) &amp; Qty:</span>
+                                  <span className="sm:col-span-2 font-mono-tabular text-white font-semibold">
+                                    {effectiveOrder.volume || '100ml'} · Qty: {orderQty} Botol
+                                  </span>
+                                </div>
+
+                                <div
+                                  className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2"
+                                  data-testid={`admin-order-shipping-status-${ord.invoiceId}`}
+                                >
+                                  <span className="text-zinc-400">Jenis Pengiriman:</span>
+                                  <div className="sm:col-span-2 space-y-1">
+                                    <div className="font-semibold text-[#F5E6B8] break-words">
+                                      {isCod
+                                        ? 'COD / Private Hand-Delivery'
+                                        : `Ekspedisi ${courierMeta.displayName}`}{' '}
+                                      — <span className="text-zinc-300 font-normal">{resolvedZoneLabel}</span>
+                                    </div>
+                                    {isCod ? (
+                                      <div className="px-2 py-1 rounded bg-amber-950/70 border border-[#D4AF37]/60 text-[10px] font-semibold text-[#F5E6B8] leading-snug">
+                                        {COD_FACE_TO_FACE_STATUS_LABEL}
+                                      </div>
+                                    ) : !hasAwb ? (
+                                      <div className="px-2 py-1 rounded bg-amber-950/60 border border-amber-500/50 text-[10px] font-semibold text-amber-300 leading-snug">
+                                        {PENDING_AWB_STATUS_LABEL}
+                                      </div>
+                                    ) : (
+                                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-mono-tabular text-emerald-300">
+                                        <span>
+                                          ● AUTO TAHAP {autoStage}/4 (RESI: {effectiveOrder.awbNumber})
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
+                                  <span className="text-zinc-400">Ongkos Kirim:</span>
+                                  <span className="sm:col-span-2 font-mono-tabular text-zinc-200 font-medium">
+                                    {orderShipCost === 0
+                                      ? 'GRATIS / Rp 0'
+                                      : formatIDRCurrency(orderShipCost)}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2 pt-1 border-t border-zinc-800/80">
+                                  <span className="text-[#F5E6B8] font-semibold">Total Nominal:</span>
+                                  <div className="sm:col-span-2 font-mono-tabular flex flex-wrap items-center gap-1.5">
+                                    <span className="text-emerald-400 font-bold text-sm">
+                                      {formatIDRCurrency(orderGrandTotal)}
+                                    </span>
+                                    {orderExtraDisc > 0 && (
+                                      <span className="text-[10px] text-[#F5E6B8] bg-[#1A1826] px-1.5 py-0.5 rounded border border-[#D4AF37]/35">
+                                        Voucher -{formatIDRCurrency(orderExtraDisc)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* BUKTI TRANSFER ROW */}
+                              <div
+                                className="pt-2.5 border-t border-zinc-800/80 flex items-center justify-between gap-2 flex-wrap"
                                 data-testid={`admin-order-proof-${ord.invoiceId}`}
                               >
+                                <span className="text-zinc-400 text-[11px]">
+                                  Bukti Pembayaran:
+                                </span>
                                 {resolvedProof ? (
-                                  <div className="space-y-1.5 min-w-[148px]">
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setSelectedProofOrder(effectiveOrder)
-                                        }
-                                        className="relative w-11 h-11 rounded-lg overflow-hidden border border-[#D4AF37]/60 group shrink-0 cursor-pointer shadow-sm"
-                                        title="Klik untuk melihat bukti transfer penuh"
-                                      >
-                                        <img
-                                          src={resolvedProof}
-                                          alt={`Bukti Bayar ${ord.invoiceId}`}
-                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                        />
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                          <Eye className="w-3.5 h-3.5 text-white" />
-                                        </div>
-                                      </button>
-                                      <div className="min-w-0 space-y-0.5">
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/85 border border-emerald-500/60 text-[10px] font-bold text-emerald-300 whitespace-nowrap">
-                                          <CheckCircle2 className="w-3 h-3" />
-                                          <span>PAID / LUNAS</span>
-                                        </span>
-                                        {resolvedUploadedAt && (
-                                          <div className="text-[10px] text-zinc-400 font-mono-tabular truncate">
-                                            {resolvedUploadedAt}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="flex flex-col gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setSelectedProofOrder(effectiveOrder)
-                                        }
-                                        data-testid={`admin-view-proof-btn-${ord.invoiceId}`}
-                                        className="px-2.5 py-1 rounded-lg bg-[#161522] hover:bg-[#211E32] border border-[#D4AF37]/50 text-[11px] font-semibold text-[#F5E6B8] flex items-center justify-center gap-1.5 cursor-pointer self-start transition-colors"
-                                      >
-                                        <span>👁️ Lihat Bukti</span>
-                                      </button>
-                                    </div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setSelectedProofOrder(effectiveOrder)
+                                      }
+                                      className="relative w-9 h-9 rounded-lg overflow-hidden border border-[#D4AF37]/60 group shrink-0 cursor-pointer shadow-sm"
+                                      title="Klik untuk melihat bukti transfer penuh"
+                                    >
+                                      <img
+                                        src={resolvedProof}
+                                        alt={`Bukti Bayar ${ord.invoiceId}`}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                      />
+                                    </button>
+                                    {resolvedUploadedAt && (
+                                      <span className="text-[10px] text-zinc-400 font-mono-tabular">
+                                        {resolvedUploadedAt}
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setSelectedProofOrder(effectiveOrder)
+                                      }
+                                      data-testid={`admin-view-proof-btn-${ord.invoiceId}`}
+                                      className="px-2.5 py-1 rounded-lg bg-[#161522] hover:bg-[#211E32] border border-[#D4AF37]/50 text-[11px] font-semibold text-[#F5E6B8] flex items-center gap-1 cursor-pointer transition-colors"
+                                    >
+                                      <span>👁️ Lihat Bukti</span>
+                                    </button>
                                   </div>
                                 ) : (
-                                  <div className="text-zinc-500 italic text-[11px] flex items-center gap-1">
+                                  <span className="text-zinc-500 italic text-[11px] inline-flex items-center gap-1">
                                     <Lock className="w-3 h-3 text-zinc-600" />
                                     <span>🔒 Belum Upload</span>
-                                  </div>
+                                  </span>
                                 )}
-                              </td>
-                              <td
-                                className="py-3 px-3 max-w-[230px]"
-                                data-testid={`admin-order-shipping-status-${ord.invoiceId}`}
-                              >
-                                <div className="font-semibold text-[#F5E6B8]">
-                                  {courierMeta.displayName}
-                                </div>
-                                {isCod ? (
-                                  <div className="mt-1 px-2.5 py-1 rounded-lg bg-amber-950/70 border border-[#D4AF37]/60 text-[10px] font-semibold text-[#F5E6B8] leading-snug">
-                                    {COD_FACE_TO_FACE_STATUS_LABEL}
-                                  </div>
-                                ) : !hasAwb ? (
-                                  <div className="mt-1 px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/50 text-[10px] font-semibold text-amber-300 leading-snug">
-                                    {PENDING_AWB_STATUS_LABEL}
-                                  </div>
-                                ) : (
-                                  <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-mono-tabular text-emerald-300">
-                                    <span>
-                                      ● AUTO TAHAP {autoStage}/4 (RESI:{' '}
-                                      {effectiveOrder.awbNumber})
-                                    </span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingResiOrder(effectiveOrder);
-                                      setEditCourierMethod(
-                                        isCod
-                                          ? 'COD / Tatap Muka'
-                                          : effectiveOrder.shippingMethod
-                                      );
-                                      setEditAwbInput(
-                                        isCod ? '' : effectiveOrder.awbNumber || ''
-                                      );
-                                    }}
-                                    data-testid={`admin-edit-resi-btn-${ord.invoiceId}`}
-                                    className="px-2.5 py-1 rounded bg-emerald-950/85 text-emerald-300 border border-emerald-500/60 hover:bg-emerald-900/90 font-semibold cursor-pointer"
-                                  >
-                                    ✏️ Input / Edit Resi &amp; Kurir
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleCopyText(
-                                        buildSmartShareUrl(effectiveOrder, 'invoice'),
-                                        `inv-${ord.invoiceId}`
-                                      )
-                                    }
-                                    className="px-2.5 py-1 rounded bg-[#D4AF37]/20 text-[#F5E6B8] border border-[#D4AF37]/40 hover:bg-[#D4AF37]/30 cursor-pointer"
-                                  >
-                                    {copiedKey === `inv-${ord.invoiceId}`
-                                      ? 'Tersalin!'
-                                      : 'Copy Link Invoice'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleCopyText(
-                                        buildSmartShareUrl(effectiveOrder, 'track'),
-                                        `trk-${ord.invoiceId}`
-                                      )
-                                    }
-                                    className="px-2.5 py-1 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-700 cursor-pointer"
-                                  >
-                                    {copiedKey === `trk-${ord.invoiceId}`
-                                      ? 'Tersalin!'
-                                      : 'Copy Link Resi'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => onDeleteCustomOrder(ord.invoiceId)}
-                                    className="p-1 text-rose-400 hover:text-rose-300 cursor-pointer"
-                                    title="Hapus"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* CARD FOOTER: TOMBOL SALIN DATA PAKET, CHAT WA PEMBELI, EDIT RESI & SMART LINK */}
+                          <div className="pt-3 border-t border-zinc-800/90 flex flex-wrap items-center gap-2 text-xs">
+                            {/* 1. TOMBOL SALIN DATA PAKET (CETAK RESI / INPUT KURIR) */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCopyText(
+                                  buildAdminPackageCopyText(effectiveOrder),
+                                  packageCopyKey
+                                )
+                              }
+                              data-testid={`admin-copy-package-btn-${ord.invoiceId}`}
+                              className="px-3.5 py-2 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            >
+                              {copiedKey === packageCopyKey ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 shrink-0" />
+                                  <span>✅ Data Paket Tersalin!</span>
+                                </>
+                              ) : (
+                                <span>📋 Salin Data Paket</span>
+                              )}
+                            </button>
+
+                            {/* 2. TOMBOL CHAT WA PEMBELI */}
+                            <a
+                              href={buildDirectBuyerWhatsAppUrl(effectiveOrder)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              data-testid={`admin-wa-buyer-btn-${ord.invoiceId}`}
+                              className="px-3.5 py-2 rounded-xl bg-emerald-950/90 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/60 font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                            >
+                              <span>💬 WA Pembeli</span>
+                            </a>
+
+                            {/* 3. TOMBOL INPUT / EDIT RESI & KURIR */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingResiOrder(effectiveOrder);
+                                setEditCourierMethod(
+                                  isCod
+                                    ? 'COD / Tatap Muka'
+                                    : effectiveOrder.shippingMethod
+                                );
+                                setEditAwbInput(
+                                  isCod ? '' : effectiveOrder.awbNumber || ''
+                                );
+                              }}
+                              data-testid={`admin-edit-resi-btn-${ord.invoiceId}`}
+                              className="px-3 py-2 rounded-xl bg-[#161522] hover:bg-[#201E30] text-[#F5E6B8] border border-[#D4AF37]/50 font-semibold cursor-pointer transition-colors"
+                            >
+                              ✏️ Input / Edit Resi &amp; Kurir
+                            </button>
+
+                            {/* 4. COPY SMART LINK INVOICE */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCopyText(
+                                  buildSmartShareUrl(effectiveOrder, 'invoice'),
+                                  `inv-${ord.invoiceId}`
+                                )
+                              }
+                              className="px-3 py-2 rounded-xl bg-[#D4AF37]/15 text-[#F5E6B8] border border-[#D4AF37]/40 hover:bg-[#D4AF37]/25 cursor-pointer transition-colors"
+                            >
+                              {copiedKey === `inv-${ord.invoiceId}`
+                                ? '✓ Link Invoice Tersalin!'
+                                : '🔗 Copy Link Invoice'}
+                            </button>
+
+                            {/* 5. COPY SMART LINK RESI */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCopyText(
+                                  buildSmartShareUrl(effectiveOrder, 'track'),
+                                  `trk-${ord.invoiceId}`
+                                )
+                              }
+                              className="px-3 py-2 rounded-xl bg-zinc-900 text-zinc-200 border border-zinc-700 hover:bg-zinc-800 cursor-pointer transition-colors"
+                            >
+                              {copiedKey === `trk-${ord.invoiceId}`
+                                ? '✓ Link Resi Tersalin!'
+                                : '📦 Copy Link Resi'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

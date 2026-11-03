@@ -137,6 +137,8 @@ export interface PrivateInvoice {
   discountPct?: number;
   extraDiscountIDR?: number;
   shippingLabel?: string;
+  shippingMethod?: ShippingMethodType;
+  isCOD?: boolean;
   items: PrivateInvoiceItem[];
   notes: string;
   paymentProof?: string | null;
@@ -277,6 +279,7 @@ export interface CustomAdminOrder {
   shippingCostIDR?: number;
   shippingLabel?: string;
   shippingMethod: ShippingMethodType;
+  isCOD?: boolean;
   awbNumber: string;
   shippingStage?: 1 | 2 | 3 | 4;
   status: 'PENDING_PAYMENT' | 'PAID';

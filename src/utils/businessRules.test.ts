@@ -1686,4 +1686,141 @@ test('Auto-Open Invoice URLs (?inv=..., ?id=..., #inv=...) parse and auto-bypass
   assert.equal(parsedManualPay.smartOrder, null);
 });
 
+test('28. Shipping Mode (Expedition vs COD) saves isCOD to Invoice Data and encodes into WhatsApp & Email URLs', async () => {
+  const {
+    encodeSmartOrderParam,
+    decodeSmartOrderParam,
+    buildSmartShareUrl,
+    buildInvoiceFromCustomOrder,
+    parseAutoOpenInvoiceUrl,
+  } = await import('./businessRules.ts');
+
+  // Case A: Expedition Shipping (isCOD: false)
+  const expeditionOrder = {
+    invoiceId: 'INV-VRV-7101',
+    trackingId: 'VRV-RESI-7101',
+    createdAt: '03 Nov 2026 · 15:00 WIB',
+    buyerName: 'Bpk. Arya Nugraha',
+    buyerCity: 'Surabaya, Jawa Timur',
+    buyerEmail: 'arya@vorvan.id',
+    buyerPhone: '081234567890',
+    house: 'Maison Francis Kurkdjian',
+    fragranceName: 'Baccarat Rouge 540 Extrait de Parfum',
+    concentration: 'Extrait de Parfum',
+    volume: '70ml',
+    quantity: 1,
+    batchCode: 'VRV-022',
+    dealPriceIDR: 5250000,
+    retailPriceIDR: 7500000,
+    discountPct: 30,
+    shippingCostIDR: 25000,
+    shippingMethod: 'JNE' as const,
+    isCOD: false,
+    awbNumber: 'JNE99182736',
+    status: 'PENDING_PAYMENT' as const,
+  };
+
+  const expToken = encodeSmartOrderParam(expeditionOrder);
+  const expDecoded = decodeSmartOrderParam(expToken);
+  assert.ok(expDecoded);
+  assert.equal(expDecoded.isCOD, false);
+  assert.equal(expDecoded.shippingMethod, 'JNE');
+
+  const expShareUrl = buildSmartShareUrl(
+    expeditionOrder,
+    'invoice',
+    'https://vorvanofficial.com'
+  );
+  assert.ok(expShareUrl.includes('cod=0'));
+
+  const expInvoice = buildInvoiceFromCustomOrder(expDecoded);
+  assert.equal(expInvoice.isCOD, false);
+  assert.equal(expInvoice.shippingMethod, 'JNE');
+
+  // Case B: COD / Private Hand-Delivery (isCOD: true)
+  const codOrder = {
+    ...expeditionOrder,
+    invoiceId: 'INV-VRV-7102',
+    shippingCostIDR: 0,
+    shippingMethod: 'COD / Tatap Muka' as const,
+    isCOD: true,
+    awbNumber: '',
+  };
+
+  const codToken = encodeSmartOrderParam(codOrder);
+  const codDecoded = decodeSmartOrderParam(codToken);
+  assert.ok(codDecoded);
+  assert.equal(codDecoded.isCOD, true);
+  assert.equal(codDecoded.shippingMethod, 'COD / Tatap Muka');
+
+  const codShareUrl = buildSmartShareUrl(
+    codOrder,
+    'invoice',
+    'https://vorvanofficial.com'
+  );
+  assert.ok(codShareUrl.includes('cod=1'));
+
+  const parsedCodUrl = parseAutoOpenInvoiceUrl(
+    '/pay/INV-VRV-7102',
+    `?v=${codToken}&inv=${codToken}&id=INV-VRV-7102&cod=1`,
+    ''
+  );
+  assert.equal(parsedCodUrl.isDirectLinkAutoOpen, true);
+  assert.ok(parsedCodUrl.smartOrder);
+  assert.equal(parsedCodUrl.smartOrder.isCOD, true);
+
+  const codInvoice = buildInvoiceFromCustomOrder(parsedCodUrl.smartOrder);
+  assert.equal(codInvoice.isCOD, true);
+  assert.equal(codInvoice.shippingMethod, 'COD / Tatap Muka');
+});
+
+test('29. Admin Package Shipping Data Copy Text and Direct Buyer WhatsApp URL format complete buyer & order details accurately', async () => {
+  const {
+    buildAdminPackageCopyText,
+    buildDirectBuyerWhatsAppUrl,
+  } = await import('./businessRules.ts');
+
+  const fullOrder = {
+    invoiceId: 'INV-VRV-8812',
+    trackingId: 'JNE-88120099',
+    createdAt: '03 Nov 2026 · 18:30 WIB',
+    buyerName: 'Bpk. Hendra Wijaya',
+    buyerCity:
+      'Jl. Senopati No. 88, Kel. Selong, Kec. Kebayoran Baru, Jakarta Selatan, DKI Jakarta 12110',
+    buyerEmail: 'hendra.wijaya@vorvan.id',
+    buyerPhone: '081298765432',
+    house: 'Louis Vuitton',
+    fragranceName: 'Afternoon Swim',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    quantity: 2,
+    batchCode: 'VRV-001',
+    dealPriceIDR: 4550000,
+    retailPriceIDR: 6500000,
+    discountPct: 30,
+    shippingCostIDR: 25000,
+    shippingLabel: 'Jawa & Jabodetabek (1 Kg + Asuransi Kargo)',
+    shippingMethod: 'JNE' as const,
+    isCOD: false,
+    awbNumber: 'JNE-88120099',
+    status: 'PAID' as const,
+  };
+
+  const copyText = buildAdminPackageCopyText(fullOrder);
+  assert.equal(
+    copyText,
+    'Penerima: Bpk. Hendra Wijaya | WA: 081298765432 | Email: hendra.wijaya@vorvan.id | Alamat: Jl. Senopati No. 88, Kel. Selong, Kec. Kebayoran Baru, Jakarta Selatan, DKI Jakarta 12110 | Item: Louis Vuitton — Afternoon Swim 100ml × 2 Botol (#INV-VRV-8812)'
+  );
+
+  const directWaUrl = buildDirectBuyerWhatsAppUrl(fullOrder);
+  assert.ok(directWaUrl.startsWith('https://wa.me/6281298765432?text='));
+  const decodedWa = decodeURIComponent(directWaUrl);
+  assert.ok(decodedWa.includes('Halo Bpk. Hendra Wijaya'));
+  assert.ok(decodedWa.includes('#INV-VRV-8812'));
+  assert.ok(decodedWa.includes('Louis Vuitton — Afternoon Swim (100ml) × 2'));
+  assert.ok(decodedWa.includes('JNE — JNE-88120099'));
+});
+
+
+
 
