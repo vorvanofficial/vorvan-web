@@ -804,13 +804,15 @@ test('Tab 1 Admin: Buyer Email, Buyer Phone, 1-Click WhatsApp URL, and Email Web
   }) as typeof fetch;
 
   try {
+    const fullExpectedInvoiceUrl =
+      `https://vorvan-official.vercel.app/pay/INV-VRV-9011?v=${token}&inv=${token}&id=INV-VRV-9011`;
     const success = await sendBuyerInvoiceEmailWebhook({
       buyerEmail: 'hendra.wijaya@gmail.com',
       buyerName: 'Bpk. Hendra Wijaya',
       invNo: 'INV-VRV-9011',
       itemName: 'Louis Vuitton — Afternoon Swim (100ml)',
       totalPrice: 'Rp 4.575.000',
-      invoiceUrl: 'https://vorvan-official.vercel.app/pay/INV-VRV-9011?v=' + token,
+      invoiceUrl: fullExpectedInvoiceUrl,
     });
     assert.equal(success, true);
     assert.equal(interceptedUrl, VORVAN_EMAIL_WEBHOOK);
@@ -820,19 +822,26 @@ test('Tab 1 Admin: Buyer Email, Buyer Phone, 1-Click WhatsApp URL, and Email Web
     assert.equal(interceptedBody.invNo, 'INV-VRV-9011');
     assert.equal(interceptedBody.itemName, 'Louis Vuitton — Afternoon Swim (100ml)');
     assert.equal(interceptedBody.totalPrice, 'Rp 4.575.000');
-    // Must NEVER contain ?v= encrypted query string in email payload; must strictly be https://vorvanofficial.com
-    assert.equal(interceptedBody.invoiceUrl, 'https://vorvanofficial.com');
-    assert.equal(interceptedBody.websiteUrl, 'https://vorvanofficial.com');
-    assert.ok(!JSON.stringify(interceptedBody).includes('?v='));
+    assert.equal(interceptedBody.invoiceUrl, fullExpectedInvoiceUrl);
+    assert.equal(interceptedBody.buttonUrl, fullExpectedInvoiceUrl);
+    assert.ok(interceptedBody.ctaButtonHtml.includes(fullExpectedInvoiceUrl));
+    assert.ok(interceptedBody.ctaButtonHtml.includes('BUKA DOKUMEN &amp; PEMBAYARAN'));
+    assert.ok(interceptedBody.htmlBody.includes(`href="${fullExpectedInvoiceUrl}"`));
+    assert.ok(interceptedBody.htmlBody.includes('BUKA DOKUMEN &amp; PEMBAYARAN'));
 
     const { sendAdminOrderBackupToGmail } = await import('./cloudSync.ts');
-    const adminBackupOk = await sendAdminOrderBackupToGmail(orderWithContact);
+    const adminBackupOk = await sendAdminOrderBackupToGmail(
+      orderWithContact,
+      fullExpectedInvoiceUrl
+    );
     assert.equal(adminBackupOk, true);
     assert.equal(interceptedBody.Nomor_Invoice_Resmi, 'INV-VRV-9011');
     assert.equal(interceptedBody.Parfum, 'Louis Vuitton — Afternoon Swim (100ml)');
     assert.equal(interceptedBody.Total_Tagihan, 'Rp 4.575.000');
-    assert.equal(interceptedBody.Website_Resmi, 'https://vorvanofficial.com');
-    assert.ok(!JSON.stringify(interceptedBody).includes('?v='));
+    assert.equal(
+      interceptedBody.Link_Buka_Dokumen_Pembayaran,
+      fullExpectedInvoiceUrl
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1586,4 +1595,95 @@ test('Admin Tab 1 Real-Time Two-Way Sync Calculator: Discount (%), Deal Price, R
   assert.equal(totals.protectionTotalIDR, 25000);
   assert.equal(totals.grandTotalIDR, 9675000);
 });
+
+test('Auto-Open Invoice URLs (?inv=..., ?id=..., #inv=...) parse and auto-bypass manual code gate while manual /pay click stays locked', async () => {
+  const {
+    encodeSmartOrderParam,
+    buildSmartShareUrl,
+    parseAutoOpenInvoiceUrl,
+  } = await import('./businessRules.ts');
+  const { buildBuyerInvoiceEmailHtmlTemplate } = await import('./cloudSync.ts');
+
+  const sampleOrder = {
+    invoiceId: 'INV-VRV-5404',
+    trackingId: 'VRV-RESI-5404',
+    createdAt: '03 Nov 2026 · 14:00 WIB',
+    buyerName: 'Bpk. Raditya Pratama',
+    buyerCity: 'Kebayoran Baru, Jakarta Selatan',
+    buyerEmail: 'raditya@vorvan.id',
+    buyerPhone: '081234567890',
+    house: 'Louis Vuitton',
+    fragranceName: 'Afternoon Swim',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    quantity: 1,
+    batchCode: 'VRV-001',
+    dealPriceIDR: 4875000,
+    retailPriceIDR: 6500000,
+    discountPct: 25,
+    shippingCostIDR: 25000,
+    shippingMethod: 'JNE' as const,
+    awbNumber: 'VRV-RESI-5404',
+    status: 'PENDING_PAYMENT' as const,
+  };
+
+  const token = encodeSmartOrderParam(sampleOrder);
+  const shareUrl = buildSmartShareUrl(
+    sampleOrder,
+    'invoice',
+    'https://vorvanofficial.com'
+  );
+  assert.ok(shareUrl.includes(`inv=${token}`));
+  assert.ok(shareUrl.includes('id=INV-VRV-5404'));
+
+  // 1. Email button HTML contains exact Auto-Open URL
+  const emailHtml = buildBuyerInvoiceEmailHtmlTemplate({
+    buyerName: sampleOrder.buyerName,
+    invNo: sampleOrder.invoiceId,
+    itemName: 'Louis Vuitton — Afternoon Swim (100ml)',
+    totalPrice: 'Rp 4.900.000',
+    invoiceUrl: shareUrl,
+  });
+  assert.ok(emailHtml.includes(`href="${shareUrl}"`));
+  assert.ok(emailHtml.includes('BUKA DOKUMEN &amp; PEMBAYARAN'));
+
+  // 2. Parse ?inv=[ENCRYPTED]&id=[INV_CODE] on root path
+  const parsedRootInvAndId = parseAutoOpenInvoiceUrl(
+    '/',
+    `?inv=${token}&id=INV-VRV-5404`,
+    ''
+  );
+  assert.equal(parsedRootInvAndId.isInvoiceRoute, true);
+  assert.equal(parsedRootInvAndId.isDirectLinkAutoOpen, true);
+  assert.equal(parsedRootInvAndId.invoiceId, 'INV-VRV-5404');
+  assert.ok(parsedRootInvAndId.smartOrder);
+  assert.equal(parsedRootInvAndId.smartOrder.buyerName, 'Bpk. Raditya Pratama');
+
+  // 3. Parse ?id=INV-VRV-5404 only
+  const parsedIdOnly = parseAutoOpenInvoiceUrl('/', '?id=INV-VRV-5404', '');
+  assert.equal(parsedIdOnly.isInvoiceRoute, true);
+  assert.equal(parsedIdOnly.isDirectLinkAutoOpen, true);
+  assert.equal(parsedIdOnly.invoiceId, 'INV-VRV-5404');
+
+  // 4. Parse #inv=[ENCRYPTED] hash
+  const parsedHashToken = parseAutoOpenInvoiceUrl('/', '', `#inv=${token}`);
+  assert.equal(parsedHashToken.isInvoiceRoute, true);
+  assert.equal(parsedHashToken.isDirectLinkAutoOpen, true);
+  assert.equal(parsedHashToken.invoiceId, 'INV-VRV-5404');
+  assert.ok(parsedHashToken.smartOrder);
+
+  // 5. Parse #inv=INV-VRV-5404 plain hash
+  const parsedHashPlain = parseAutoOpenInvoiceUrl('/', '', '#inv=INV-VRV-5404');
+  assert.equal(parsedHashPlain.isInvoiceRoute, true);
+  assert.equal(parsedHashPlain.isDirectLinkAutoOpen, true);
+  assert.equal(parsedHashPlain.invoiceId, 'INV-VRV-5404');
+
+  // 6. Manual click on INVOICE menu (/pay with no params) -> isDirectLinkAutoOpen is false
+  const parsedManualPay = parseAutoOpenInvoiceUrl('/pay', '', '');
+  assert.equal(parsedManualPay.isInvoiceRoute, true);
+  assert.equal(parsedManualPay.isDirectLinkAutoOpen, false);
+  assert.equal(parsedManualPay.invoiceId, '');
+  assert.equal(parsedManualPay.smartOrder, null);
+});
+
 

@@ -1432,8 +1432,114 @@ export function getVorvanBaseDomain(): string {
     : window.location.origin;
 }
 
+export interface ParsedInvoiceUrlResult {
+  isInvoiceRoute: boolean;
+  isDirectLinkAutoOpen: boolean;
+  invoiceId: string;
+  smartOrder: CustomAdminOrder | null;
+}
+
 /**
- * Generates an ultra-short Smart Shareable URL (`?v=...`) for WhatsApp/Telegram.
+ * Parses URL pathname, query string (`?inv=...`, `?id=...`, `?v=...`, `?order=...`),
+ * and hash (`#inv=...`, `#id=...`, `#v=...`) to determine if the page was opened via
+ * an Email or WhatsApp Invoice link that should auto-bypass the manual code entry screen.
+ */
+export function parseAutoOpenInvoiceUrl(
+  pathname: string,
+  search: string,
+  hash: string = ''
+): ParsedInvoiceUrlResult {
+  const cleanPath = (pathname || '/').trim();
+  const searchParams = new URLSearchParams(search || '');
+
+  const rawHash = (hash || '').replace(/^#/, '').trim();
+  const hashQueryStr = rawHash.includes('?')
+    ? rawHash.slice(rawHash.indexOf('?') + 1)
+    : rawHash.includes('=')
+    ? rawHash.replace(/^\/+/, '')
+    : '';
+  const hashParams = new URLSearchParams(hashQueryStr);
+
+  // 1. Check encrypted order data in ?inv=, ?v=, ?order=, #inv=, #v=, #order=
+  const tokenCandidates = [
+    searchParams.get('inv'),
+    searchParams.get('v'),
+    searchParams.get('order'),
+    hashParams.get('inv'),
+    hashParams.get('v'),
+    hashParams.get('order'),
+  ].filter((val): val is string => Boolean(val && val.trim()));
+
+  let decodedSmartOrder: CustomAdminOrder | null = null;
+  for (const candidate of tokenCandidates) {
+    const decoded = decodeSmartOrderParam(candidate.trim());
+    if (decoded) {
+      decodedSmartOrder = decoded;
+      break;
+    }
+  }
+
+  // 2. Check explicit invoice code in ?id=, ?invoice=, ?invId=, #id=, /pay/..., or plain ?inv= / #inv=
+  const rawSearchInv = (searchParams.get('inv') || '').trim();
+  const rawHashInv = (hashParams.get('inv') || '').trim();
+  const plainInvFromSearch =
+    rawSearchInv && !decodeSmartOrderParam(rawSearchInv) ? rawSearchInv : '';
+  const plainInvFromHash =
+    rawHashInv && !decodeSmartOrderParam(rawHashInv) ? rawHashInv : '';
+
+  const pathInvoiceId = cleanPath.startsWith('/pay/')
+    ? decodeURIComponent(cleanPath.slice('/pay/'.length)).trim()
+    : cleanPath.startsWith('/invoice/')
+    ? decodeURIComponent(cleanPath.slice('/invoice/'.length)).trim()
+    : '';
+
+  const explicitId = (
+    searchParams.get('id') ||
+    searchParams.get('invoice') ||
+    searchParams.get('invId') ||
+    hashParams.get('id') ||
+    hashParams.get('invoice') ||
+    pathInvoiceId ||
+    plainInvFromSearch ||
+    plainInvFromHash ||
+    ''
+  )
+    .trim()
+    .toUpperCase();
+
+  if (decodedSmartOrder && explicitId && explicitId.startsWith('INV-')) {
+    decodedSmartOrder = {
+      ...decodedSmartOrder,
+      invoiceId: explicitId,
+    };
+  }
+
+  const finalInvoiceId = (
+    explicitId ||
+    decodedSmartOrder?.invoiceId ||
+    ''
+  )
+    .trim()
+    .toUpperCase();
+
+  const isDirectLinkAutoOpen = Boolean(decodedSmartOrder || finalInvoiceId);
+  const isInvoiceRoute =
+    isDirectLinkAutoOpen ||
+    cleanPath === '/pay' ||
+    cleanPath.startsWith('/pay/') ||
+    cleanPath === '/invoice' ||
+    cleanPath.startsWith('/invoice/');
+
+  return {
+    isInvoiceRoute,
+    isDirectLinkAutoOpen,
+    invoiceId: finalInvoiceId,
+    smartOrder: decodedSmartOrder,
+  };
+}
+
+/**
+ * Generates an Auto-Open Smart Shareable URL (`?v=...&inv=...&id=...`) for Email & WhatsApp/Telegram.
  * Uses dynamic domain detection so moving to custom domains (.com / .id) works seamlessly.
  */
 export function buildSmartShareUrl(
@@ -1444,11 +1550,15 @@ export function buildSmartShareUrl(
   const token = encodeSmartOrderParam(order);
   const origin = originOverride || getVorvanBaseDomain();
   if (mode === 'invoice') {
-    return `${origin}/pay/${order.invoiceId.trim().toUpperCase()}?v=${token}`;
+    const cleanInvId = order.invoiceId.trim().toUpperCase();
+    return `${origin}/pay/${cleanInvId}?v=${token}&inv=${token}&id=${encodeURIComponent(
+      cleanInvId
+    )}`;
   }
   const trackCode = (order.awbNumber || order.trackingId || order.invoiceId).trim();
   return `${origin}/track/${encodeURIComponent(trackCode)}?v=${token}`;
 }
+
 
 /**
  * Normalizes an Indonesian phone number to E.164 without plus (e.g., '0812...' -> '62812...').

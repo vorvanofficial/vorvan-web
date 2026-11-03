@@ -34,6 +34,7 @@ import {
   loadCustomAdminOrders,
   loadVorvanSettings,
   markLeadEmailDeleted,
+  parseAutoOpenInvoiceUrl,
   reindexVisitorLeads,
   removePaymentProofRecord,
   saveCustomAdminOrders,
@@ -80,12 +81,19 @@ import {
 type ActiveRoute =
   | { view: 'showroom' }
   | { view: 'track'; query?: string; smartOrder?: CustomAdminOrder | null }
-  | { view: 'invoice'; invoiceId: string; smartOrder?: CustomAdminOrder | null };
+  | {
+      view: 'invoice';
+      invoiceId: string;
+      smartOrder?: CustomAdminOrder | null;
+      isDirectLink?: boolean;
+    };
 
 function parseCurrentLocation(): ActiveRoute {
   if (typeof window === 'undefined') return { view: 'showroom' };
   const path = window.location.pathname;
-  const params = new URLSearchParams(window.location.search);
+  const search = window.location.search;
+  const hash = window.location.hash;
+  const params = new URLSearchParams(search);
   const encodedOrder = params.get('v') || params.get('order');
   const decodedSmartOrder = encodedOrder
     ? decodeSmartOrderParam(encodedOrder)
@@ -108,30 +116,13 @@ function parseCurrentLocation(): ActiveRoute {
     };
   }
 
-  if (path.startsWith('/pay/')) {
-    const rawId = decodeURIComponent(path.replace('/pay/', '')).trim();
+  const parsedInvoice = parseAutoOpenInvoiceUrl(path, search, hash);
+  if (parsedInvoice.isInvoiceRoute) {
     return {
       view: 'invoice',
-      invoiceId: rawId
-        ? rawId.toUpperCase()
-        : decodedSmartOrder?.invoiceId || '',
-      smartOrder: decodedSmartOrder,
-    };
-  }
-
-  if (path === '/pay') {
-    return {
-      view: 'invoice',
-      invoiceId: decodedSmartOrder?.invoiceId || '',
-      smartOrder: decodedSmartOrder,
-    };
-  }
-
-  if (decodedSmartOrder) {
-    return {
-      view: 'invoice',
-      invoiceId: decodedSmartOrder.invoiceId,
-      smartOrder: decodedSmartOrder,
+      invoiceId: parsedInvoice.invoiceId,
+      smartOrder: parsedInvoice.smartOrder,
+      isDirectLink: parsedInvoice.isDirectLinkAutoOpen,
     };
   }
 
@@ -144,8 +135,18 @@ function shouldShowSplashOnBoot(): boolean {
   if (
     params.get('autostart') === '1' ||
     params.get('v') ||
+    params.get('inv') ||
+    params.get('id') ||
     params.get('order')
   ) {
+    return false;
+  }
+  const parsedInvoice = parseAutoOpenInvoiceUrl(
+    window.location.pathname,
+    window.location.search,
+    window.location.hash
+  );
+  if (parsedInvoice.isInvoiceRoute) {
     return false;
   }
   if (
@@ -503,12 +504,14 @@ export default function App() {
       });
     };
     window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handlePopState);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       if (rafId !== null) {
         window.cancelAnimationFrame(rafId);
       }
       window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handlePopState);
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
@@ -624,7 +627,11 @@ export default function App() {
             window.history.replaceState(
               null,
               '',
-              `/pay/${cleanInvId}?v=${encodeURIComponent(token)}`
+              `/pay/${cleanInvId}?v=${encodeURIComponent(
+                token
+              )}&inv=${encodeURIComponent(token)}&id=${encodeURIComponent(
+                cleanInvId
+              )}`
             );
           }
         } else if (route.view === 'track') {
@@ -677,12 +684,13 @@ export default function App() {
     const explicitId = invoiceId.trim().toUpperCase();
     const effectiveId =
       explicitId ||
-      (smartOrder ? smartOrder.invoiceId.trim().toUpperCase() : '') ||
-      (activeBuyerSession ? activeBuyerSession.invoiceId : '');
+      (smartOrder ? smartOrder.invoiceId.trim().toUpperCase() : '');
     const effectiveSmart =
       smartOrder !== undefined
         ? smartOrder
-        : !explicitId && activeBuyerSession
+        : explicitId &&
+          activeBuyerSession &&
+          activeBuyerSession.invoiceId.trim().toUpperCase() === explicitId
         ? activeBuyerSession.smartOrder
         : null;
 
@@ -715,13 +723,20 @@ export default function App() {
 
     const token = matchedOrder ? encodeSmartOrderParam(matchedOrder) : '';
     const nextUrl = effectiveId
-      ? `/pay/${effectiveId}${token ? `?v=${encodeURIComponent(token)}` : ''}`
+      ? `/pay/${effectiveId}${
+          token
+            ? `?v=${encodeURIComponent(token)}&inv=${encodeURIComponent(
+                token
+              )}&id=${encodeURIComponent(effectiveId)}`
+            : ''
+        }`
       : '/pay';
     window.history.pushState({}, '', nextUrl);
     setRoute({
       view: 'invoice',
       invoiceId: effectiveId,
       smartOrder: matchedOrder,
+      isDirectLink: Boolean(effectiveId || matchedOrder),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1334,6 +1349,9 @@ export default function App() {
           <PrivateInvoiceView
             invoiceId={route.invoiceId}
             smartOrder={route.smartOrder}
+            isDirectLink={Boolean(
+              route.isDirectLink || route.smartOrder || route.invoiceId
+            )}
             customOrders={customOrders}
             settings={siteSettings}
             onSelectInvoiceId={(newId) => navigateToInvoice(newId)}

@@ -656,7 +656,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     setCreatedOrderResult(newOrder);
 
     // Auto-dispatch email directly to buyer's inbox via official Google Apps Script webhook
-    // Anti-Spam: Only send Official Invoice Number, Perfume Name, Total, and clean https://vorvanofficial.com domain (no long ?v= query string)
+    // Includes the full Auto-Open Invoice URL on the "BUKA DOKUMEN & PEMBAYARAN" button
     if (cleanBuyerEmail) {
       setAutoEmailStatus('sending');
       setAutoEmailRecipient(cleanBuyerEmail);
@@ -666,6 +666,11 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       );
       const formattedGrandTotal = formatIDRCurrency(grandTotalNum);
       const qtySuffix = numericQty > 1 ? ` × ${numericQty} Flacon` : '';
+      const fullAutoOpenInvoiceUrl = buildSmartShareUrl(
+        newOrder,
+        'invoice',
+        getVorvanBaseDomain()
+      );
 
       sendBuyerInvoiceEmailWebhook({
         buyerEmail: cleanBuyerEmail,
@@ -673,7 +678,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
         invNo: invoiceId,
         itemName: `${houseName} — ${perfumeName} (${volume.trim() || '100ml'})${qtySuffix}`,
         totalPrice: formattedGrandTotal,
-        invoiceUrl: 'https://vorvanofficial.com',
+        invoiceUrl: fullAutoOpenInvoiceUrl,
+        order: newOrder,
       })
         .then((ok) => {
           setAutoEmailStatus(ok ? 'sent' : 'failed');
@@ -1777,7 +1783,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             </p>
                             <p className="text-[10px] opacity-80 mt-0.5">
                               {autoEmailStatus === 'sent'
-                                ? 'Pembeli menerima Nomor Invoice Resmi, rincian singkat pesanan (Nama Parfum & Total), dan domain bersih https://vorvanofficial.com di email (bebas spam).'
+                                ? 'Tombol "BUKA DOKUMEN & PEMBAYARAN" di dalam email memuat URL Auto-Open lengkap sehingga langsung membuka rincian tagihan & pembayaran tanpa perlu ketik kode manual.'
                                 : 'Google Apps Script Webhook VORVAN.'}
                             </p>
                           </div>

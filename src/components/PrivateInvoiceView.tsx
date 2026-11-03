@@ -447,6 +447,7 @@ const PaymentChannelLogoBadge: React.FC<{
 interface PrivateInvoiceViewProps {
   invoiceId: string;
   smartOrder?: CustomAdminOrder | null;
+  isDirectLink?: boolean;
   customOrders?: CustomAdminOrder[];
   settings?: VorvanSiteSettings;
   onBackToCatalog: () => void;
@@ -462,6 +463,7 @@ interface PrivateInvoiceViewProps {
 export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   invoiceId,
   smartOrder,
+  isDirectLink = false,
   customOrders,
   settings,
   onBackToCatalog,
@@ -477,16 +479,16 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const [submittedInvoiceId, setSubmittedInvoiceId] = useState<string>(
     invoiceId?.trim() || smartOrder?.invoiceId || ''
   );
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(() =>
-    Boolean(
-      (invoiceId?.trim() || smartOrder) &&
-        lookupPrivateInvoice(
-          invoiceId || smartOrder?.invoiceId || '',
-          customOrders,
-          smartOrder
-        )
-    )
-  );
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
+    const targetCode = (invoiceId || smartOrder?.invoiceId || '').trim();
+    if (!targetCode && !smartOrder) return false;
+    return Boolean(
+      lookupPrivateInvoice(targetCode, customOrders, smartOrder) ||
+        (isDirectLink && targetCode
+          ? resolvePrivateInvoice(targetCode, customOrders, smartOrder)
+          : null)
+    );
+  });
   const [activePaymentTab, setActivePaymentTab] = useState<
     'bank_transfer' | 'cod_hand_delivery' | 'international_paypal'
   >('bank_transfer');
@@ -507,7 +509,11 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   useEffect(() => {
     if (invoiceId?.trim() || smartOrder) {
       const targetCode = (invoiceId || smartOrder?.invoiceId || '').trim();
-      const matched = lookupPrivateInvoice(targetCode, customOrders, smartOrder);
+      const matched =
+        lookupPrivateInvoice(targetCode, customOrders, smartOrder) ||
+        (isDirectLink && targetCode
+          ? resolvePrivateInvoice(targetCode, customOrders, smartOrder)
+          : null);
       setCustomIdInput(targetCode);
       if (matched) {
         setSubmittedInvoiceId(matched.invoiceId);
@@ -526,7 +532,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
       setInputError(null);
       setIsUnlocked(false);
     }
-  }, [invoiceId, smartOrder, customOrders]);
+  }, [invoiceId, smartOrder, customOrders, isDirectLink]);
 
   useEffect(() => {
     setPaypalImgFailed(false);
@@ -534,7 +540,14 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
   const matchedInvoice: PrivateInvoice | null =
     (submittedInvoiceId || smartOrder) && !inputError
-      ? lookupPrivateInvoice(submittedInvoiceId, customOrders, smartOrder)
+      ? lookupPrivateInvoice(submittedInvoiceId, customOrders, smartOrder) ||
+        (isDirectLink && (submittedInvoiceId || smartOrder?.invoiceId)
+          ? resolvePrivateInvoice(
+              submittedInvoiceId || smartOrder?.invoiceId || '',
+              customOrders,
+              smartOrder
+            )
+          : null)
       : null;
 
   const baseInvoice: PrivateInvoice =
@@ -783,58 +796,63 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
         </div>
       </div>
 
-      {/* CLEAN LOCKED INITIAL STATE: Kotak Input Kode Tagihan Elegan */}
-      <div className="mt-8 p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-[#16151F] via-[#111017] to-[#0C0B10] border border-[#D4AF37]/40 shadow-[0_18px_48px_-15px_rgba(0,0,0,0.85)] space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 font-brand text-[10px] sm:text-xs uppercase tracking-[0.22em] text-[#E5C87E]">
-              <Lock className="w-3.5 h-3.5 text-[#E5C87E]" />
-              <span>AKSES DOKUMEN TAGIHAN PRIVAT VORVAN</span>
+      {/* CLEAN LOCKED INITIAL STATE: Hanya tampil jika pengunjung mengklik tab menu INVOICE secara manual tanpa membuka link khusus */}
+      {!isInvoiceVisible && (
+        <div
+          className="mt-8 p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-[#16151F] via-[#111017] to-[#0C0B10] border border-[#D4AF37]/40 shadow-[0_18px_48px_-15px_rgba(0,0,0,0.85)] space-y-5"
+          data-testid="invoice-manual-code-gate"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-brand text-[10px] sm:text-xs uppercase tracking-[0.22em] text-[#E5C87E]">
+                <Lock className="w-3.5 h-3.5 text-[#E5C87E]" />
+                <span>AKSES DOKUMEN TAGIHAN PRIVAT VORVAN</span>
+              </div>
+              <h1
+                id="private-invoice-heading"
+                className="font-serif-luxury text-2xl sm:text-3xl font-semibold text-white"
+              >
+                Masukkan Kode Private Invoice Anda
+              </h1>
+              <p className="text-xs sm:text-sm text-zinc-300">
+                Ketik kode tagihan resmi yang diterbitkan oleh Concierge VORVAN untuk
+                membuka rincian pesanan &amp; instruksi pembayaran.
+              </p>
             </div>
-            <h1
-              id="private-invoice-heading"
-              className="font-serif-luxury text-2xl sm:text-3xl font-semibold text-white"
+
+            <form
+              onSubmit={handleOpenInvoiceSubmit}
+              className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto"
             >
-              Masukkan Kode Private Invoice Anda
-            </h1>
-            <p className="text-xs sm:text-sm text-zinc-300">
-              Ketik kode tagihan resmi yang diterbitkan oleh Concierge VORVAN untuk
-              membuka rincian pesanan &amp; instruksi pembayaran.
-            </p>
+              <input
+                type="text"
+                value={customIdInput}
+                onChange={(e) => {
+                  setCustomIdInput(e.target.value);
+                  if (inputError) setInputError(null);
+                }}
+                placeholder="Ketik Kode Invoice (mis. INV-VRV-...)"
+                className="w-full sm:w-64 px-4 py-3 rounded-xl bg-[#0B0A0E] border border-[#D4AF37]/40 focus:border-[#F5E6B8] text-xs sm:text-sm font-mono-tabular uppercase text-white placeholder:text-zinc-600 outline-none"
+                aria-label="Masukkan nomor Private Invoice"
+                data-testid="invoice-code-input"
+              />
+              <button
+                type="submit"
+                className="px-6 py-3 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.18em] cursor-pointer whitespace-nowrap shrink-0"
+                data-testid="open-invoice-submit-btn"
+              >
+                BUKA TAGIHAN
+              </button>
+            </form>
           </div>
 
-          <form
-            onSubmit={handleOpenInvoiceSubmit}
-            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto"
-          >
-            <input
-              type="text"
-              value={customIdInput}
-              onChange={(e) => {
-                setCustomIdInput(e.target.value);
-                if (inputError) setInputError(null);
-              }}
-              placeholder="Ketik Kode Invoice (mis. INV-VRV-...)"
-              className="w-full sm:w-64 px-4 py-3 rounded-xl bg-[#0B0A0E] border border-[#D4AF37]/40 focus:border-[#F5E6B8] text-xs sm:text-sm font-mono-tabular uppercase text-white placeholder:text-zinc-600 outline-none"
-              aria-label="Masukkan nomor Private Invoice"
-              data-testid="invoice-code-input"
-            />
-            <button
-              type="submit"
-              className="px-6 py-3 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.18em] cursor-pointer whitespace-nowrap shrink-0"
-              data-testid="open-invoice-submit-btn"
-            >
-              BUKA TAGIHAN
-            </button>
-          </form>
+          {inputError && (
+            <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-800/60 px-3.5 py-2.5 rounded-xl">
+              {inputError}
+            </p>
+          )}
         </div>
-
-        {inputError && (
-          <p className="text-xs text-rose-400 bg-rose-950/30 border border-rose-800/60 px-3.5 py-2.5 rounded-xl">
-            {inputError}
-          </p>
-        )}
-      </div>
+      )}
 
       {/* AUTHORIZED PAYMENT & SETTLEMENT CHANNELS MARQUEE */}
       <div
@@ -901,7 +919,10 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   VORVAN PRIVATE CLIENT INVOICE
                 </span>
               </div>
-              <h2 className="mt-2 font-serif-luxury text-2xl sm:text-3xl md:text-4xl font-semibold text-white leading-tight flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <h2
+                id="private-invoice-heading"
+                className="mt-2 font-serif-luxury text-2xl sm:text-3xl md:text-4xl font-semibold text-white leading-tight flex flex-wrap items-baseline gap-x-2 gap-y-1"
+              >
                 <span className="whitespace-nowrap">Tagihan Privat</span>
                 <span className="whitespace-nowrap text-[#F5E6B8]">
                   #{baseInvoice.invoiceId}

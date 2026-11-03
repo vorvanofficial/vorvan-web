@@ -1,6 +1,7 @@
 import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
 import {
   applyPaymentProofToOrders,
+  buildSmartShareUrl,
   loadDeletedLeadEmails,
   loadPaymentProofsMap,
   markLeadEmailDeleted,
@@ -117,15 +118,47 @@ export async function sendVisitorLeadToGmail(params: {
 }
 
 /**
+ * Builds the official luxury HTML email template containing the `<a href="...">BUKA DOKUMEN & PEMBAYARAN</a>`
+ * button with the full Auto-Open Invoice URL (`?v=...&inv=...&id=...`).
+ */
+export function buildBuyerInvoiceEmailHtmlTemplate(params: {
+  buyerName: string;
+  invNo: string;
+  itemName: string;
+  totalPrice: string;
+  invoiceUrl: string;
+}): string {
+  const cleanInvNo = params.invNo.trim().toUpperCase();
+  const cleanBuyerName = params.buyerName.trim();
+  const cleanItemName = params.itemName.trim();
+  const cleanTotalPrice = params.totalPrice.trim();
+  const fullAutoOpenUrl = params.invoiceUrl.trim();
+
+  return (
+    `<div style="background-color:#0B0A0E;color:#FAF8F5;padding:32px 24px;font-family:Georgia,serif;border:1px solid #D4AF37;border-radius:16px;max-width:600px;margin:0 auto;">` +
+    `<p style="color:#E5C87E;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin:0 0 8px 0;">VORVAN OFFICIAL · PRIVATE CLIENT INVOICE</p>` +
+    `<h2 style="color:#FFFFFF;font-size:24px;margin:0 0 16px 0;">Tagihan Privat #${cleanInvNo}</h2>` +
+    `<p style="color:#E4E4E7;font-size:14px;line-height:1.6;">Yth. <strong>${cleanBuyerName}</strong>,</p>` +
+    `<p style="color:#D4D4D8;font-size:14px;line-height:1.6;">Berikut dokumen resmi alokasi parfum Anda di VORVAN Vault:</p>` +
+    `<div style="background-color:#14131B;border:1px solid rgba(212,175,55,0.4);border-radius:12px;padding:16px;margin:20px 0;">` +
+    `<p style="margin:4px 0;color:#FAF8F5;font-size:14px;"><strong>Nomor Invoice:</strong> #${cleanInvNo}</p>` +
+    `<p style="margin:4px 0;color:#E5C87E;font-size:14px;"><strong>Alokasi Parfum:</strong> ${cleanItemName}</p>` +
+    `<p style="margin:8px 0 4px 0;color:#34D399;font-size:16px;"><strong>Total Tagihan Resmi: ${cleanTotalPrice}</strong></p>` +
+    `</div>` +
+    `<div style="text-align:center;margin:28px 0;">` +
+    `<a href="${fullAutoOpenUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 28px;background-color:#D4AF37;color:#0B0A0E;font-weight:bold;font-size:13px;letter-spacing:2px;text-transform:uppercase;text-decoration:none;border-radius:10px;">BUKA DOKUMEN &amp; PEMBAYARAN</a>` +
+    `</div>` +
+    `</div>`
+  );
+}
+
+/**
  * Sends an automatic backup of a newly created Admin Invoice & Resi to VORVAN's Gmail
- * (`vorvanlifestyle@gmail.com`) via FormSubmit AJAX.
- * Never includes long encrypted `?v=` URLs so Gmail spam filters never block the email;
- * displays only the Official Invoice Number, concise order summary (Perfume Name & Total),
- * and the clean official domain `https://vorvanofficial.com`.
+ * (`vorvanlifestyle@gmail.com`) via FormSubmit AJAX, including the full Auto-Open Invoice URL.
  */
 export async function sendAdminOrderBackupToGmail(
   order: CustomAdminOrder,
-  _invoiceSmartUrl?: string,
+  invoiceSmartUrl?: string,
   _trackingSmartUrl?: string
 ): Promise<boolean> {
   const qty = Math.max(1, Math.round(order.quantity || 1));
@@ -135,6 +168,10 @@ export async function sendAdminOrderBackupToGmail(
     order.dealPriceIDR * qty - extraDisc + (order.shippingCostIDR || 0)
   );
   const qtySuffix = qty > 1 ? ` × ${qty} Flacon` : '';
+  const resolvedInvoiceUrl =
+    (invoiceSmartUrl || '').trim() ||
+    buildSmartShareUrl(order, 'invoice', VORVAN_CLEAN_OFFICIAL_DOMAIN);
+
   try {
     const response = await fetch(FORMSUBMIT_GMAIL_ENDPOINT, {
       method: 'POST',
@@ -148,6 +185,7 @@ export async function sendAdminOrderBackupToGmail(
         Nama_Pembeli: order.buyerName,
         Parfum: `${order.house} — ${order.fragranceName} (${order.volume})${qtySuffix}`,
         Total_Tagihan: `Rp ${grandTotal.toLocaleString('id-ID')}`,
+        Link_Buka_Dokumen_Pembayaran: resolvedInvoiceUrl,
         Website_Resmi: VORVAN_CLEAN_OFFICIAL_DOMAIN,
         Waktu_Terbit: order.createdAt,
       }),
@@ -161,9 +199,9 @@ export async function sendAdminOrderBackupToGmail(
 /**
  * Fires an automatic HTTP POST to the official VORVAN Google Apps Script webhook
  * to immediately dispatch the luxury invoice email directly to the buyer's inbox.
- * Anti-Spam Guaranteed: Never sends long encrypted query-string URLs (`?v=...`) in the email;
- * includes only the Official Invoice Number, concise order details (Perfume Name & Total),
- * and the clean short domain `https://vorvanofficial.com`.
+ * Embeds the complete Auto-Open Invoice URL (`?v=...&inv=...&id=...`) on the
+ * `<a href="...">BUKA DOKUMEN & PEMBAYARAN</a>` button so clicking the button
+ * opens the full Invoice & Payment Instructions immediately without manual code entry.
  */
 export async function sendBuyerInvoiceEmailWebhook(params: {
   buyerEmail: string;
@@ -172,14 +210,37 @@ export async function sendBuyerInvoiceEmailWebhook(params: {
   itemName: string;
   totalPrice: string;
   invoiceUrl?: string;
+  order?: CustomAdminOrder;
 }): Promise<boolean> {
   const buyerEmail = params.buyerEmail.trim();
   if (!buyerEmail) return false;
 
-  const cleanInvNo = params.invNo.trim();
+  const cleanInvNo = params.invNo.trim().toUpperCase();
   const cleanBuyerName = params.buyerName.trim();
   const cleanItemName = params.itemName.trim();
   const cleanTotalPrice = params.totalPrice.trim();
+
+  const rawUrl = (params.invoiceUrl || '').trim();
+  const resolvedInvoiceUrl =
+    rawUrl && (rawUrl.includes('?') || rawUrl.includes('#'))
+      ? rawUrl
+      : params.order
+      ? buildSmartShareUrl(
+          params.order,
+          'invoice',
+          rawUrl || VORVAN_CLEAN_OFFICIAL_DOMAIN
+        )
+      : `${rawUrl || VORVAN_CLEAN_OFFICIAL_DOMAIN}/?inv=${encodeURIComponent(
+          cleanInvNo
+        )}&id=${encodeURIComponent(cleanInvNo)}`;
+
+  const htmlBody = buildBuyerInvoiceEmailHtmlTemplate({
+    buyerName: cleanBuyerName,
+    invNo: cleanInvNo,
+    itemName: cleanItemName,
+    totalPrice: cleanTotalPrice,
+    invoiceUrl: resolvedInvoiceUrl,
+  });
 
   try {
     await fetch(VORVAN_EMAIL_WEBHOOK, {
@@ -194,13 +255,17 @@ export async function sendBuyerInvoiceEmailWebhook(params: {
         invNo: cleanInvNo,
         itemName: cleanItemName,
         totalPrice: cleanTotalPrice,
-        invoiceUrl: VORVAN_CLEAN_OFFICIAL_DOMAIN,
-        websiteUrl: VORVAN_CLEAN_OFFICIAL_DOMAIN,
+        invoiceUrl: resolvedInvoiceUrl,
+        websiteUrl: resolvedInvoiceUrl,
+        buttonUrl: resolvedInvoiceUrl,
+        buttonLabel: 'BUKA DOKUMEN & PEMBAYARAN',
+        ctaButtonHtml: `<a href="${resolvedInvoiceUrl}" target="_blank" rel="noopener noreferrer">BUKA DOKUMEN &amp; PEMBAYARAN</a>`,
+        htmlBody,
         emailSummary:
           `Nomor Invoice Resmi: #${cleanInvNo}\n` +
           `Pesanan Parfum: ${cleanItemName}\n` +
           `Total Tagihan: ${cleanTotalPrice}\n` +
-          `Website Resmi: ${VORVAN_CLEAN_OFFICIAL_DOMAIN} (Masukkan Nomor Invoice #${cleanInvNo} pada menu INVOICE)`,
+          `Buka Dokumen & Pembayaran: ${resolvedInvoiceUrl}`,
       }),
     });
     return true;
