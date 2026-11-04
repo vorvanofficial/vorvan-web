@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { LUXURY_BRAND_HOUSES } from '../data/catalog';
 import {
   BrandHouseId,
@@ -52,12 +52,11 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
   const matchingFragrances =
     filteredByGender.length > 0 ? filteredByGender : allBrandFragrances;
 
-  // Keep active chip centered inside the horizontal quick-switch ribbon
-  useEffect(() => {
+  const centerRibbonChipManual = (brandId: BrandHouseId) => {
     const bar = ribbonBarRef.current;
     if (!bar) return;
     const activeChip = bar.querySelector(
-      `[data-ribbon-brand="${selectedBrandId}"]`
+      `[data-ribbon-brand="${brandId}"]`
     ) as HTMLElement | null;
     if (activeChip) {
       if (typeof activeChip.scrollIntoView === 'function') {
@@ -74,7 +73,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
         bar.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
       }
     }
-  }, [selectedBrandId]);
+  };
 
   const smoothScrollToBrandShowcase = () => {
     setTimeout(() => {
@@ -116,6 +115,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
       setSelectedGender('ALL');
     }
     if (shouldAutoGlide) {
+      centerRibbonChipManual(brandId);
       smoothScrollToBrandShowcase();
     }
   };

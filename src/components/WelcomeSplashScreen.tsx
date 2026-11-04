@@ -17,7 +17,19 @@ export const WelcomeSplashScreen: React.FC<WelcomeSplashScreenProps> = ({
   const t = getTranslation(locale).splash;
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    if (!isOpen) {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
 
     // Extended majestic duration (~5.4 seconds) so the welcome intro is never rushed
     const stepTimer = setInterval(() => {
@@ -29,6 +41,9 @@ export const WelcomeSplashScreen: React.FC<WelcomeSplashScreenProps> = ({
     }, 5000);
 
     const autoEnterTimer = setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }
       onEnterVault();
     }, 5600);
 
@@ -42,8 +57,14 @@ export const WelcomeSplashScreen: React.FC<WelcomeSplashScreenProps> = ({
   if (!isOpen) return null;
 
   const handleManualEnter = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
     setIsFadingOut(true);
     setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }
       onEnterVault();
     }, 240);
   };

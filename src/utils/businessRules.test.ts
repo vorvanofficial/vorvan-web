@@ -2008,3 +2008,40 @@ test('31. Zero "Parallel Import" strings remain anywhere in the codebase; Privat
   }
 });
 
+test('32. Splash Screen exit enforces window.scrollTo({ top: 0, left: 0, behavior: "instant" }), manual scrollRestoration, and BrandHierarchyExplorer never calls scrollIntoView in useEffect on initial mount', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+  const splashCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'WelcomeSplashScreen.tsx'),
+    'utf8'
+  );
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf8'
+  );
+
+  assert.ok(appCode.includes("window.history.scrollRestoration = 'manual'"));
+  assert.ok(
+    appCode.includes(
+      "window.scrollTo({ top: 0, left: 0, behavior: 'instant' })"
+    )
+  );
+  assert.ok(splashCode.includes("window.history.scrollRestoration = 'manual'"));
+  assert.ok(
+    splashCode.includes(
+      "window.scrollTo({ top: 0, left: 0, behavior: 'instant' })"
+    )
+  );
+  assert.ok(
+    !explorerCode.includes('useEffect'),
+    'BrandHierarchyExplorer must not run scrollIntoView automatically inside useEffect on initial mount'
+  );
+  assert.ok(explorerCode.includes('centerRibbonChipManual'));
+});
+
+

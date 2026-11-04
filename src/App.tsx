@@ -452,7 +452,31 @@ export default function App() {
     useState<boolean>(false);
   const [b2bModalOpen, setB2BModalOpen] = useState<boolean>(false);
 
+  const handleEnterVaultFromSplash = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+    setShowSplash(false);
+  }, []);
+
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    if (!showSplash) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+  }, [showSplash]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
     const handlePopState = () => {
       const next = parseCurrentLocation();
       setRoute(next);
@@ -1129,7 +1153,7 @@ export default function App() {
       {/* 1. CINEMATIC WELCOME SPLASH SCREEN (EXTENDED 5.4s DURATION) */}
       <WelcomeSplashScreen
         isOpen={showSplash}
-        onEnterVault={() => setShowSplash(false)}
+        onEnterVault={handleEnterVaultFromSplash}
         locale={locale}
       />
 
