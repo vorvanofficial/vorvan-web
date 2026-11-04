@@ -486,7 +486,7 @@ export function formatInquiryMessage(
     `• Tipe Parfum: ${fragrance.name} (${fragrance.concentration})\n` +
     `• Gender: ${genderLabel}\n` +
     `• Ukuran: ${volumeLabel}${emailPart}${extraPart}\n\n` +
-    `Mohon informasi alokasi stok dan penawaran terbaiknya (Privilege Efisiensi Valuasi 20%–30%). Terima kasih.`
+    `Mohon informasi alokasi stok dan penawaran terbaiknya (Private Fragrance Curation — Privilege Efisiensi Valuasi 20%–30%). Terima kasih.`
   );
 }
 
@@ -1674,7 +1674,7 @@ export function buildBuyerInvoiceWhatsAppUrl(
     `👉 Link Status Pesanan: ${trackUrl}\n\n` +
     `Hormat kami,\n` +
     `VORVAN Official Concierge\n` +
-    `Haute Parfumerie & Olfactory Vault`;
+    `Private Fragrance Curation · Direct International Archive`;
 
   const phoneTarget = normalizedPhone || VORVAN_WHATSAPP_NUMBER;
   return `https://wa.me/${phoneTarget}?text=${encodeURIComponent(message)}`;
@@ -2776,7 +2776,7 @@ export function buildConciergeRecommendationWaText(
     `• *Karakter Aroma:* ${entry.simpleNotes}\n` +
     `• *Kecocokan Iklim & Momen:* ${momentAndClimate}\n` +
     `• *Valuasi Resmi Butik:* ~Rp ${formattedRetail}~\n` +
-    `• *Harga Kurasi VORVAN (Hemat ${entry.disc}%):* *Rp ${formattedPrice}* (Full-Size Sealed + Digital Certificate)`
+    `• *Harga Kurasi VORVAN (Hemat ${entry.disc}%):* *Rp ${formattedPrice}* (Full-Size Sealed · Private Fragrance Curation + Digital Certificate)`
   );
 }
 

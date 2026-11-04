@@ -148,6 +148,7 @@ export function buildBuyerInvoiceEmailHtmlTemplate(params: {
     `<div style="text-align:center;margin:28px 0;">` +
     `<a href="${fullAutoOpenUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 28px;background-color:#D4AF37;color:#0B0A0E;font-weight:bold;font-size:13px;letter-spacing:2px;text-transform:uppercase;text-decoration:none;border-radius:10px;">BUKA DOKUMEN &amp; PEMBAYARAN</a>` +
     `</div>` +
+    `<p style="margin:20px 0 0 0;padding-top:16px;border-top:1px solid rgba(212,175,55,0.25);color:#A1A1AA;font-size:11px;text-align:center;letter-spacing:1px;">VORVAN Official · Private Fragrance Curation &amp; Direct International Curation (https://vorvanofficial.com)</p>` +
     `</div>`
   );
 }

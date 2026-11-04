@@ -1112,7 +1112,7 @@ export default function App() {
     siteSettings.telegramUsername.replace(/^@/, '') || 'vorvanofficial';
 
   const generalConciergeMessage =
-    'Halo Concierge VORVAN, saya ingin berkonsultasi mengenai koleksi parfum Original Parallel Import (Privilege Efisiensi Valuasi 20%–30%) dan mengecek ketersediaan unit di Vault.';
+    'Halo Concierge VORVAN, saya ingin berkonsultasi mengenai koleksi parfum Private Fragrance Curation (Direct International Curation — Privilege Efisiensi Valuasi 20%–30%) dan mengecek ketersediaan unit di Vault.';
 
   const generalConciergeWaUrl = `https://wa.me/${normalizedWa}?text=${encodeURIComponent(
     generalConciergeMessage
@@ -1397,7 +1397,7 @@ export default function App() {
                     {t.hero.scriptCrown}
                   </p>
 
-                  {/* Unboxed Editorial Kicker: ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE */}
+                  {/* Unboxed Editorial Kicker: PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE */}
                   <div
                     className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 font-brand text-[10px] sm:text-xs text-[#E5C87E] uppercase tracking-[0.22em] font-semibold text-center"
                     data-testid="hero-kicker-subtitle"
@@ -1462,41 +1462,41 @@ export default function App() {
               </div>
             </section>
 
-            {/* 2. SECTION EDUKASI: THE PARALLEL IMPORT ADVANTAGE */}
+            {/* 2. SECTION EDUKASI: THE DIRECT CURATION PRIVILEGE */}
             <section
-              id="parallel-import-advantage"
+              id="direct-curation-privilege"
               className="relative overflow-hidden py-16 sm:py-20 bg-[#100F15]/65 border-b border-[#D4AF37]/25"
-              data-testid="parallel-import-section"
+              data-testid="direct-curation-section"
             >
               <ParallaxSectionBg
                 speed={0.16}
                 tone="champagne"
                 watermarkText="II · L’ALLOCATION DIRECTE"
                 align="left"
-                testId="parallax-bg-parallel-import"
+                testId="parallax-bg-direct-curation"
               />
               <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 sm:space-y-12">
                 <ScrollReveal variant="up">
                   <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-8 border-b border-[#D4AF37]/25">
                     <div className="space-y-1.5">
                       <p className="font-latin-script text-2xl sm:text-3xl text-gold-champagne">
-                        {t.parallelImport.scriptCrown}
+                        {t.directCuration.scriptCrown}
                       </p>
                       <p className="font-brand text-[10px] sm:text-xs uppercase tracking-[0.24em] text-[#D8BE82]">
-                        {t.parallelImport.kicker}
+                        {t.directCuration.kicker}
                       </p>
                       <h2 className="font-serif-luxury text-3xl sm:text-4xl font-semibold text-white tracking-wide">
-                        {t.parallelImport.title}
+                        {t.directCuration.title}
                       </h2>
                     </div>
                     <p className="font-latin-italic text-base sm:text-lg text-zinc-200 max-w-md leading-relaxed">
-                      {t.parallelImport.subtitle}
+                      {t.directCuration.subtitle}
                     </p>
                   </div>
                 </ScrollReveal>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-                  {t.parallelImport.pillars.map((pillar, idx) => {
+                  {t.directCuration.pillars.map((pillar, idx) => {
                     const isValuationBox = idx === 2;
                     return (
                       <ScrollReveal
@@ -1521,7 +1521,7 @@ export default function App() {
                             {isValuationBox && (
                               <div
                                 className="pt-0.5 flex flex-col gap-1 items-center sm:items-start"
-                                data-testid="parallel-import-valuation-highlight"
+                                data-testid="direct-curation-valuation-highlight"
                               >
                                 <span className="font-serif italic text-3xl md:text-4xl text-[#D4AF37] tracking-tight whitespace-nowrap">
                                   20% — 30%

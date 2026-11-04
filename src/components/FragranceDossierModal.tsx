@@ -239,7 +239,7 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
               <div className="flex flex-wrap items-center gap-4 text-[11px] text-zinc-400 pt-1">
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#E5C87E]" />
-                  100% Original Parallel Import · European Vault Allocation
+                  Private Fragrance Curation · Direct International Archive
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#E5C87E]" />

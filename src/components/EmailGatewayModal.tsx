@@ -1291,7 +1291,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           htmlFor="admin-discount-pct"
                           className="block text-xs text-emerald-400 font-medium mb-1"
                         >
-                          Diskon Parallel Import (%)
+                          Diskon Privilege Kurasi (%)
                         </label>
                         <input
                           id="admin-discount-pct"

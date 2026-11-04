@@ -47,7 +47,7 @@ export interface TranslationDictionary {
     ctaExploreHouses: string;
     ctaPrivateInvoice: string;
   };
-  parallelImport: {
+  directCuration: {
     scriptCrown: string;
     kicker: string;
     title: string;
@@ -179,11 +179,11 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       welcomeTitle: 'WELCOME TO VORVAN',
       tagline: 'LIFESTYLE FOR EVERYONE',
       enterVaultBtn: 'MASUKI VAULT EKSKLUSIF',
-      bottomNote: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      bottomNote: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
     },
     hero: {
       scriptCrown: 'La Collection Privée d’Europe',
-      kickerLeft: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      kickerLeft: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
       kickerRight: 'LIFESTYLE FOR EVERYONE',
       headline:
         'Gerbang Eksklusif Menuju Mahakarya Wewangian Dunia Tanpa Batasan Ritel Konvensional.',
@@ -196,19 +196,19 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       ctaExploreHouses: 'Eksplorasi 19 Rumah Parfum',
       ctaPrivateInvoice: 'Buka Private Invoice',
     },
-    parallelImport: {
-      scriptCrown: 'L’Art de l’Importation Parallèle',
-      kicker: 'EUROPEAN DIRECT ALLOCATION • TRANSPARENT SOURCING',
-      title: 'The Parallel Import Advantage',
+    directCuration: {
+      scriptCrown: 'L’Art de la Curation Internationale Directe',
+      kicker: 'DIRECT INTERNATIONAL CURATION • TRANSPARENT SOURCING',
+      title: 'The Direct Curation Privilege',
       subtitle:
-        'Transparansi jalur pengadaan langsung dari distributor resmi Eropa yang memungkinkan kolektor menikmati keaslian mutlak dengan struktur valuasi yang rasional.',
+        'Kurasi Internasional Langsung — efisiensi harga 20%–30% di bawah ritel butik diperoleh dari pemangkasan rantai distribusi konvensional dan biaya sewa mal mewah.',
       pillars: [
         {
           index: '01',
           subtitle: 'MEMOTONG JALUR DISTRIBUSI PANJANG',
           title: 'Arbitrase Rantai Pasok Global',
           description:
-            'Mengakses alokasi langsung dari distributor resmi Eropa tanpa beban sewa butik mal mewah atau rantai perantara berlapis.',
+            'Mengakses alokasi langsung dari jaringan distribusi resmi Eropa melalui Direct International Curation tanpa beban sewa butik mal mewah atau rantai perantara berlapis.',
         },
         {
           index: '02',
@@ -219,10 +219,10 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         },
         {
           index: '03',
-          subtitle: 'PRIVILEGE ARBITRASE 20% – 30%',
+          subtitle: 'PRIVILEGE KURASI 20% – 30%',
           title: 'Valuasi Rasional & Eksklusif',
           description:
-            'Menghadirkan seluruh koleksi Original Parallel Import dari rumah mode dunia dengan selisih valuasi 20% hingga 30% di bawah harga ritel butik mal konvensional maupun situs resmi.',
+            'Menghadirkan seluruh koleksi Private Fragrance Curation dari rumah mode dunia dengan efisiensi valuasi 20% hingga 30% di bawah harga ritel butik mal konvensional maupun situs resmi.',
         },
       ],
     },
@@ -375,11 +375,11 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       welcomeTitle: 'WELCOME TO VORVAN',
       tagline: 'LIFESTYLE FOR EVERYONE',
       enterVaultBtn: 'ENTER PRIVATE VAULT',
-      bottomNote: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      bottomNote: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
     },
     hero: {
       scriptCrown: 'La Collection Privée d’Europe',
-      kickerLeft: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      kickerLeft: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
       kickerRight: 'LIFESTYLE FOR EVERYONE',
       headline:
         'The Exclusive Gateway to World-Class Olfactory Masterpieces Beyond Conventional Retail.',
@@ -392,12 +392,12 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       ctaExploreHouses: 'Explore 19 Fragrance Houses',
       ctaPrivateInvoice: 'Open Private Invoice',
     },
-    parallelImport: {
-      scriptCrown: 'L’Art de l’Importation Parallèle',
-      kicker: 'EUROPEAN DIRECT ALLOCATION • TRANSPARENT SOURCING',
-      title: 'The Parallel Import Advantage',
+    directCuration: {
+      scriptCrown: 'L’Art de la Curation Internationale Directe',
+      kicker: 'DIRECT INTERNATIONAL CURATION • TRANSPARENT SOURCING',
+      title: 'The Direct Curation Privilege',
       subtitle:
-        'Direct European sourcing transparency enabling discerning collectors to acquire absolute provenance with a rational valuation structure.',
+        'Direct International Curation — achieving a 20%–30% valuation efficiency below boutique retail by bypassing conventional distribution chains and luxury mall lease markups.',
       pillars: [
         {
           index: '01',
@@ -415,10 +415,10 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         },
         {
           index: '03',
-          subtitle: 'PRIVILEGE ARBITRAGE 20% – 30%',
+          subtitle: 'CURATION PRIVILEGE 20% – 30%',
           title: 'Rational & Exclusive Valuation',
           description:
-            'Presenting Original Parallel Import collections from world fashion houses with a 20% to 30% valuation differential below conventional mall boutiques and official websites.',
+            'Presenting Private Fragrance Curation collections through Direct International Curation from world fashion houses with a 20% to 30% valuation differential below conventional mall boutiques and official websites.',
         },
       ],
     },
@@ -571,11 +571,11 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       welcomeTitle: 'BIENVENUE CHEZ VORVAN',
       tagline: 'LIFESTYLE FOR EVERYONE',
       enterVaultBtn: 'ENTRER DANS LE SALON',
-      bottomNote: 'HAUTE PARFUMERIE D’IMPORTATION PARALLÈLE AUTHENTIQUE',
+      bottomNote: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
     },
     hero: {
       scriptCrown: 'La Collection Privée d’Europe',
-      kickerLeft: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      kickerLeft: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
       kickerRight: 'LIFESTYLE FOR EVERYONE',
       headline:
         'Le Sanctuaire Exclusif des Chefs-d’Œuvre de la Haute Parfumerie Mondiale.',
@@ -588,12 +588,12 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       ctaExploreHouses: 'Explorer les 19 Maisons',
       ctaPrivateInvoice: 'Facture Privée',
     },
-    parallelImport: {
-      scriptCrown: 'L’Art de l’Importation Parallèle',
-      kicker: 'ALLOCATION DIRECTE EUROPÉENNE · TRAÇABILITÉ TOTALE',
-      title: 'L’Avantage de l’Importation Parallèle',
+    directCuration: {
+      scriptCrown: 'L’Art de la Curation Internationale Directe',
+      kicker: 'DIRECT INTERNATIONAL CURATION · TRAÇABILITÉ TOTALE',
+      title: 'The Direct Curation Privilege',
       subtitle:
-        'Pourquoi les collectionisseurs avertis privilégient le circuit d’allocation directe européenne VORVAN.',
+        'Pourquoi les collectionneurs avertis privilégient le circuit de Curation Internationale Directe VORVAN (20%–30% sous le prix boutique).',
       pillars: [
         {
           index: '01',
@@ -767,11 +767,11 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       welcomeTitle: 'WELCOME TO VORVAN',
       tagline: 'LIFESTYLE FOR EVERYONE',
       enterVaultBtn: 'دخول الخزينة الخاصة',
-      bottomNote: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      bottomNote: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
     },
     hero: {
       scriptCrown: 'La Collection Privée d’Europe',
-      kickerLeft: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      kickerLeft: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
       kickerRight: 'LIFESTYLE FOR EVERYONE',
       headline:
         'بوابتك الحصرية إلى أرقى روائع العطور العالمية خارج حدود التجزئة التقليدية.',
@@ -784,12 +784,12 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       ctaExploreHouses: 'استكشف 19 دار عطور عالمية',
       ctaPrivateInvoice: 'فاتورة خاصة',
     },
-    parallelImport: {
-      scriptCrown: 'L’Art de l’Importation Parallèle',
-      kicker: 'EUROPEAN DIRECT ALLOCATION · TRANSPARENT SOURCING',
-      title: 'مزايا الاستيراد الموازي الأصلي',
+    directCuration: {
+      scriptCrown: 'L’Art de la Curation Internationale Directe',
+      kicker: 'DIRECT INTERNATIONAL CURATION · TRANSPARENT SOURCING',
+      title: 'The Direct Curation Privilege',
       subtitle:
-        'لماذا يختار جامعو العطور الفاخرة مسار التوريد الأوروبي المباشر لدى VORVAN.',
+        'لماذا يختار جامعو العطور الفاخرة مسار الانتقاء الدولي المباشر (Direct International Curation) لدى VORVAN.',
       pillars: [
         {
           index: '01',
@@ -962,11 +962,11 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       welcomeTitle: 'WELCOME TO VORVAN',
       tagline: 'LIFESTYLE FOR EVERYONE',
       enterVaultBtn: '进入私人香氛金库',
-      bottomNote: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      bottomNote: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
     },
     hero: {
       scriptCrown: 'La Collection Privée d’Europe',
-      kickerLeft: 'ORIGINAL PARALLEL IMPORT LUXURY FRAGRANCE',
+      kickerLeft: 'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE',
       kickerRight: 'LIFESTYLE FOR EVERYONE',
       headline: '突破传统零售界限，通往世界殿堂级高定香氛的私密之门。',
       narrativePrefix: '欢迎莅临 ',
@@ -977,12 +977,12 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       ctaExploreHouses: '探索 19 大高定香氛世家',
       ctaPrivateInvoice: '私人账单',
     },
-    parallelImport: {
-      scriptCrown: 'L’Art de l’Importation Parallèle',
-      kicker: 'EUROPEAN DIRECT ALLOCATION · TRANSPARENT SOURCING',
-      title: '官方平行进口的核心优势',
+    directCuration: {
+      scriptCrown: 'L’Art de la Curation Internationale Directe',
+      kicker: 'DIRECT INTERNATIONAL CURATION · TRANSPARENT SOURCING',
+      title: 'The Direct Curation Privilege',
       subtitle:
-        '为何全球资深香氛藏家青睐 VORVAN 欧洲直配平行进口渠道。',
+        '为何全球资深香氛藏家青睐 VORVAN 国际直采甄选 (Direct International Curation) 渠道。',
       pillars: [
         {
           index: '01',

@@ -618,7 +618,7 @@ test('Tab 4 Concierge Guide (Panduan 81 Parfum — Iklim Indonesia) filters by m
   assert.ok(waText.includes('• *Valuasi Resmi Butik:* ~Rp 2.650.000~'));
   assert.ok(
     waText.includes(
-      '• *Harga Kurasi VORVAN (Hemat 23%):* *Rp 2.040.000* (Full-Size Sealed + Digital Certificate)'
+      '• *Harga Kurasi VORVAN (Hemat 23%):* *Rp 2.040.000* (Full-Size Sealed · Private Fragrance Curation + Digital Certificate)'
     )
   );
 });
@@ -1457,7 +1457,7 @@ test('Public Invoice & Tracking Privacy: lookupPrivateInvoice and lookupTracking
   assert.equal(trkCustomer2.recipientName, 'Ibu Sinta Maharani');
 });
 
-test('SEO Meta Tags & JSON-LD Organization Schema in index.html include vorvanofficial and https://vorvanofficial.com', async () => {
+test('SEO Meta Tags & JSON-LD Organization Schema in index.html include vorvanofficial, https://vorvanofficial.com, Private Fragrance Curation, and Direct International Curation', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
   const html = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
@@ -1468,12 +1468,12 @@ test('SEO Meta Tags & JSON-LD Organization Schema in index.html include vorvanof
   );
   assert.ok(
     html.includes(
-      'content="VORVAN Official (vorvanofficial.com) — Kurasi Independen 81 Parfum Full-Size Sealed dari 19 Rumah Mode Eropa melalui jalur Parallel Import. Valuasi 20%–30% di bawah ritel butik resmi."'
+      'content="VORVAN Official (vorvanofficial.com) — Kurasi Independen 81 Parfum Full-Size Sealed dari 19 Rumah Mode Eropa melalui jalur Private Fragrance Curation &amp; Direct International Curation. Valuasi 20%–30% di bawah ritel butik resmi."'
     )
   );
   assert.ok(
     html.includes(
-      'content="vorvanofficial, vorvan official, vorvan, vorvan parfum, vorvan luxury parfums, vorvanofficial.com, parallel import parfum indonesia"'
+      'content="vorvanofficial, vorvan official, vorvan, vorvan parfum, vorvan luxury parfums, vorvanofficial.com, private fragrance curation, direct international curation"'
     )
   );
   assert.ok(
@@ -1483,6 +1483,7 @@ test('SEO Meta Tags & JSON-LD Organization Schema in index.html include vorvanof
   assert.ok(html.includes('"name": "VORVAN Official"'));
   assert.ok(html.includes('"alternateName": "vorvanofficial"'));
   assert.ok(html.includes('"url": "https://vorvanofficial.com"'));
+  assert.ok(!/parallel\s+import/i.test(html));
 });
 
 test('Admin Tab 1 Real-Time Two-Way Sync Calculator: Discount (%), Deal Price, Retail Price, Qty, Extra Discount, and Ongkir synchronize accurately', async () => {
@@ -1867,9 +1868,10 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
   }
   assert.ok(robotsTxt.includes('Allow: /'));
 
-  // 3. Verify llms.txt has official profile, Parallel Import, warranty, and all 19 European Houses
+  // 3. Verify llms.txt has official profile, Private Fragrance Curation & Direct International Curation, warranty, and all 19 European Houses
   assert.ok(llmsTxt.includes('https://vorvanofficial.com'));
-  assert.ok(llmsTxt.includes('Parallel Import'));
+  assert.ok(llmsTxt.includes('Private Fragrance Curation'));
+  assert.ok(llmsTxt.includes('Direct International Curation'));
   assert.ok(llmsTxt.includes('20%–30%'));
   assert.ok(llmsTxt.includes('Digital Certificate of Curation'));
   for (const house of [
@@ -1902,3 +1904,87 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
   assert.ok(indexCss.includes('backdrop-filter: blur(16px);'));
   assert.ok(indexCss.includes('padding-inline: 16px;'));
 });
+
+test('31. Zero "Parallel Import" strings remain anywhere in the codebase; Private Fragrance Curation, Direct International Curation, The Direct Curation Privilege, Privilege Kurasi VORVAN, and Clause 1 are active', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { TRANSLATIONS } = await import('../i18n/translations.ts');
+  const { buildBuyerInvoiceEmailHtmlTemplate } = await import('./cloudSync.ts');
+  const { buildConciergeRecommendationWaText } = await import('./businessRules.ts');
+  const { CONCIERGE_81_GUIDE } = await import('../data/conciergeGuide81.ts');
+
+  // 1. Check Showroom, Splash Screen & Translations
+  assert.equal(
+    TRANSLATIONS.ID.splash.bottomNote,
+    'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE'
+  );
+  assert.equal(
+    TRANSLATIONS.ID.hero.kickerLeft,
+    'PRIVATE FRAGRANCE CURATION · DIRECT INTERNATIONAL ARCHIVE'
+  );
+  assert.equal(
+    TRANSLATIONS.ID.directCuration.title,
+    'The Direct Curation Privilege'
+  );
+  assert.equal(
+    TRANSLATIONS.EN.directCuration.title,
+    'The Direct Curation Privilege'
+  );
+
+  // 2. Check PrivateInvoiceView.tsx Clause 1 & discount row label
+  const invoiceViewCode = fs
+    .readFileSync(
+      path.join(process.cwd(), 'src', 'components', 'PrivateInvoiceView.tsx'),
+      'utf8'
+    )
+    .replace(/\s+/g, ' ');
+  assert.ok(invoiceViewCode.includes('Privilege Kurasi VORVAN (Diskon'));
+  assert.ok(
+    invoiceViewCode.includes(
+      '1. Status Kurasi Independen (Private Fragrance Curation):'
+    )
+  );
+  assert.ok(
+    invoiceViewCode.includes(
+      'Pembeli memahami dan menyetujui bahwa VORVAN beroperasi sebagai kurator independen melalui jalur Direct International Curation (pengadaan langsung lintas negara non-afiliasi ritel mal lokal), di mana efisiensi harga 20%–30% merupakan keuntungan langsung dari pemangkasan rantai distribusi konvensional tersebut.'
+    )
+  );
+
+  // 3. Check Email template footer & WhatsApp recommendation
+  const emailHtml = buildBuyerInvoiceEmailHtmlTemplate({
+    buyerName: 'Bpk. Aditya',
+    invNo: 'INV-VRV-9001',
+    itemName: 'Louis Vuitton — Imagination (100ml)',
+    totalPrice: 'Rp 4.450.000',
+    invoiceUrl: 'https://vorvanofficial.com/?inv=test&id=INV-VRV-9001',
+  });
+  assert.ok(emailHtml.includes('Private Fragrance Curation'));
+  assert.ok(emailHtml.includes('Direct International Curation'));
+
+  const waRec = buildConciergeRecommendationWaText(CONCIERGE_81_GUIDE[0]);
+  assert.ok(waRec.includes('Private Fragrance Curation'));
+
+  // 4. Verify zero occurrences of "parallel import" across index.html, metadata.json, public/, and src/ (excluding this test assertion string)
+  const checkFiles = [
+    'index.html',
+    'metadata.json',
+    'public/llms.txt',
+    'src/App.tsx',
+    'src/i18n/translations.ts',
+    'src/components/PrivateInvoiceView.tsx',
+    'src/components/EmailGatewayModal.tsx',
+    'src/components/FragranceDossierModal.tsx',
+    'src/components/OrderTrackingView.tsx',
+    'src/data/catalog.ts',
+    'src/utils/businessRules.ts',
+    'src/utils/cloudSync.ts',
+  ];
+  for (const relPath of checkFiles) {
+    const content = fs.readFileSync(path.join(process.cwd(), relPath), 'utf8');
+    assert.ok(
+      !/parallel\s*import/i.test(content),
+      `Found forbidden "Parallel Import" in ${relPath}`
+    );
+  }
+});
+

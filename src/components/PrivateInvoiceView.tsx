@@ -1043,7 +1043,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 Jaminan &amp; Otentikasi Vault
               </span>
               <p className="text-zinc-200 font-medium">
-                100% Original Parallel Import · Segel Hologram VORVAN
+                Private Fragrance Curation · Direct International Archive · Segel Hologram VORVAN
               </p>
               <p className="text-zinc-400 leading-relaxed">{baseInvoice.notes}</p>
             </div>
@@ -1116,7 +1116,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </table>
             </div>
 
-            {/* Totals Breakdown — Retail Valuation Comparison, Parallel Import Savings & Shipping Zone */}
+            {/* Totals Breakdown — Retail Valuation Comparison, Curation Privilege Savings & Shipping Zone */}
             <div
               className="mt-6 pt-6 border-t border-zinc-800 flex flex-col items-end space-y-2.5 text-xs sm:text-[13px]"
               data-testid="invoice-pricing-summary"
@@ -1132,7 +1132,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   </div>
                   <div className="w-full sm:w-[440px] flex items-center justify-between gap-4 text-[#E5C87E] font-semibold">
                     <span>
-                      Efisiensi Parallel Import VORVAN (Diskon{' '}
+                      Privilege Kurasi VORVAN (Diskon{' '}
                       {baseInvoice.discountPct ||
                         Math.round(
                           (((baseInvoice.retailPriceTotalIDR || 0) -
@@ -1249,13 +1249,14 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 >
                   <p className="vorvan-legal-clause-item">
                     <strong>
-                      1. Status Kurasi Independen (Parallel Import Disclosure):
+                      1. Status Kurasi Independen (Private Fragrance Curation):
                     </strong>{' '}
                     Pembeli memahami dan menyetujui bahwa VORVAN beroperasi
-                    sebagai kurator independen jalur Parallel Import (distribusi
-                    langsung lintas negara non-afiliasi ritel mal lokal), di
-                    mana efisiensi harga 20%–30% merupakan keuntungan langsung
-                    dari pemangkasan rantai distribusi tersebut.
+                    sebagai kurator independen melalui jalur Direct International
+                    Curation (pengadaan langsung lintas negara non-afiliasi
+                    ritel mal lokal), di mana efisiensi harga 20%–30% merupakan
+                    keuntungan langsung dari pemangkasan rantai distribusi
+                    konvensional tersebut.
                   </p>
                   <p className="vorvan-legal-clause-item">
                     <strong>

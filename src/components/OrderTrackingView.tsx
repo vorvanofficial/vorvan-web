@@ -678,7 +678,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
               </span>
               <span className="inline-flex items-center gap-1.5 text-emerald-400">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>100% Original Parallel Import</span>
+                <span>Private Fragrance Curation · Direct International Archive</span>
               </span>
             </div>
           </div>
