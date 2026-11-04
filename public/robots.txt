@@ -1,4 +1,44 @@
+# VORVAN Official (https://vorvanofficial.com) — Robots & AI Crawler Policy
+# Explicitly allow all search engine crawlers and AI assistants (ChatGPT, Gemini, Perplexity, Claude)
+
 User-agent: *
 Allow: /
 
-Sitemap: https://vorvan-official.vercel.app/sitemap.xml
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+Sitemap: https://vorvanofficial.com/sitemap.xml
+# AI/LLM Structured Knowledge Base: https://vorvanofficial.com/llms.txt

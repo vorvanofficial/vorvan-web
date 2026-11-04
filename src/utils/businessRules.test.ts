@@ -1821,6 +1821,84 @@ test('29. Admin Package Shipping Data Copy Text and Direct Buyer WhatsApp URL fo
   assert.ok(decodedWa.includes('JNE — JNE-88120099'));
 });
 
+test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms.txt) and Full-Bleed Sticky 19-Brand Bar CSS are properly configured', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
 
+  const rootDir = process.cwd();
+  const indexHtml = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf8');
+  const robotsTxt = fs.readFileSync(
+    path.join(rootDir, 'public', 'robots.txt'),
+    'utf8'
+  );
+  const llmsTxt = fs.readFileSync(
+    path.join(rootDir, 'public', 'llms.txt'),
+    'utf8'
+  );
+  const indexCss = fs.readFileSync(
+    path.join(rootDir, 'src', 'index.css'),
+    'utf8'
+  );
 
+  // 1. Verify index.html has JSON-LD Organization, LuxuryGoodsStore, ItemList (19 Houses) and static semantic article inside #root + noscript
+  assert.ok(indexHtml.includes('"@type": "Organization"'));
+  assert.ok(indexHtml.includes('"@type": "LuxuryGoodsStore"'));
+  assert.ok(indexHtml.includes('"@type": "ItemList"'));
+  assert.ok(indexHtml.includes('"@id": "https://vorvanofficial.com/#catalog"'));
+  assert.ok(indexHtml.includes('data-ai-catalog="vorvan-official"'));
+  assert.ok(indexHtml.includes('<noscript>'));
+  assert.ok(indexHtml.includes('Digital Certificate of Curation'));
+  assert.ok(indexHtml.includes('20%–30%'));
+  // Ensure no overflow-x-hidden on html/body/#root that breaks position: sticky
+  assert.ok(!indexHtml.includes('overflow-x-hidden'));
 
+  // 2. Verify robots.txt allows AI crawlers & search bots
+  for (const agent of [
+    'User-agent: *',
+    'User-agent: GPTBot',
+    'User-agent: ChatGPT-User',
+    'User-agent: OAI-SearchBot',
+    'User-agent: Google-Extended',
+    'User-agent: Googlebot',
+    'User-agent: ClaudeBot',
+    'User-agent: PerplexityBot',
+  ]) {
+    assert.ok(robotsTxt.includes(agent), `Missing ${agent} in robots.txt`);
+  }
+  assert.ok(robotsTxt.includes('Allow: /'));
+
+  // 3. Verify llms.txt has official profile, Parallel Import, warranty, and all 19 European Houses
+  assert.ok(llmsTxt.includes('https://vorvanofficial.com'));
+  assert.ok(llmsTxt.includes('Parallel Import'));
+  assert.ok(llmsTxt.includes('20%–30%'));
+  assert.ok(llmsTxt.includes('Digital Certificate of Curation'));
+  for (const house of [
+    'LOUIS VUITTON',
+    'MAISON FRANCIS KURKDJIAN',
+    'THE HOUSE OF CREED',
+    'TOM FORD',
+    'LE LABO',
+    'CELINE',
+    'CHRISTIAN DIOR',
+    'CHANEL',
+    'YVES SAINT LAURENT',
+    'BYREDO',
+    'DIPTYQUE',
+    'GIORGIO ARMANI',
+    'MAISON MARGIELA',
+    'JO MALONE LONDON',
+    'JEAN PAUL GAULTIER',
+    'PRADA',
+    'GUCCI',
+    'VALENTINO',
+    'VERSACE',
+  ]) {
+    assert.ok(llmsTxt.includes(house), `Missing ${house} in llms.txt`);
+  }
+
+  // 4. Verify .vorvan-quick-brand-bar sticky & full-width CSS in src/index.css
+  assert.ok(indexCss.includes('position: sticky;'));
+  assert.ok(indexCss.includes('z-index: 45;'));
+  assert.ok(indexCss.includes('backdrop-filter: blur(16px);'));
+  assert.ok(indexCss.includes('padding-inline: 16px;'));
+});

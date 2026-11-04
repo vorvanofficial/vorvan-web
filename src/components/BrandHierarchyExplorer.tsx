@@ -60,11 +60,19 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
       `[data-ribbon-brand="${selectedBrandId}"]`
     ) as HTMLElement | null;
     if (activeChip) {
-      const targetLeft =
-        activeChip.offsetLeft -
-        bar.clientWidth / 2 +
-        activeChip.clientWidth / 2;
-      bar.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+      if (typeof activeChip.scrollIntoView === 'function') {
+        activeChip.scrollIntoView({
+          behavior: 'smooth',
+          inline: 'center',
+          block: 'nearest',
+        });
+      } else {
+        const targetLeft =
+          activeChip.offsetLeft -
+          bar.clientWidth / 2 +
+          activeChip.clientWidth / 2;
+        bar.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+      }
     }
   }, [selectedBrandId]);
 
@@ -72,7 +80,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
     setTimeout(() => {
       const targetEl = brandShowcaseRef.current;
       if (targetEl && typeof window !== 'undefined') {
-        const yOffset = -70; // Ruang untuk sticky header
+        const yOffset = -124; // Ruang untuk sticky header + sticky 19-brand bar
         const y =
           targetEl.getBoundingClientRect().top + window.pageYOffset + yOffset;
         window.scrollTo({ top: y, behavior: 'smooth' });
@@ -88,6 +96,12 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
         gridEl.getBoundingClientRect().top + window.pageYOffset + yOffset;
       window.scrollTo({ top: y, behavior: 'smooth' });
     }
+  };
+
+  const handleScrollRibbonBy = (delta: number) => {
+    const bar = ribbonBarRef.current;
+    if (!bar) return;
+    bar.scrollBy({ left: delta, behavior: 'smooth' });
   };
 
   const handleSelectBrand = (
@@ -148,7 +162,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
         align="right"
         testId="parallax-bg-houses"
       />
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10 mb-6 sm:mb-8">
         {/* Section Header — Centered Precision on Mobile */}
         <ScrollReveal variant="up">
           <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-8 border-b border-[#D4AF37]/25">
@@ -214,14 +228,30 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
             })}
           </div>
         </ScrollReveal>
+      </div>
 
-        {/* 1. PITA GESER 19 MERK CEPAT (STICKY QUICK-SWITCH RIBBON) */}
+      {/* 1. PITA GESER 19 MERK CEPAT (FULL-WIDTH 100% EDGE-TO-EDGE & NGE-FREEZE / STICKY SAAT DI-SCROLL) */}
+      <div
+        className="vorvan-quick-brand-bar"
+        role="region"
+        aria-label="Pita Geser Cepat 19 Merk"
+        data-testid="vorvan-quick-brand-bar"
+      >
+        <div className="vorvan-ribbon-edge-fade-left" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => handleScrollRibbonBy(-320)}
+          className="vorvan-ribbon-arrow vorvan-ribbon-arrow-left font-brand text-xs font-bold"
+          aria-label="Geser daftar merk ke kiri"
+          data-testid="ribbon-scroll-left"
+        >
+          &lt;
+        </button>
+
         <div
           ref={ribbonBarRef}
-          className="vorvan-quick-brand-bar"
-          role="region"
-          aria-label="Pita Geser Cepat 19 Merk"
-          data-testid="vorvan-quick-brand-bar"
+          className="vorvan-quick-brand-track"
+          data-testid="vorvan-quick-brand-track"
         >
           <button
             type="button"
@@ -239,7 +269,14 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
                 type="button"
                 data-ribbon-brand={brand.id}
                 data-testid={`ribbon-chip-${brand.id}`}
-                onClick={() => handleSelectBrand(brand.id, false)}
+                onClick={(e) => {
+                  e.currentTarget.scrollIntoView({
+                    behavior: 'smooth',
+                    inline: 'center',
+                    block: 'nearest',
+                  });
+                  handleSelectBrand(brand.id, true);
+                }}
                 className={`vorvan-ribbon-chip font-brand ${
                   isChipActive ? 'active' : ''
                 }`}
@@ -250,6 +287,19 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
           })}
         </div>
 
+        <button
+          type="button"
+          onClick={() => handleScrollRibbonBy(320)}
+          className="vorvan-ribbon-arrow vorvan-ribbon-arrow-right font-brand text-xs font-bold"
+          aria-label="Geser daftar merk ke kanan"
+          data-testid="ribbon-scroll-right"
+        >
+          &gt;
+        </button>
+        <div className="vorvan-ribbon-edge-fade-right" aria-hidden="true" />
+      </div>
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8 space-y-8 sm:space-y-10">
         {/* ACTIVE BRAND SHOWCASE + COMPACT GENDER PILLS */}
         <div ref={brandShowcaseRef}>
           <ScrollReveal variant="scale" delayMs={70}>

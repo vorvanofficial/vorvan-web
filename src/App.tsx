@@ -1124,7 +1124,7 @@ export default function App() {
   return (
     <div
       dir={locale === 'AR' ? 'rtl' : 'ltr'}
-      className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#0B0A0E] text-[#FAF8F5] flex flex-col relative"
+      className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-[#0B0A0E] text-[#FAF8F5] flex flex-col relative"
     >
       {/* 1. CINEMATIC WELCOME SPLASH SCREEN (EXTENDED 5.4s DURATION) */}
       <WelcomeSplashScreen
@@ -1348,7 +1348,7 @@ export default function App() {
       )}
 
       {/* MAIN VIEW ROUTER */}
-      <main className="flex-1 relative z-10 w-full max-w-[100vw] overflow-x-hidden">
+      <main className="flex-1 relative z-10 w-full max-w-[100vw] overflow-x-clip">
         {route.view === 'invoice' && (
           <PrivateInvoiceView
             invoiceId={route.invoiceId}
