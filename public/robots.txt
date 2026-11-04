@@ -41,4 +41,6 @@ User-agent: Bingbot
 Allow: /
 
 Sitemap: https://vorvanofficial.com/sitemap.xml
+Sitemap: https://www.vorvanofficial.com/sitemap.xml
 # AI/LLM Structured Knowledge Base: https://vorvanofficial.com/llms.txt
+

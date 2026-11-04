@@ -1849,6 +1849,11 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
   assert.ok(indexHtml.includes('data-ai-catalog="vorvan-official"'));
   assert.ok(
     indexHtml.includes(
+      '<meta name="google-site-verification" content="vpVebsXWh7vDIbzcu3D8REaFNQyk0E4WXsH2hfKPzqg" />'
+    )
+  );
+  assert.ok(
+    indexHtml.includes(
       'style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; opacity:0; pointer-events:none;"'
     )
   );
@@ -1866,7 +1871,7 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
   // Ensure no overflow-x-hidden on html/body/#root that breaks position: sticky
   assert.ok(!indexHtml.includes('overflow-x-hidden'));
 
-  // 2. Verify robots.txt allows AI crawlers & search bots
+  // 2. Verify robots.txt allows AI crawlers & search bots and includes Sitemap
   for (const agent of [
     'User-agent: *',
     'User-agent: GPTBot',
@@ -1880,6 +1885,18 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
     assert.ok(robotsTxt.includes(agent), `Missing ${agent} in robots.txt`);
   }
   assert.ok(robotsTxt.includes('Allow: /'));
+  assert.ok(
+    robotsTxt.includes('Sitemap: https://www.vorvanofficial.com/sitemap.xml')
+  );
+
+  // 2b. Verify sitemap.xml contains https://www.vorvanofficial.com/ and https://vorvanofficial.com/ with priority 1.0
+  const sitemapXml = fs.readFileSync(
+    path.join(process.cwd(), 'public', 'sitemap.xml'),
+    'utf8'
+  );
+  assert.ok(sitemapXml.includes('<loc>https://www.vorvanofficial.com/</loc>'));
+  assert.ok(sitemapXml.includes('<loc>https://vorvanofficial.com/</loc>'));
+  assert.ok(sitemapXml.includes('<priority>1.0</priority>'));
 
   // 3. Verify llms.txt has official profile, Private Fragrance Curation & Direct International Curation, warranty, and all 19 European Houses
   assert.ok(llmsTxt.includes('https://vorvanofficial.com'));
