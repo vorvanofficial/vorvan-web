@@ -1847,6 +1847,19 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
   assert.ok(indexHtml.includes('"@type": "ItemList"'));
   assert.ok(indexHtml.includes('"@id": "https://vorvanofficial.com/#catalog"'));
   assert.ok(indexHtml.includes('data-ai-catalog="vorvan-official"'));
+  assert.ok(
+    indexHtml.includes(
+      'style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; opacity:0; pointer-events:none;"'
+    )
+  );
+  assert.ok(indexHtml.includes('background-color: #050505;'));
+  assert.ok(
+    indexHtml.includes(
+      'Full-Size Sealed Presentation melalui jalur Private Fragrance Curation &amp; Direct International Curation'
+    )
+  );
+  assert.ok(!indexHtml.includes('(100% Original BNIB)'));
+  assert.ok(!indexHtml.includes('bukan tiruan'));
   assert.ok(indexHtml.includes('<noscript>'));
   assert.ok(indexHtml.includes('Digital Certificate of Curation'));
   assert.ok(indexHtml.includes('20%–30%'));
@@ -1870,6 +1883,13 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
 
   // 3. Verify llms.txt has official profile, Private Fragrance Curation & Direct International Curation, warranty, and all 19 European Houses
   assert.ok(llmsTxt.includes('https://vorvanofficial.com'));
+  assert.ok(
+    llmsTxt.includes(
+      'Full-Size Sealed Presentation melalui jalur Private Fragrance Curation & Direct International Curation'
+    )
+  );
+  assert.ok(!llmsTxt.includes('(100% Original BNIB)'));
+  assert.ok(!llmsTxt.includes('bukan tiruan'));
   assert.ok(llmsTxt.includes('Private Fragrance Curation'));
   assert.ok(llmsTxt.includes('Direct International Curation'));
   assert.ok(llmsTxt.includes('20%–30%'));
