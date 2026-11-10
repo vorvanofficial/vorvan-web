@@ -1854,6 +1854,35 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
   );
   assert.ok(
     indexHtml.includes(
+      '<link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />'
+    )
+  );
+  assert.ok(
+    indexHtml.includes(
+      '<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" />'
+    )
+  );
+  assert.ok(
+    indexHtml.includes(
+      '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />'
+    )
+  );
+  assert.ok(
+    indexHtml.includes(
+      '<meta property="og:image" content="https://www.vorvanofficial.com/assets/aistudio/1793899381212_11a88212.jpg" />'
+    )
+  );
+  assert.ok(
+    fs.existsSync(path.join(process.cwd(), 'public', 'favicon-48x48.png'))
+  );
+  assert.ok(
+    fs.existsSync(path.join(process.cwd(), 'public', 'favicon-192x192.png'))
+  );
+  assert.ok(
+    fs.existsSync(path.join(process.cwd(), 'public', 'apple-touch-icon.png'))
+  );
+  assert.ok(
+    indexHtml.includes(
       'style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; opacity:0; pointer-events:none;"'
     )
   );
