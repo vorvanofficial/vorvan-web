@@ -4,7 +4,9 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Compass,
+  Crown,
   FileCheck2,
+  Gem,
   Globe,
   Handshake,
   Instagram,
@@ -82,6 +84,9 @@ import {
 
 type ActiveRoute =
   | { view: 'showroom' }
+  | { view: 'apex' }
+  | { view: 'urban' }
+  | { view: 'houses' }
   | { view: 'track'; query?: string; smartOrder?: CustomAdminOrder | null }
   | {
       view: 'invoice';
@@ -126,6 +131,16 @@ function parseCurrentLocation(): ActiveRoute {
       smartOrder: parsedInvoice.smartOrder,
       isDirectLink: parsedInvoice.isDirectLinkAutoOpen,
     };
+  }
+
+  if (path === '/apex' || hash === '#apex' || hash === '#apex-prestige') {
+    return { view: 'apex' };
+  }
+  if (path === '/urban' || hash === '#urban' || hash === '#urban-signatures') {
+    return { view: 'urban' };
+  }
+  if (path === '/houses' || hash === '#houses') {
+    return { view: 'houses' };
   }
 
   return { view: 'showroom' };
@@ -690,7 +705,29 @@ export default function App() {
     }
   };
 
+  const navigateToTab = (tabView: 'showroom' | 'apex' | 'urban' | 'houses') => {
+    const nextPath =
+      tabView === 'showroom'
+        ? '/'
+        : tabView === 'apex'
+        ? '/#apex'
+        : tabView === 'urban'
+        ? '/#urban'
+        : '/#houses';
+    window.history.pushState({}, '', nextPath);
+    setRoute({ view: tabView });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  };
+
   const navigateToShowroom = (sectionHash?: string) => {
+    if (sectionHash === 'apex-prestige') {
+      navigateToTab('apex');
+      return;
+    }
+    if (sectionHash === 'urban-signatures') {
+      navigateToTab('urban');
+      return;
+    }
     window.history.pushState({}, '', sectionHash ? `/#${sectionHash}` : '/');
     setRoute({ view: 'showroom' });
     if (sectionHash) {
@@ -699,7 +736,7 @@ export default function App() {
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       }, 40);
     } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
   };
 
@@ -764,7 +801,7 @@ export default function App() {
       smartOrder: matchedOrder,
       isDirectLink: Boolean(effectiveId || matchedOrder),
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   };
 
   const navigateToTrack = (
@@ -818,7 +855,7 @@ export default function App() {
       query: effectiveQuery,
       smartOrder: matchedOrder,
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   };
 
   const handleTriggerInquiry = (
@@ -1641,150 +1678,6 @@ export default function App() {
               }
             />
 
-            {/* 5A. CURATED SHOWROOM SECTION 1: APEX PRESTIGE (TIER 1) */}
-            <section
-              id="apex-prestige"
-              className="relative overflow-hidden py-16 sm:py-20 border-b border-[#D4AF37]/20"
-            >
-              <ParallaxSectionBg
-                speed={0.2}
-                tone="champagne"
-                watermarkText="IV · APEX PRESTIGE"
-                align="left"
-                testId="parallax-bg-apex"
-              />
-              <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <ScrollReveal variant="up">
-                  <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-10 border-b border-[#D4AF37]/25">
-                    <div className="space-y-1.5">
-                      <p className="font-latin-script text-2xl sm:text-3xl text-gold-champagne">
-                        {t.tiers.apexScript}
-                      </p>
-                      <div className="flex items-center justify-center md:justify-start gap-2 font-brand text-[10px] sm:text-xs text-[#D8BE82] uppercase tracking-[0.24em]">
-                        <span>{t.tiers.apexKicker}</span>
-                      </div>
-                      <h2 className="font-serif-luxury text-3xl sm:text-5xl font-semibold text-gold-shimmer tracking-wide">
-                        {t.tiers.apexTitle}
-                      </h2>
-                    </div>
-                    <p className="font-latin-italic text-base sm:text-lg text-zinc-200 max-w-md leading-relaxed">
-                      {t.tiers.apexSubtitle}
-                    </p>
-                  </div>
-                </ScrollReveal>
-
-                <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-                  {apexFragrances.map((fragrance, idx) => (
-                    <ScrollReveal
-                      key={fragrance.id}
-                      variant={idx % 2 === 0 ? 'up' : 'scale'}
-                      delayMs={idx * 80}
-                      className="h-full"
-                    >
-                      <FragranceCard
-                        fragrance={fragrance}
-                        registeredEmail={registeredEmail}
-                        locale={locale}
-                        onOpenDossier={(item, vol) =>
-                          setSelectedDossier({ fragrance: item, volume: vol })
-                        }
-                        onInquireFragrance={(item, vol) =>
-                          handleTriggerInquiry(item, vol)
-                        }
-                      />
-                    </ScrollReveal>
-                  ))}
-                </div>
-
-                <ScrollReveal variant="up" delayMs={240}>
-                  <div className="mt-10 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigateToShowroom('brand-hierarchy-explorer')
-                      }
-                      className="min-h-[50px] px-7 py-3.5 rounded-xl bg-[#14131B]/95 hover:bg-[#E5C87E] text-[#F5E6B8] hover:text-zinc-950 border border-[#D4AF37]/65 hover:border-[#F5E6B8] font-brand text-xs font-bold uppercase tracking-[0.18em] transition-all duration-300 shadow-[0_10px_28px_-10px_rgba(212,175,55,0.3)] flex items-center justify-center gap-2.5 cursor-pointer"
-                      data-testid="explore-all-houses-apex-btn"
-                    >
-                      <span>JELAJAHI SELURUH 81 KOLEKSI DI 19 HOUSES →</span>
-                    </button>
-                  </div>
-                </ScrollReveal>
-              </div>
-            </section>
-
-            {/* 5B. CURATED SHOWROOM SECTION 2: URBAN SIGNATURES (TIER 2) */}
-            <section
-              id="urban-signatures"
-              className="relative overflow-hidden py-16 sm:py-20 bg-[#100F16]/65 border-t border-[#D4AF37]/25"
-            >
-              <ParallaxSectionBg
-                speed={0.18}
-                tone="silver"
-                watermarkText="V · URBAN SIGNATURES"
-                align="right"
-                testId="parallax-bg-urban"
-              />
-              <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <ScrollReveal variant="up">
-                  <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-10 border-b border-[#D4AF37]/25">
-                    <div className="space-y-1.5">
-                      <p className="font-latin-script text-2xl sm:text-3xl text-gold-champagne">
-                        {t.tiers.urbanScript}
-                      </p>
-                      <div className="flex items-center justify-center md:justify-start gap-2 font-brand text-[10px] sm:text-xs text-[#D8BE82] uppercase tracking-[0.24em]">
-                        <span>{t.tiers.urbanKicker}</span>
-                      </div>
-                      <h2 className="font-serif-luxury text-3xl sm:text-5xl font-semibold text-gold-shimmer tracking-wide">
-                        {t.tiers.urbanTitle}
-                      </h2>
-                    </div>
-                    <p className="font-latin-italic text-base sm:text-lg text-zinc-200 max-w-md leading-relaxed">
-                      {t.tiers.urbanSubtitle}
-                    </p>
-                  </div>
-                </ScrollReveal>
-
-                <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-                  {urbanFragrances.map((fragrance, idx) => (
-                    <ScrollReveal
-                      key={fragrance.id}
-                      variant={idx % 2 === 0 ? 'up' : 'scale'}
-                      delayMs={idx * 80}
-                      className="h-full"
-                    >
-                      <FragranceCard
-                        fragrance={fragrance}
-                        registeredEmail={registeredEmail}
-                        locale={locale}
-                        onOpenDossier={(item, vol) =>
-                          setSelectedDossier({ fragrance: item, volume: vol })
-                        }
-                        onInquireFragrance={(item, vol) =>
-                          handleTriggerInquiry(item, vol)
-                        }
-                      />
-                    </ScrollReveal>
-                  ))}
-                </div>
-
-                <ScrollReveal variant="up" delayMs={240}>
-                  <div className="mt-10 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigateToShowroom('brand-hierarchy-explorer')
-                      }
-                      className="min-h-[50px] px-7 py-3.5 rounded-xl bg-[#14131B]/95 hover:bg-[#E5C87E] text-[#F5E6B8] hover:text-zinc-950 border border-[#D4AF37]/65 hover:border-[#F5E6B8] font-brand text-xs font-bold uppercase tracking-[0.18em] transition-all duration-300 shadow-[0_10px_28px_-10px_rgba(212,175,55,0.3)] flex items-center justify-center gap-2.5 cursor-pointer"
-                      data-testid="explore-all-houses-urban-btn"
-                    >
-                      <span>JELAJAHI SELURUH 81 KOLEKSI DI 19 HOUSES →</span>
-                    </button>
-                  </div>
-                </ScrollReveal>
-              </div>
-            </section>
-
             {/* 6. PRIVATE INVOICE & SECURE WEB CHECKOUT BANNER */}
             <section className="relative overflow-hidden py-16 bg-[#0B0A0E]/65 border-t border-[#D4AF37]/25">
               <ParallaxSectionBg
@@ -1881,10 +1774,178 @@ export default function App() {
             </section>
           </>
         )}
+
+        {/* DEDICATED TAB 2: APEX PRESTIGE (TIER 1) */}
+        {route.view === 'apex' && (
+          <section
+            id="apex-prestige"
+            data-testid="apex-tab-view"
+            className="relative overflow-hidden py-14 sm:py-20 border-b border-[#D4AF37]/20"
+          >
+            <ParallaxSectionBg
+              speed={0.2}
+              tone="champagne"
+              watermarkText="IV · APEX PRESTIGE"
+              align="left"
+              testId="parallax-bg-apex"
+            />
+            <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <ScrollReveal variant="up">
+                <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-10 border-b border-[#D4AF37]/25">
+                  <div className="space-y-1.5">
+                    <p className="font-latin-script text-2xl sm:text-3xl text-gold-champagne">
+                      {t.tiers.apexScript}
+                    </p>
+                    <div className="flex items-center justify-center md:justify-start gap-2 font-brand text-[10px] sm:text-xs text-[#D8BE82] uppercase tracking-[0.24em]">
+                      <span>{t.tiers.apexKicker}</span>
+                    </div>
+                    <h2 className="font-serif-luxury text-3xl sm:text-5xl font-semibold text-gold-shimmer tracking-wide">
+                      {t.tiers.apexTitle}
+                    </h2>
+                  </div>
+                  <p className="font-latin-italic text-base sm:text-lg text-zinc-200 max-w-md leading-relaxed">
+                    {t.tiers.apexSubtitle}
+                  </p>
+                </div>
+              </ScrollReveal>
+
+              <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+                {apexFragrances.map((fragrance, idx) => (
+                  <ScrollReveal
+                    key={fragrance.id}
+                    variant={idx % 2 === 0 ? 'up' : 'scale'}
+                    delayMs={idx * 80}
+                    className="h-full"
+                  >
+                    <FragranceCard
+                      fragrance={fragrance}
+                      registeredEmail={registeredEmail}
+                      locale={locale}
+                      onOpenDossier={(item, vol) =>
+                        setSelectedDossier({ fragrance: item, volume: vol })
+                      }
+                      onInquireFragrance={(item, vol) =>
+                        handleTriggerInquiry(item, vol)
+                      }
+                    />
+                  </ScrollReveal>
+                ))}
+              </div>
+
+              <ScrollReveal variant="up" delayMs={240}>
+                <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3.5">
+                  <button
+                    type="button"
+                    onClick={() => navigateToTab('urban')}
+                    className="min-h-[50px] px-7 py-3.5 rounded-xl btn-luxury-gold font-brand text-xs font-bold uppercase tracking-[0.18em] transition-all duration-300 flex items-center justify-center gap-2.5 cursor-pointer"
+                    data-testid="open-urban-from-apex-btn"
+                  >
+                    <span>LIHAT KOLEKSI 02. URBAN SIGNATURES →</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateToTab('houses')}
+                    className="min-h-[50px] px-7 py-3.5 rounded-xl bg-[#14131B]/95 hover:bg-[#E5C87E] text-[#F5E6B8] hover:text-zinc-950 border border-[#D4AF37]/65 hover:border-[#F5E6B8] font-brand text-xs font-bold uppercase tracking-[0.18em] transition-all duration-300 shadow-[0_10px_28px_-10px_rgba(212,175,55,0.3)] flex items-center justify-center gap-2.5 cursor-pointer"
+                    data-testid="explore-all-houses-apex-btn"
+                  >
+                    <span>JELAJAHI SELURUH 81 KOLEKSI DI 19 HOUSES →</span>
+                  </button>
+                </div>
+              </ScrollReveal>
+            </div>
+          </section>
+        )}
+
+        {/* DEDICATED TAB 3: URBAN SIGNATURES (TIER 2) */}
+        {route.view === 'urban' && (
+          <section
+            id="urban-signatures"
+            data-testid="urban-tab-view"
+            className="relative overflow-hidden py-14 sm:py-20 bg-[#100F16]/65 border-b border-[#D4AF37]/25"
+          >
+            <ParallaxSectionBg
+              speed={0.18}
+              tone="silver"
+              watermarkText="V · URBAN SIGNATURES"
+              align="right"
+              testId="parallax-bg-urban"
+            />
+            <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <ScrollReveal variant="up">
+                <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-10 border-b border-[#D4AF37]/25">
+                  <div className="space-y-1.5">
+                    <p className="font-latin-script text-2xl sm:text-3xl text-gold-champagne">
+                      {t.tiers.urbanScript}
+                    </p>
+                    <div className="flex items-center justify-center md:justify-start gap-2 font-brand text-[10px] sm:text-xs text-[#D8BE82] uppercase tracking-[0.24em]">
+                      <span>{t.tiers.urbanKicker}</span>
+                    </div>
+                    <h2 className="font-serif-luxury text-3xl sm:text-5xl font-semibold text-gold-shimmer tracking-wide">
+                      {t.tiers.urbanTitle}
+                    </h2>
+                  </div>
+                  <p className="font-latin-italic text-base sm:text-lg text-zinc-200 max-w-md leading-relaxed">
+                    {t.tiers.urbanSubtitle}
+                  </p>
+                </div>
+              </ScrollReveal>
+
+              <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+                {urbanFragrances.map((fragrance, idx) => (
+                  <ScrollReveal
+                    key={fragrance.id}
+                    variant={idx % 2 === 0 ? 'up' : 'scale'}
+                    delayMs={idx * 80}
+                    className="h-full"
+                  >
+                    <FragranceCard
+                      fragrance={fragrance}
+                      registeredEmail={registeredEmail}
+                      locale={locale}
+                      onOpenDossier={(item, vol) =>
+                        setSelectedDossier({ fragrance: item, volume: vol })
+                      }
+                      onInquireFragrance={(item, vol) =>
+                        handleTriggerInquiry(item, vol)
+                      }
+                    />
+                  </ScrollReveal>
+                ))}
+              </div>
+
+              <ScrollReveal variant="up" delayMs={240}>
+                <div className="mt-10 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => navigateToTab('houses')}
+                    className="min-h-[50px] px-7 py-3.5 rounded-xl bg-[#14131B]/95 hover:bg-[#E5C87E] text-[#F5E6B8] hover:text-zinc-950 border border-[#D4AF37]/65 hover:border-[#F5E6B8] font-brand text-xs font-bold uppercase tracking-[0.18em] transition-all duration-300 shadow-[0_10px_28px_-10px_rgba(212,175,55,0.3)] flex items-center justify-center gap-2.5 cursor-pointer"
+                    data-testid="explore-all-houses-urban-btn"
+                  >
+                    <span>JELAJAHI SELURUH 81 KOLEKSI DI 19 HOUSES →</span>
+                  </button>
+                </div>
+              </ScrollReveal>
+            </div>
+          </section>
+        )}
+
+        {/* DEDICATED TAB 4: 19 HOUSES CATALOG */}
+        {route.view === 'houses' && (
+          <BrandHierarchyExplorer
+            registeredEmail={registeredEmail}
+            locale={locale}
+            onOpenDossier={(item, vol) =>
+              setSelectedDossier({ fragrance: item, volume: vol })
+            }
+            onInquireFragrance={(item, vol) =>
+              handleTriggerInquiry(item, vol)
+            }
+          />
+        )}
       </main>
 
       {/* 9. FOOTER WITH STAGGERED SCROLL REVEAL, PARALLAX DEPTH & ARCHITECTURAL LUXURY CARDS */}
-      <footer className="relative overflow-hidden bg-[#0B0A0E] border-t border-[#D4AF37]/35 pt-14 sm:pt-18 pb-24 lg:pb-14 text-sm z-10">
+      <footer className="relative overflow-hidden bg-[#0B0A0E] border-t border-[#D4AF37]/35 pt-14 sm:pt-18 pb-24 text-sm z-10">
         <ParallaxSectionBg
           speed={0.12}
           tone="champagne"
@@ -1925,9 +1986,7 @@ export default function App() {
                     <li>
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateToShowroom('brand-hierarchy-explorer')
-                        }
+                        onClick={() => navigateToTab('houses')}
                         className="hover:text-[#F5E6B8] transition-colors cursor-pointer text-center py-0.5"
                       >
                         {t.footer.explore11Houses}
@@ -1936,7 +1995,7 @@ export default function App() {
                     <li>
                       <button
                         type="button"
-                        onClick={() => navigateToShowroom('apex-prestige')}
+                        onClick={() => navigateToTab('apex')}
                         className="hover:text-[#F5E6B8] transition-colors cursor-pointer text-center py-0.5"
                       >
                         {t.footer.apexShowcase}
@@ -2058,58 +2117,105 @@ export default function App() {
         </div>
       </footer>
 
-      {/* ERGONOMIC MOBILE THUMB-ZONE BOTTOM NAVIGATION BAR */}
+      {/* 6-TAB UNIFORM BOTTOM NAVIGATION BAR (SHOWROOM · APEX · URBAN · 19 HOUSES · CEK RESI · INVOICE) */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#0B0A0E] border-t border-[#D4AF37]/35 grid grid-cols-4 items-center px-2"
+        data-testid="bottom-navigation-bar"
+        className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-[#0B0A0E]/96 backdrop-blur-md border-t border-[#D4AF37]/35 grid grid-cols-6 items-center px-1 sm:px-4"
       >
         <button
           type="button"
-          onClick={() => navigateToShowroom()}
-          className={`flex flex-col items-center justify-center gap-0.5 py-1 cursor-pointer ${
-            route.view === 'showroom' ? 'text-[#E5C87E]' : 'text-zinc-400'
+          onClick={() => navigateToTab('showroom')}
+          data-testid="bottom-nav-showroom"
+          className={`flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 min-w-0 cursor-pointer transition-colors ${
+            route.view === 'showroom'
+              ? 'text-[#E5C87E]'
+              : 'text-zinc-400 hover:text-[#E5C87E]'
           }`}
         >
-          <Sparkles className="w-4 h-4" />
-          <span className="font-brand text-[9px] uppercase tracking-[0.14em] truncate max-w-full">
-            {t.nav.showroom}
+          <Sparkles className="w-[18px] h-[18px] shrink-0" />
+          <span className="font-brand text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap leading-none">
+            SHOWROOM
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => navigateToShowroom('brand-hierarchy-explorer')}
-          className="flex flex-col items-center justify-center gap-0.5 py-1 text-zinc-400 hover:text-[#E5C87E] cursor-pointer"
+          onClick={() => navigateToTab('apex')}
+          data-testid="bottom-nav-apex"
+          className={`flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 min-w-0 cursor-pointer transition-colors ${
+            route.view === 'apex'
+              ? 'text-[#E5C87E]'
+              : 'text-zinc-400 hover:text-[#E5C87E]'
+          }`}
         >
-          <Compass className="w-4 h-4" />
-          <span className="font-brand text-[9px] uppercase tracking-[0.14em] truncate max-w-full">
-            {t.nav.mobileHouses}
+          <Crown className="w-[18px] h-[18px] shrink-0" />
+          <span className="font-brand text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap leading-none">
+            APEX
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigateToTab('urban')}
+          data-testid="bottom-nav-urban"
+          className={`flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 min-w-0 cursor-pointer transition-colors ${
+            route.view === 'urban'
+              ? 'text-[#E5C87E]'
+              : 'text-zinc-400 hover:text-[#E5C87E]'
+          }`}
+        >
+          <Gem className="w-[18px] h-[18px] shrink-0" />
+          <span className="font-brand text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap leading-none">
+            URBAN
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigateToTab('houses')}
+          data-testid="bottom-nav-houses"
+          className={`flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 min-w-0 cursor-pointer transition-colors ${
+            route.view === 'houses'
+              ? 'text-[#E5C87E]'
+              : 'text-zinc-400 hover:text-[#E5C87E]'
+          }`}
+        >
+          <Compass className="w-[18px] h-[18px] shrink-0" />
+          <span className="font-brand text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap leading-none">
+            19 HOUSES
           </span>
         </button>
 
         <button
           type="button"
           onClick={() => navigateToTrack('')}
-          className={`flex flex-col items-center justify-center gap-0.5 py-1 cursor-pointer ${
-            route.view === 'track' ? 'text-[#E5C87E]' : 'text-zinc-400'
+          data-testid="bottom-nav-track"
+          className={`flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 min-w-0 cursor-pointer transition-colors ${
+            route.view === 'track'
+              ? 'text-[#E5C87E]'
+              : 'text-zinc-400 hover:text-[#E5C87E]'
           }`}
         >
-          <PackageSearch className="w-4 h-4" />
-          <span className="font-brand text-[9px] uppercase tracking-[0.14em] truncate max-w-full">
-            {t.nav.mobileTrack}
+          <PackageSearch className="w-[18px] h-[18px] shrink-0" />
+          <span className="font-brand text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap leading-none">
+            CEK RESI
           </span>
         </button>
 
         <button
           type="button"
           onClick={() => navigateToInvoice('')}
-          className={`flex flex-col items-center justify-center gap-0.5 py-1 cursor-pointer ${
-            route.view === 'invoice' ? 'text-[#E5C87E]' : 'text-zinc-400'
+          data-testid="bottom-nav-invoice"
+          className={`flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 min-w-0 cursor-pointer transition-colors ${
+            route.view === 'invoice'
+              ? 'text-[#E5C87E]'
+              : 'text-zinc-400 hover:text-[#E5C87E]'
           }`}
         >
-          <FileCheck2 className="w-4 h-4" />
-          <span className="font-brand text-[9px] uppercase tracking-[0.14em] truncate max-w-full">
-            {t.nav.mobileInvoice}
+          <FileCheck2 className="w-[18px] h-[18px] shrink-0" />
+          <span className="font-brand text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap leading-none">
+            INVOICE
           </span>
         </button>
       </nav>

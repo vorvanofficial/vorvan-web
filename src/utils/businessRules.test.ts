@@ -2246,5 +2246,41 @@ test('36. Footer CONCIERGE & B2B list has 5 uniform 13px non-italic icon items w
   assert.ok(appCode.includes('data-testid="footer-telegram-link"'));
 });
 
+test('37. APEX PRESTIGE and URBAN SIGNATURES are separated from SHOWROOM into dedicated tabs, and Bottom Bar displays 6 uniform tabs (SHOWROOM, APEX, URBAN, 19 HOUSES, CEK RESI, INVOICE)', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+
+  // 1. Dedicated route views for apex, urban, and houses
+  assert.ok(appCode.includes("route.view === 'apex'"));
+  assert.ok(appCode.includes("route.view === 'urban'"));
+  assert.ok(appCode.includes("route.view === 'houses'"));
+  assert.ok(appCode.includes('data-testid="apex-tab-view"'));
+  assert.ok(appCode.includes('data-testid="urban-tab-view"'));
+
+  // 2. Showroom block does NOT contain #apex-prestige or #urban-signatures
+  const showroomBlockMatch = appCode.match(
+    /\{route\.view === 'showroom' && \([\s\S]*?\{\/\* DEDICATED TAB 2: APEX PRESTIGE/
+  );
+  assert.ok(showroomBlockMatch);
+  assert.ok(!showroomBlockMatch[0].includes('id="apex-prestige"'));
+  assert.ok(!showroomBlockMatch[0].includes('id="urban-signatures"'));
+
+  // 3. 6-tab bottom bar in exact order with grid-cols-6 and 18px icons
+  assert.ok(appCode.includes('data-testid="bottom-navigation-bar"'));
+  assert.ok(appCode.includes('grid-cols-6'));
+  assert.ok(appCode.includes('data-testid="bottom-nav-showroom"'));
+  assert.ok(appCode.includes('data-testid="bottom-nav-apex"'));
+  assert.ok(appCode.includes('data-testid="bottom-nav-urban"'));
+  assert.ok(appCode.includes('data-testid="bottom-nav-houses"'));
+  assert.ok(appCode.includes('data-testid="bottom-nav-track"'));
+  assert.ok(appCode.includes('data-testid="bottom-nav-invoice"'));
+});
+
+
 
 
