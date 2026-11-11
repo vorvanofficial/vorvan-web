@@ -2219,4 +2219,32 @@ test('35. Header right-zone buttons (ID, CONCIERGE WA, TG, IG) share uniform hei
   assert.ok(appCode.includes('<span>IG</span>'));
 });
 
+test('36. Footer CONCIERGE & B2B list has 5 uniform 13px non-italic icon items with 12px gap, and bottom copyright replaces duplicate contact line with PRIVATE FRAGRANCE CURATION · VORVANOFFICIAL.COM', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+
+  // 1. Duplicate "Official Email:" contact line is removed from App.tsx
+  assert.ok(!appCode.includes('Official Email:'));
+
+  // 2. Bottom copyright subline is PRIVATE FRAGRANCE CURATION · VORVANOFFICIAL.COM with 0.2em tracking
+  assert.ok(appCode.includes('data-testid="footer-copyright-subline"'));
+  assert.ok(
+    appCode.includes('PRIVATE FRAGRANCE CURATION · VORVANOFFICIAL.COM')
+  );
+
+  // 3. All 5 CONCIERGE & B2B items exist with uniform 13px non-italic no-underline styling and 12px gap
+  assert.ok(appCode.includes('data-testid="footer-concierge-b2b-list"'));
+  assert.ok(appCode.includes('data-testid="footer-email-concierge-link"'));
+  assert.ok(appCode.includes('data-testid="footer-b2b-link"'));
+  assert.ok(appCode.includes('data-testid="footer-instagram-link"'));
+  assert.ok(appCode.includes('data-testid="footer-whatsapp-link"'));
+  assert.ok(appCode.includes('data-testid="footer-telegram-link"'));
+});
+
+
 

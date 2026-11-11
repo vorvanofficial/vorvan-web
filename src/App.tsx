@@ -6,6 +6,7 @@ import {
   Compass,
   FileCheck2,
   Globe,
+  Handshake,
   Instagram,
   Mail,
   MessageCircle,
@@ -1915,7 +1916,7 @@ export default function App() {
               delayMs={120}
               className="lg:col-span-7 h-full"
             >
-              <div className="h-full p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-[#14131C]/85 to-[#0D0C12]/85 border border-[#D4AF37]/25 grid grid-cols-1 sm:grid-cols-2 gap-7 sm:gap-5 text-xs text-center justify-items-center items-center w-full">
+              <div className="h-full p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-[#14131C]/85 to-[#0D0C12]/85 border border-[#D4AF37]/25 grid grid-cols-1 sm:grid-cols-2 gap-7 sm:gap-5 text-xs text-center justify-items-center items-center sm:items-start w-full">
                 <div className="space-y-3.5 flex flex-col items-center w-full pb-5 sm:pb-0 border-b sm:border-b-0 border-[#D4AF37]/15">
                   <p className="font-brand text-xs uppercase tracking-[0.22em] text-[#E5C87E] font-semibold">
                     {t.footer.clientServicesTitle}
@@ -1966,65 +1967,73 @@ export default function App() {
                   <p className="font-brand text-xs uppercase tracking-[0.22em] text-[#E5C87E] font-semibold">
                     {t.footer.conciergeB2bTitle}
                   </p>
-                  <ul className="space-y-2.5 font-latin-italic text-sm sm:text-[15px] text-zinc-300 flex flex-col items-center">
-                    <li>
+                  <ul
+                    className="flex flex-col items-center gap-[12px] w-full not-italic text-[13px] text-zinc-200"
+                    data-testid="footer-concierge-b2b-list"
+                  >
+                    <li className="w-full flex justify-center">
                       <button
                         type="button"
                         onClick={() => {
                           setPendingInquiry(null);
                           setEmailGatewayOpen(true);
                         }}
-                        className="hover:text-[#F5E6B8] transition-colors cursor-pointer text-center inline-flex items-center justify-center gap-1.5 py-0.5"
+                        title={t.footer.emailConciergeAccess}
+                        className="inline-flex items-center justify-center gap-2 h-8 px-3.5 rounded-full bg-white/[0.025] hover:bg-[#D4AF37]/12 border border-[#D4AF37]/25 hover:border-[#E5C87E]/65 text-[13px] font-sans font-normal not-italic text-zinc-200 hover:text-[#F5E6B8] no-underline whitespace-nowrap transition-all cursor-pointer"
+                        data-testid="footer-email-concierge-link"
                       >
                         <Mail className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
-                        <span>{t.footer.emailConciergeAccess}</span>
+                        <span>{siteSettings.conciergeEmail}</span>
                       </button>
                     </li>
-                    <li>
+                    <li className="w-full flex justify-center">
                       <button
                         type="button"
                         onClick={() => setB2BModalOpen(true)}
-                        className="text-[#F5E6B8] hover:text-white font-semibold underline decoration-[#D4AF37]/70 underline-offset-4 transition-colors cursor-pointer text-center py-0.5"
+                        className="inline-flex items-center justify-center gap-2 h-8 px-3.5 rounded-full bg-white/[0.025] hover:bg-[#D4AF37]/12 border border-[#D4AF37]/25 hover:border-[#E5C87E]/65 text-[13px] font-sans font-normal not-italic text-zinc-200 hover:text-[#F5E6B8] no-underline whitespace-nowrap transition-all cursor-pointer"
                         data-testid="footer-b2b-link"
                       >
-                        {t.footer.b2bWholesaleLink}
+                        <Handshake className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
+                        <span>{t.footer.b2bWholesaleLink}</span>
                       </button>
                     </li>
-                    <li>
+                    <li className="w-full flex justify-center">
                       <a
                         href={officialInstagramUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:text-[#F5E6B8] transition-colors inline-flex items-center justify-center gap-1.5 py-0.5"
+                        className="inline-flex items-center justify-center gap-2 h-8 px-3.5 rounded-full bg-white/[0.025] hover:bg-[#D4AF37]/12 border border-[#D4AF37]/25 hover:border-[#E5C87E]/65 text-[13px] font-sans font-normal not-italic text-zinc-200 hover:text-[#F5E6B8] no-underline whitespace-nowrap transition-all cursor-pointer"
                         data-testid="footer-instagram-link"
                       >
                         <Instagram className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
                         <span>Instagram @vorvanofficial</span>
-                        <ArrowUpRight className="w-3 h-3 text-[#E5C87E]" />
+                        <ArrowUpRight className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
                       </a>
                     </li>
-                    <li>
+                    <li className="w-full flex justify-center">
                       <a
                         href={generalConciergeWaUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:text-[#F5E6B8] transition-colors inline-flex items-center justify-center gap-1 py-0.5"
+                        className="inline-flex items-center justify-center gap-2 h-8 px-3.5 rounded-full bg-white/[0.025] hover:bg-[#D4AF37]/12 border border-[#D4AF37]/25 hover:border-[#E5C87E]/65 text-[13px] font-sans font-normal not-italic text-zinc-200 hover:text-[#F5E6B8] no-underline whitespace-nowrap transition-all cursor-pointer"
                         data-testid="footer-whatsapp-link"
                       >
+                        <MessageCircle className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
                         <span>WhatsApp Concierge</span>
-                        <ArrowUpRight className="w-3 h-3 text-[#E5C87E]" />
+                        <ArrowUpRight className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
                       </a>
                     </li>
-                    <li>
+                    <li className="w-full flex justify-center">
                       <a
                         href={generalConciergeTgUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:text-[#F5E6B8] transition-colors inline-flex items-center justify-center gap-1 py-0.5"
+                        className="inline-flex items-center justify-center gap-2 h-8 px-3.5 rounded-full bg-white/[0.025] hover:bg-[#D4AF37]/12 border border-[#D4AF37]/25 hover:border-[#E5C87E]/65 text-[13px] font-sans font-normal not-italic text-zinc-200 hover:text-[#F5E6B8] no-underline whitespace-nowrap transition-all cursor-pointer"
                         data-testid="footer-telegram-link"
                       >
+                        <Send className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
                         <span>Telegram VIP Concierge</span>
-                        <ArrowUpRight className="w-3 h-3 text-[#E5C87E]" />
+                        <ArrowUpRight className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
                       </a>
                     </li>
                   </ul>
@@ -2034,21 +2043,15 @@ export default function App() {
           </div>
 
           <ScrollReveal variant="up" delayMs={140}>
-            <div className="mt-10 sm:mt-12 pt-7 border-t border-[#D4AF37]/20 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4 font-latin-italic text-sm text-zinc-400 text-center">
-              <p>
+            <div className="mt-10 sm:mt-12 pt-7 border-t border-[#D4AF37]/20 flex flex-col items-center justify-center gap-2 text-center">
+              <p className="font-editorial text-xs sm:text-sm text-zinc-400">
                 © 2026 VORVAN — LIFESTYLE FOR EVERYONE. {t.footer.rightsReserved}
               </p>
-              <p className="text-[#D8BE82]">
-                Official Email: {siteSettings.conciergeEmail} ·{' '}
-                <a
-                  href={officialInstagramUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-[#F5E6B8] underline decoration-[#D4AF37]/50 underline-offset-4"
-                >
-                  Instagram @vorvanofficial
-                </a>{' '}
-                · WhatsApp Concierge · Telegram VIP Concierge
+              <p
+                className="font-brand text-[9px] sm:text-[11px] uppercase tracking-[0.16em] sm:tracking-[0.2em] text-[#B8AA8E] whitespace-nowrap"
+                data-testid="footer-copyright-subline"
+              >
+                PRIVATE FRAGRANCE CURATION · VORVANOFFICIAL.COM
               </p>
             </div>
           </ScrollReveal>
