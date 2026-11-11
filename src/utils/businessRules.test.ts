@@ -2090,4 +2090,61 @@ test('32. Splash Screen exit enforces window.scrollTo({ top: 0, left: 0, behavio
   assert.ok(explorerCode.includes('centerRibbonChipManual'));
 });
 
+test('33. Cheat Sheet 81 SKU interactive discount input recalculates Potongan (nearest Rp 5.000) & Harga VORVAN in real-time, syncs with resolveVorvanSkuPricing, and resets to Excel defaults', async () => {
+  const {
+    computeCheatSheetRowFromDiscount,
+    filterVorvanCheatSheet,
+    resolveVorvanSkuPricing,
+  } = await import('./businessRules.ts');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
 
+  // 1. Real-time row calculation with Rp 5.000 rounding:
+  // LV Afternoon Swim (Retail Rp 6.500.000):
+  // Default 30% -> Potongan = Rp 1.950.000, Harga VORVAN = Rp 4.550.000
+  const def30 = computeCheatSheetRowFromDiscount(6500000, 30);
+  assert.deepEqual(def30, { disc: 30, cut: 1950000, price: 4550000 });
+
+  // Custom 25% -> Potongan = Math.round((6500000 * 0.25) / 5000) * 5000 = 1.625.000, Harga VORVAN = 4.875.000
+  const custom25 = computeCheatSheetRowFromDiscount(6500000, 25);
+  assert.deepEqual(custom25, { disc: 25, cut: 1625000, price: 4875000 });
+
+  // Clamping: >90 clamps to 90, <0 clamps to 0
+  assert.equal(computeCheatSheetRowFromDiscount(6500000, 99).disc, 90);
+  assert.equal(computeCheatSheetRowFromDiscount(6500000, -5).disc, 0);
+
+  // 2. filterVorvanCheatSheet & resolveVorvanSkuPricing apply overrides and reset cleanly
+  const overrides = { 1: 25, 2: 20 };
+  const filteredWithOverrides = filterVorvanCheatSheet('', 'ALL', overrides);
+  assert.equal(filteredWithOverrides[0].no, 1);
+  assert.equal(filteredWithOverrides[0].disc, 25);
+  assert.equal(filteredWithOverrides[0].cut, 1625000);
+  assert.equal(filteredWithOverrides[0].price, 4875000);
+
+  assert.equal(filteredWithOverrides[1].no, 2);
+  assert.equal(filteredWithOverrides[1].disc, 20);
+  assert.equal(filteredWithOverrides[1].cut, 1630000);
+  assert.equal(filteredWithOverrides[1].price, 6520000);
+
+  const resolvedSku1 = resolveVorvanSkuPricing(0, overrides);
+  assert.ok(resolvedSku1);
+  assert.equal(resolvedSku1.disc, 25);
+  assert.equal(resolvedSku1.cut, 1625000);
+  assert.equal(resolvedSku1.price, 4875000);
+
+  // Reset overrides ({}) -> back to default Excel values (30% / Rp 4.550.000)
+  const resetSku1 = resolveVorvanSkuPricing(0, {});
+  assert.ok(resetSku1);
+  assert.equal(resetSku1.disc, 30);
+  assert.equal(resetSku1.cut, 1950000);
+  assert.equal(resetSku1.price, 4550000);
+
+  // 3. Verify EmailGatewayModal.tsx has the interactive number input and Reset Default Excel button
+  const modalCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'EmailGatewayModal.tsx'),
+    'utf8'
+  );
+  assert.ok(modalCode.includes('cheatsheet-disc-input-'));
+  assert.ok(modalCode.includes('reset-cheatsheet-discounts-btn'));
+  assert.ok(modalCode.includes('↺ Reset Default Excel'));
+});

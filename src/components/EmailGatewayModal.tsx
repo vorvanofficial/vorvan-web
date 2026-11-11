@@ -46,20 +46,24 @@ import {
   calculateAdminTab1PricingFromRetailPrice,
   COD_FACE_TO_FACE_STATUS_LABEL,
   computeAutoShippingStage,
+  computeCheatSheetRowFromDiscount,
   filterConciergeGuide81,
   filterVorvanCheatSheet,
   formatIDRCurrency,
   getVorvanBaseDomain,
   hasValidCourierAwb,
   isCodShippingMethod,
+  loadCheatSheetDiscountOverrides,
   loadPaymentProofsMap,
   normalizeIndonesianPhoneNumber,
   PENDING_AWB_STATUS_LABEL,
   reindexVisitorLeads,
   removePaymentProofRecord,
+  resetCheatSheetDiscountOverrides,
   resolveArchiveRefCode,
   resolveCourierMetadata,
   resolveVorvanSkuPricing,
+  saveCheatSheetDiscountOverrides,
   validateConciergeEmail,
 } from '../utils/businessRules';
 import { sendBuyerInvoiceEmailWebhook } from '../utils/cloudSync';
@@ -288,8 +292,14 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   const [guideGenderFilter, setGuideGenderFilter] =
     useState<ConciergeGenderFilterKey>('All');
 
-  // Default initial SKU #1 (LV Afternoon Swim)
-  const initialSku = VORVAN_81_CATALOG[0];
+  // Custom Cheat Sheet discount overrides persisted in localStorage
+  const [cheatSheetDiscounts, setCheatSheetDiscounts] = useState<
+    Record<number, number>
+  >(() => loadCheatSheetDiscountOverrides());
+
+  // Default initial SKU #1 (LV Afternoon Swim) with any saved discount override applied
+  const initialSku =
+    resolveVorvanSkuPricing(0, cheatSheetDiscounts) || VORVAN_81_CATALOG[0];
 
   // Tab 1: Create Invoice & Resi state
   const [buyerName, setBuyerName] = useState<string>('');
@@ -313,7 +323,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     String(initialSku?.retail || 6500000)
   );
   const [discountPct, setDiscountPct] = useState<string>(
-    String(initialSku?.disc || 30)
+    String(initialSku?.disc ?? 30)
   );
   const [extraDiscountIDR, setExtraDiscountIDR] = useState<string>('0');
   const [selectedShippingZone, setSelectedShippingZone] =
@@ -371,7 +381,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     selectedFragranceId === 'CUSTOM'
       ? null
       : resolveVorvanSkuPricing(
-          selectedCatalogIndex >= 0 ? selectedCatalogIndex : selectedFragranceId
+          selectedCatalogIndex >= 0 ? selectedCatalogIndex : selectedFragranceId,
+          cheatSheetDiscounts
         );
 
   // Live Real-Time Derived Pricing & Totals (Two-Way Sync Calculator)
@@ -478,7 +489,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     });
   };
 
-  const handleSelectPerfumeByIdOrIndex = (idOrIdx: string | number) => {
+  const handleSelectPerfumeByIdOrIndex = (
+    idOrIdx: string | number,
+    customOverrides?: Record<number, number>
+  ) => {
     if (idOrIdx === 'CUSTOM') {
       setSelectedFragranceId('CUSTOM');
       return;
@@ -488,7 +502,10 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
         ? idOrIdx
         : FRAGRANCE_CATALOG.findIndex((f) => f.id === idOrIdx);
     const catalogItem = idx >= 0 ? FRAGRANCE_CATALOG[idx] : undefined;
-    const skuEntry = resolveVorvanSkuPricing(idx >= 0 ? idx : idOrIdx);
+    const skuEntry = resolveVorvanSkuPricing(
+      idx >= 0 ? idx : idOrIdx,
+      customOverrides ?? cheatSheetDiscounts
+    );
 
     if (catalogItem) {
       setSelectedFragranceId(catalogItem.id);
@@ -507,6 +524,64 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
         extraDiscountIDR: liveExtraDisc,
         shippingCostIDR: liveShippingCost,
       });
+    }
+  };
+
+  const handleCheatSheetDiscountChange = (skuNo: number, rawVal: string) => {
+    const baseSku = VORVAN_81_CATALOG.find((item) => item.no === skuNo);
+    if (!baseSku) return;
+
+    const cleanStr = rawVal.replace(/[^\d.]/g, '');
+    const numericDisc = cleanStr === '' ? 0 : Number(cleanStr);
+    const { disc, price } = computeCheatSheetRowFromDiscount(
+      baseSku.retail,
+      numericDisc
+    );
+
+    const nextOverrides: Record<number, number> = {
+      ...cheatSheetDiscounts,
+      [skuNo]: disc,
+    };
+    setCheatSheetDiscounts(nextOverrides);
+    saveCheatSheetDiscountOverrides(nextOverrides);
+
+    // If this SKU is currently selected in the Tab 1 Invoice form, sync it immediately
+    if (
+      selectedFragranceId !== 'CUSTOM' &&
+      selectedCatalogIndex === skuNo - 1
+    ) {
+      setDiscountPct(String(disc));
+      setDealPriceIDR(String(price));
+      setRetailPriceIDR(String(baseSku.retail));
+      syncActiveOrderWithPricing({
+        dealPriceIDR: price,
+        retailPriceIDR: baseSku.retail,
+        discountPct: disc,
+        quantity: liveQty,
+        extraDiscountIDR: liveExtraDisc,
+        shippingCostIDR: liveShippingCost,
+      });
+    }
+  };
+
+  const handleResetCheatSheetDiscounts = () => {
+    resetCheatSheetDiscountOverrides();
+    setCheatSheetDiscounts({});
+    if (selectedFragranceId !== 'CUSTOM' && selectedCatalogIndex >= 0) {
+      const defaultSku = VORVAN_81_CATALOG[selectedCatalogIndex];
+      if (defaultSku) {
+        setDiscountPct(String(defaultSku.disc));
+        setDealPriceIDR(String(defaultSku.price));
+        setRetailPriceIDR(String(defaultSku.retail));
+        syncActiveOrderWithPricing({
+          dealPriceIDR: defaultSku.price,
+          retailPriceIDR: defaultSku.retail,
+          discountPct: defaultSku.disc,
+          quantity: liveQty,
+          extraDiscountIDR: liveExtraDisc,
+          shippingCostIDR: liveShippingCost,
+        });
+      }
     }
   };
 
@@ -566,7 +641,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
 
   const filteredCheatSheetItems = filterVorvanCheatSheet(
     cheatSheetQuery,
-    cheatSheetTier
+    cheatSheetTier,
+    cheatSheetDiscounts
   );
 
   const filteredConciergeGuideItems = filterConciergeGuide81(
@@ -1043,11 +1119,14 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
                       >
                         {FRAGRANCE_CATALOG.map((item, idx) => {
-                          const sku = VORVAN_81_CATALOG[idx];
+                          const sku =
+                            resolveVorvanSkuPricing(idx, cheatSheetDiscounts) ||
+                            VORVAN_81_CATALOG[idx];
                           return (
                             <option key={item.id} value={item.id}>
                               #{idx + 1} {item.house} — {item.name} (
-                              {sku?.size || item.defaultVolume}) · Rp{' '}
+                              {sku?.size || item.defaultVolume}) · Diskon{' '}
+                              {sku?.disc ?? 30}% · Rp{' '}
                               {(sku?.price || 4550000).toLocaleString('id-ID')}
                             </option>
                           );
@@ -2017,9 +2096,19 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                       Tabel Katalog Harga Ritel, Diskon %, Potongan &amp; Harga VORVAN
                     </h3>
                   </div>
-                  <span className="text-xs text-zinc-400 font-mono-tabular">
-                    Menampilkan {filteredCheatSheetItems.length} dari 81 SKU
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="text-xs text-zinc-400 font-mono-tabular">
+                      Menampilkan {filteredCheatSheetItems.length} dari 81 SKU
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleResetCheatSheetDiscounts}
+                      data-testid="reset-cheatsheet-discounts-btn"
+                      className="px-3 py-1.5 rounded-lg bg-[#14131A] hover:bg-[#1C1A26] border border-[#D4AF37]/45 hover:border-[#E5C87E] text-[#E5C87E] text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      ↺ Reset Default Excel
+                    </button>
+                  </div>
                 </div>
 
                 {/* Search & Tier Filters */}
@@ -2064,7 +2153,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 {/* Scrollable 81 SKU Cheat Sheet Table */}
                 <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-zinc-800">
                   <table className="w-full text-left border-collapse">
-                    <thead className="sticky top-0 bg-[#14131A] border-b border-zinc-700 text-[11px] uppercase tracking-wider text-zinc-400">
+                    <thead className="sticky top-0 bg-[#14131A] border-b border-zinc-700 text-[11px] uppercase tracking-wider text-zinc-400 z-10">
                       <tr>
                         <th className="py-2.5 px-3">No</th>
                         <th className="py-2.5 px-3">Brand — Nama Parfum</th>
@@ -2101,20 +2190,48 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                           <td className="py-2 px-3 text-xs text-zinc-400 text-right font-mono-tabular">
                             <del>Rp {sku.retail.toLocaleString('id-ID')}</del>
                           </td>
-                          <td className="py-2 px-2 text-xs text-emerald-400 font-semibold text-center font-mono-tabular">
-                            {sku.disc}%
+                          <td className="py-2 px-2 text-center">
+                            <div className="inline-flex items-center justify-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                max={90}
+                                value={sku.disc}
+                                onChange={(e) =>
+                                  handleCheatSheetDiscountChange(
+                                    sku.no,
+                                    e.target.value
+                                  )
+                                }
+                                aria-label={`Diskon persen untuk ${sku.brand} ${sku.name}`}
+                                data-testid={`cheatsheet-disc-input-${sku.no}`}
+                                className="w-14 px-1.5 py-1 rounded-md bg-[#14131A] border border-emerald-500/50 focus:border-emerald-400 text-xs text-emerald-400 font-bold text-center font-mono-tabular outline-none"
+                              />
+                              <span className="text-xs text-emerald-400 font-bold font-mono-tabular">
+                                %
+                              </span>
+                            </div>
                           </td>
-                          <td className="py-2 px-3 text-xs text-zinc-300 text-right font-mono-tabular">
+                          <td
+                            className="py-2 px-3 text-xs text-emerald-400/90 text-right font-mono-tabular"
+                            data-testid={`cheatsheet-cut-${sku.no}`}
+                          >
                             -Rp {sku.cut.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-2 px-3 text-xs text-[#F5E6B8] font-bold text-right font-mono-tabular">
+                          <td
+                            className="py-2 px-3 text-xs text-[#F5E6B8] font-bold text-right font-mono-tabular"
+                            data-testid={`cheatsheet-price-${sku.no}`}
+                          >
                             Rp {sku.price.toLocaleString('id-ID')}
                           </td>
                           <td className="py-2 px-3 text-center">
                             <button
                               type="button"
                               onClick={() => {
-                                handleSelectPerfumeByIdOrIndex(sku.no - 1);
+                                handleSelectPerfumeByIdOrIndex(
+                                  sku.no - 1,
+                                  cheatSheetDiscounts
+                                );
                                 const formEl = document.getElementById(
                                   'vorvan-admin-create-form'
                                 );

@@ -1093,15 +1093,138 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
   return toBase64Url(compactPipe);
 }
 
+export const STORAGE_CHEATSHEET_DISCOUNTS_KEY =
+  'vorvan_cheatsheet_81_discounts_v1';
+
+/**
+ * Calculates the rounded discount cut (Potongan, rounded to nearest Rp 5.000)
+ * and final VORVAN deal price from a retail price and discount percentage (0..90%).
+ */
+export function computeCheatSheetRowFromDiscount(
+  retailPriceIDR: number,
+  discountPct: number
+): { disc: number; cut: number; price: number } {
+  const cleanRetail = Math.max(0, Math.round(Number(retailPriceIDR) || 0));
+  const rawDisc = Number(discountPct);
+  const disc = Number.isFinite(rawDisc)
+    ? Math.max(0, Math.min(90, Math.round(rawDisc)))
+    : 0;
+  const cut = Math.min(
+    cleanRetail,
+    Math.round((cleanRetail * (disc / 100)) / 5000) * 5000
+  );
+  const price = Math.max(0, cleanRetail - cut);
+  return { disc, cut, price };
+}
+
+/**
+ * Loads saved custom discount percentage overrides (keyed by SKU `no` 1..81) from localStorage.
+ */
+export function loadCheatSheetDiscountOverrides(): Record<number, number> {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return {};
+    const raw = window.localStorage.getItem(STORAGE_CHEATSHEET_DISCOUNTS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const result: Record<number, number> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      const no = Number(k);
+      const disc = Number(v);
+      if (
+        Number.isInteger(no) &&
+        no >= 1 &&
+        no <= 81 &&
+        Number.isFinite(disc)
+      ) {
+        result[no] = Math.max(0, Math.min(90, Math.round(disc)));
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Persists custom discount percentage overrides (keyed by SKU `no` 1..81) to localStorage.
+ */
+export function saveCheatSheetDiscountOverrides(
+  overrides: Record<number, number>
+): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const clean: Record<number, number> = {};
+    for (const [k, v] of Object.entries(overrides || {})) {
+      const no = Number(k);
+      const disc = Number(v);
+      if (
+        Number.isInteger(no) &&
+        no >= 1 &&
+        no <= 81 &&
+        Number.isFinite(disc)
+      ) {
+        clean[no] = Math.max(0, Math.min(90, Math.round(disc)));
+      }
+    }
+    window.localStorage.setItem(
+      STORAGE_CHEATSHEET_DISCOUNTS_KEY,
+      JSON.stringify(clean)
+    );
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+/**
+ * Clears all custom Cheat Sheet discount overrides in localStorage back to original Excel defaults.
+ */
+export function resetCheatSheetDiscountOverrides(): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.removeItem(STORAGE_CHEATSHEET_DISCOUNTS_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+/**
+ * Applies any custom discount percentage override for a given SKU entry.
+ */
+export function applyCheatSheetDiscountOverride(
+  sku: VorvanSkuPricingEntry,
+  discountOverrides?: Record<number, number>
+): VorvanSkuPricingEntry {
+  const map = discountOverrides ?? loadCheatSheetDiscountOverrides();
+  const customDisc = map?.[sku.no];
+  if (typeof customDisc === 'number' && Number.isFinite(customDisc)) {
+    const { disc, cut, price } = computeCheatSheetRowFromDiscount(
+      sku.retail,
+      customDisc
+    );
+    return {
+      ...sku,
+      disc,
+      cut,
+      price,
+    };
+  }
+  return sku;
+}
+
 /**
  * Resolves official VORVAN 81 SKU pricing & discount metadata by catalog index (0..80),
- * fragrance ID, or brand/perfume name.
+ * fragrance ID, or brand/perfume name, applying any active Cheat Sheet discount override.
  */
 export function resolveVorvanSkuPricing(
-  catalogIdxOrIdOrName: number | string
+  catalogIdxOrIdOrName: number | string,
+  discountOverrides?: Record<number, number>
 ): VorvanSkuPricingEntry | null {
+  const wrap = (entry: VorvanSkuPricingEntry | null | undefined) =>
+    entry ? applyCheatSheetDiscountOverride(entry, discountOverrides) : null;
+
   if (typeof catalogIdxOrIdOrName === 'number') {
-    return VORVAN_81_CATALOG[catalogIdxOrIdOrName] || null;
+    return wrap(VORVAN_81_CATALOG[catalogIdxOrIdOrName]);
   }
 
   const clean = (catalogIdxOrIdOrName || '').trim();
@@ -1109,7 +1232,7 @@ export function resolveVorvanSkuPricing(
 
   const byCatalogIdIdx = FRAGRANCE_CATALOG.findIndex((f) => f.id === clean);
   if (byCatalogIdIdx >= 0 && VORVAN_81_CATALOG[byCatalogIdIdx]) {
-    return VORVAN_81_CATALOG[byCatalogIdIdx];
+    return wrap(VORVAN_81_CATALOG[byCatalogIdIdx]);
   }
 
   const lower = clean.toLowerCase();
@@ -1119,7 +1242,7 @@ export function resolveVorvanSkuPricing(
       `${p.brand} — ${p.name}`.toLowerCase() === lower ||
       p.name.toLowerCase() === lower
   );
-  if (exactMatch) return exactMatch;
+  if (exactMatch) return wrap(exactMatch);
 
   // 1. Exact match in FRAGRANCE_CATALOG first (so "Donna Born in Roma" matches #81 instead of #80 "Donna Born in Roma Extradose")
   const byCatalogExactIdx = FRAGRANCE_CATALOG.findIndex(
@@ -1130,7 +1253,7 @@ export function resolveVorvanSkuPricing(
       `${f.house} — ${f.name}`.toLowerCase() === lower
   );
   if (byCatalogExactIdx >= 0 && VORVAN_81_CATALOG[byCatalogExactIdx]) {
-    return VORVAN_81_CATALOG[byCatalogExactIdx];
+    return wrap(VORVAN_81_CATALOG[byCatalogExactIdx]);
   }
 
   // 2. Substring match in FRAGRANCE_CATALOG (e.g. "Baccarat Rouge 540 Extrait" -> "Baccarat Rouge 540 Extrait de Parfum")
@@ -1138,19 +1261,19 @@ export function resolveVorvanSkuPricing(
     f.name.toLowerCase().includes(lower)
   );
   if (byCatalogContainsIdx >= 0 && VORVAN_81_CATALOG[byCatalogContainsIdx]) {
-    return VORVAN_81_CATALOG[byCatalogContainsIdx];
+    return wrap(VORVAN_81_CATALOG[byCatalogContainsIdx]);
   }
 
   const bySkuContains = VORVAN_81_CATALOG.find((p) =>
     p.name.toLowerCase().includes(lower)
   );
-  if (bySkuContains) return bySkuContains;
+  if (bySkuContains) return wrap(bySkuContains);
 
   // Fallback: longest SKU name that is contained inside `lower`
   const reverseMatches = VORVAN_81_CATALOG.filter((p) =>
     lower.includes(p.name.toLowerCase())
   ).sort((a, b) => b.name.length - a.name.length);
-  return reverseMatches[0] || null;
+  return wrap(reverseMatches[0]);
 }
 
 /**
@@ -1215,13 +1338,16 @@ export function autoDetectShippingZoneByCity(addressText: string): {
 }
 
 /**
- * Filters the 81 SKU Cheat Sheet by search query and tier (ALL, 1..5).
+ * Filters the 81 SKU Cheat Sheet by search query and tier (ALL, 1..5),
+ * applying any custom discount overrides per SKU.
  */
 export function filterVorvanCheatSheet(
   searchQuery: string = '',
-  tierFilter: string = 'ALL'
+  tierFilter: string = 'ALL',
+  discountOverrides?: Record<number, number>
 ): VorvanSkuPricingEntry[] {
   const q = (searchQuery || '').toLowerCase().trim();
+  const overrides = discountOverrides ?? loadCheatSheetDiscountOverrides();
   return VORVAN_81_CATALOG.filter((item) => {
     const matchText =
       !q ||
@@ -1233,7 +1359,7 @@ export function filterVorvanCheatSheet(
       tierFilter === 'ALL' ||
       String(item.tier) === String(tierFilter);
     return matchText && matchTier;
-  });
+  }).map((item) => applyCheatSheetDiscountOverride(item, overrides));
 }
 
 /**
