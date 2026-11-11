@@ -106,6 +106,42 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
+/* Uniform Header Right-Zone Action Controls (ID, CONCIERGE WA, TG, IG) */
+.vorvan-header-btn {
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border-radius: 8px;
+  line-height: 1;
+}
+
+.vorvan-header-social-btn {
+  width: 42px;
+  min-width: 42px;
+  max-width: 42px;
+  padding-inline: 0;
+}
+
+@media (min-width: 640px) {
+  .vorvan-header-btn {
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+  }
+
+  .vorvan-header-social-btn {
+    width: 54px;
+    min-width: 54px;
+    max-width: 54px;
+  }
+}
+
 /* Marquee Carousel */
 @keyframes marquee-scroll {
   0% {

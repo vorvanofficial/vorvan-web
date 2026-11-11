@@ -6,6 +6,7 @@ import {
   Compass,
   FileCheck2,
   Globe,
+  Instagram,
   Mail,
   MessageCircle,
   PackageSearch,
@@ -1144,6 +1145,7 @@ export default function App() {
   const generalConciergeTgUrl = `https://t.me/${cleanTelegram}?text=${encodeURIComponent(
     generalConciergeMessage
   )}`;
+  const officialInstagramUrl = 'https://www.instagram.com/vorvanofficial/';
 
   return (
     <div
@@ -1169,13 +1171,13 @@ export default function App() {
             : 'bg-[#0B0A0E]/85 backdrop-blur-xs border-b border-[#D4AF37]/20'
         }`}
       >
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-1.5 sm:gap-4 lg:gap-6 px-3 sm:px-6 lg:px-8 h-14 sm:h-16">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-1.5 sm:gap-4 lg:gap-6 px-[12px] sm:px-6 lg:px-8 h-14 sm:h-16">
           {/* Zone 1: Single brand element with semi-gold wordmark — 5x Tap Opens Secret Admin Gate */}
           <div className="flex items-center justify-start shrink-0">
             <a
               href="/"
               onClick={handleLogoSecretTap}
-              className="inline-flex items-center font-brand text-sm sm:text-lg lg:text-xl font-semibold tracking-[0.2em] sm:tracking-[0.28em] text-gold-shimmer whitespace-nowrap shrink-0 bg-transparent border-none select-none cursor-pointer"
+              className="inline-flex items-center font-brand text-[12.5px] sm:text-lg lg:text-xl font-semibold tracking-[0.14em] sm:tracking-[0.28em] text-gold-shimmer whitespace-nowrap shrink-0 bg-transparent border-none select-none cursor-pointer"
               data-testid="vorvan-header-logo"
             >
               <span>VORVAN</span>
@@ -1234,11 +1236,17 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Zone 3: International Language Selector + Dual-Concierge (WhatsApp + Telegram VIP) */}
-          <div className="flex items-center justify-end gap-1 sm:gap-2 shrink-0">
+          {/* Zone 3: International Language Selector + Dual-Concierge (WhatsApp + Telegram VIP + Instagram) */}
+          <div
+            className="flex items-center justify-end gap-[5px] sm:gap-2 shrink-0"
+            data-testid="header-actions-group"
+          >
             {/* Compact International Language Selector (Displays 🌐 ID) */}
-            <div className="relative flex items-center gap-1 bg-[#14131B] border border-[#D4AF37]/45 rounded-lg px-2 sm:px-2.5 py-1.5">
-              <Globe className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#E5C87E] shrink-0" />
+            <div
+              className="vorvan-header-btn vorvan-header-social-btn relative gap-1 bg-[#14131B] border border-[#D4AF37]/45"
+              data-testid="header-language-box"
+            >
+              <Globe className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#E5C87E] shrink-0 pointer-events-none" />
               <label htmlFor="vorvan-locale-select" className="sr-only">
                 Pilih Bahasa Internasional
               </label>
@@ -1250,7 +1258,7 @@ export default function App() {
                   handleChangeLocale(e.target.value as SupportedLocale)
                 }
                 aria-label="International Language Selector"
-                className="bg-transparent font-brand text-[10px] sm:text-xs font-bold text-[#F5E6B8] uppercase tracking-wider outline-none cursor-pointer"
+                className="h-full w-[18px] sm:w-[22px] appearance-none text-center bg-transparent font-brand text-[10px] sm:text-xs font-bold leading-none text-[#F5E6B8] uppercase tracking-[0.04em] outline-none cursor-pointer m-0 p-0"
               >
                 {SUPPORTED_LOCALES.map((loc) => (
                   <option
@@ -1275,7 +1283,7 @@ export default function App() {
                   setEmailGatewayOpen(true);
                 }
               }}
-              className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg btn-luxury-gold font-brand text-[10px] sm:text-xs font-bold uppercase tracking-[0.06em] sm:tracking-[0.12em] transition-all whitespace-nowrap shrink-0 inline-flex items-center gap-1 sm:gap-1.5 cursor-pointer"
+              className="vorvan-header-btn px-2 sm:px-3.5 btn-luxury-gold font-brand text-[9.5px] sm:text-xs font-bold uppercase tracking-[0.02em] sm:tracking-[0.1em] transition-all gap-1 sm:gap-1.5 cursor-pointer"
               data-testid="header-concierge-cta"
             >
               <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 text-zinc-950" />
@@ -1293,13 +1301,24 @@ export default function App() {
                   setEmailGatewayOpen(true);
                 }
               }}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-[#14131B] hover:bg-[#1E1C2A] border border-[#D4AF37]/45 text-[#F5E6B8] font-brand text-[10px] sm:text-xs font-semibold uppercase tracking-[0.06em] sm:tracking-[0.1em] transition-all whitespace-nowrap shrink-0 inline-flex items-center gap-1 sm:gap-1.5 cursor-pointer"
+              className="vorvan-header-btn vorvan-header-social-btn bg-[#14131B] hover:bg-[#1E1C2A] border border-[#D4AF37]/45 text-[#F5E6B8] font-brand text-[10px] sm:text-xs font-semibold uppercase tracking-[0.04em] sm:tracking-[0.08em] transition-all gap-1 cursor-pointer"
               data-testid="header-telegram-cta"
               title="Telegram VIP @vorvanofficial"
             >
               <Send className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 text-[#E5C87E]" />
-              <span className="hidden sm:inline">TELEGRAM</span>
-              <span className="sm:hidden">TG</span>
+              <span>TG</span>
+            </a>
+
+            <a
+              href={officialInstagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="vorvan-header-btn vorvan-header-social-btn bg-[#14131B] hover:bg-[#1E1C2A] border border-[#D4AF37]/45 text-[#F5E6B8] font-brand text-[10px] sm:text-xs font-semibold uppercase tracking-[0.04em] sm:tracking-[0.08em] transition-all gap-1 cursor-pointer"
+              data-testid="header-instagram-cta"
+              title="Instagram Resmi @vorvanofficial"
+            >
+              <Instagram className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 text-[#E5C87E]" />
+              <span>IG</span>
             </a>
           </div>
         </div>
@@ -1820,6 +1839,45 @@ export default function App() {
 
             {/* 8. RETURN POLICY & AUTHENTICITY GUARANTEE SECTION */}
             <ReturnPolicyContent isModal={false} locale={locale} />
+
+            {/* 8B. OFFICIAL INSTAGRAM ARCHIVE BANNER (@VORVANOFFICIAL) BEFORE FOOTER */}
+            <section
+              id="official-instagram-archive"
+              data-testid="showroom-instagram-banner"
+              className="relative py-12 sm:py-16 border-t border-[#D4AF37]/30 overflow-hidden bg-gradient-to-b from-[#09080D] via-[#0B0A10] to-[#08070B]"
+            >
+              <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <ScrollReveal variant="scale" delayMs={60}>
+                  <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-r from-[#13111A]/95 via-[#0E0D14]/95 to-[#15121D]/95 border border-[#D4AF37]/45 shadow-[0_24px_60px_rgba(0,0,0,0.65)] grid grid-cols-1 lg:grid-cols-12 gap-7 items-center text-center lg:text-left">
+                    <div className="lg:col-span-8 space-y-3">
+                      <div className="inline-flex items-center justify-center lg:justify-start gap-2 px-3 py-1 rounded-full bg-[#171522] border border-[#D4AF37]/40 font-brand text-[10px] sm:text-xs text-[#E5C87E] uppercase tracking-[0.24em]">
+                        <Instagram className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
+                        <span>OFFICIAL SOCIAL ARCHIVE · INSTAGRAM</span>
+                      </div>
+                      <h2 className="font-serif-luxury text-2xl sm:text-4xl font-semibold text-gold-shimmer tracking-wide">
+                        @vorvanofficial
+                      </h2>
+                      <p className="font-latin-italic text-base sm:text-lg text-zinc-200 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                        Ikuti jurnal visual, update kedatangan Batch terbaru, dan kurasi eksklusif VORVAN di Instagram resmi kami.
+                      </p>
+                    </div>
+                    <div className="lg:col-span-4 flex flex-col items-center lg:items-end justify-center">
+                      <a
+                        href={officialInstagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid="showroom-instagram-cta"
+                        className="w-full sm:w-auto lg:w-full min-h-[50px] py-3.5 px-6 rounded-xl btn-luxury-gold font-brand text-xs font-bold uppercase tracking-[0.16em] transition-all inline-flex items-center justify-center gap-2 cursor-pointer text-zinc-950"
+                      >
+                        <Instagram className="w-4 h-4 shrink-0 text-zinc-950" />
+                        <span>KUNJUNGI INSTAGRAM @VORVANOFFICIAL</span>
+                        <ArrowUpRight className="w-4 h-4 shrink-0 text-zinc-950" />
+                      </a>
+                    </div>
+                  </div>
+                </ScrollReveal>
+              </div>
+            </section>
           </>
         )}
       </main>
@@ -1934,6 +1992,19 @@ export default function App() {
                     </li>
                     <li>
                       <a
+                        href={officialInstagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-[#F5E6B8] transition-colors inline-flex items-center justify-center gap-1.5 py-0.5"
+                        data-testid="footer-instagram-link"
+                      >
+                        <Instagram className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
+                        <span>Instagram @vorvanofficial</span>
+                        <ArrowUpRight className="w-3 h-3 text-[#E5C87E]" />
+                      </a>
+                    </li>
+                    <li>
+                      <a
                         href={generalConciergeWaUrl}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -1968,8 +2039,16 @@ export default function App() {
                 © 2026 VORVAN — LIFESTYLE FOR EVERYONE. {t.footer.rightsReserved}
               </p>
               <p className="text-[#D8BE82]">
-                Official Email: {siteSettings.conciergeEmail} · WhatsApp Concierge ·
-                Telegram VIP Concierge
+                Official Email: {siteSettings.conciergeEmail} ·{' '}
+                <a
+                  href={officialInstagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-[#F5E6B8] underline decoration-[#D4AF37]/50 underline-offset-4"
+                >
+                  Instagram @vorvanofficial
+                </a>{' '}
+                · WhatsApp Concierge · Telegram VIP Concierge
               </p>
             </div>
           </ScrollReveal>

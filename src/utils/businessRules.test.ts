@@ -2148,3 +2148,75 @@ test('33. Cheat Sheet 81 SKU interactive discount input recalculates Potongan (n
   assert.ok(modalCode.includes('reset-cheatsheet-discounts-btn'));
   assert.ok(modalCode.includes('↺ Reset Default Excel'));
 });
+
+test('34. Official Instagram (@vorvanofficial — https://www.instagram.com/vorvanofficial/) is integrated in Header IG button, Showroom Official Social Archive card, Footer, and index.html JSON-LD sameAs', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+  const indexHtml = fs.readFileSync(
+    path.join(process.cwd(), 'index.html'),
+    'utf8'
+  );
+
+  // 1. Header IG button next to TG
+  assert.ok(appCode.includes('https://www.instagram.com/vorvanofficial/'));
+  assert.ok(appCode.includes('data-testid="header-instagram-cta"'));
+  assert.ok(appCode.includes('<span>IG</span>'));
+
+  // 2. Showroom Official Instagram Archive card before Footer
+  assert.ok(appCode.includes('data-testid="showroom-instagram-banner"'));
+  assert.ok(appCode.includes('OFFICIAL SOCIAL ARCHIVE · INSTAGRAM'));
+  assert.ok(appCode.includes('@vorvanofficial'));
+  assert.ok(
+    appCode.includes(
+      'Ikuti jurnal visual, update kedatangan Batch terbaru, dan kurasi eksklusif VORVAN di Instagram resmi kami.'
+    )
+  );
+  assert.ok(appCode.includes('KUNJUNGI INSTAGRAM @VORVANOFFICIAL'));
+  assert.ok(appCode.includes('data-testid="footer-instagram-link"'));
+
+  // 3. index.html JSON-LD Organization sameAs contains https://www.instagram.com/vorvanofficial/
+  const ldJsonMatches = [
+    ...indexHtml.matchAll(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g
+    ),
+  ];
+  assert.ok(ldJsonMatches.length >= 1);
+  const orgJson = JSON.parse(ldJsonMatches[0][1]);
+  assert.equal(orgJson['@type'], 'Organization');
+  assert.ok(Array.isArray(orgJson.sameAs));
+  assert.ok(
+    orgJson.sameAs.includes('https://www.instagram.com/vorvanofficial/')
+  );
+});
+
+test('35. Header right-zone buttons (ID, CONCIERGE WA, TG, IG) share uniform height (32px mobile / 36px desktop), identical TG & IG box sizing, and 12px inline padding on mobile', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+  const cssCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'index.css'),
+    'utf8'
+  );
+
+  assert.ok(cssCode.includes('.vorvan-header-btn'));
+  assert.ok(cssCode.includes('height: 32px;'));
+  assert.ok(cssCode.includes('height: 36px;'));
+  assert.ok(cssCode.includes('.vorvan-header-social-btn'));
+
+  assert.ok(appCode.includes('px-[12px] sm:px-6 lg:px-8'));
+  assert.ok(appCode.includes('gap-[5px] sm:gap-2'));
+  assert.ok(appCode.includes('data-testid="header-language-box"'));
+  assert.ok(appCode.includes('<span>TG</span>'));
+  assert.ok(appCode.includes('<span>IG</span>'));
+});
+
+
