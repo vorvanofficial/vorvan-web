@@ -32,8 +32,8 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
   const [selectedBrandId, setSelectedBrandId] =
     useState<BrandHouseId>('louis-vuitton');
   const [selectedGender, setSelectedGender] = useState<
-    GenderCategory | 'ALL'
-  >('ALL');
+    GenderCategory | 'ALL' | null
+  >(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const brandGridRef = useRef<HTMLDivElement | null>(null);
@@ -51,19 +51,26 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
     'ALL'
   );
 
-  // Strict gender filtering: NEVER fall back to allBrandFragrances when filtered count is 0
-  const matchingFragrances = filterFragrancesByBrandAndGender(
-    selectedBrandId,
-    selectedGender
-  );
+  // Strict gender filtering: NEVER fall back to allBrandFragrances when filtered count is 0,
+  // and wait until a category button is clicked (selectedGender !== null) before showing fragrances.
+  const matchingFragrances =
+    selectedGender !== null
+      ? filterFragrancesByBrandAndGender(selectedBrandId, selectedGender)
+      : [];
 
   const isSearching = searchQuery.trim().length > 0;
   const searchResults = isSearching
     ? searchCatalogFragrances81(searchQuery)
     : matchingFragrances;
   const isEmptySearch = isSearching && searchResults.length === 0;
-  const isEmptyGenderFilter = !isSearching && matchingFragrances.length === 0;
-  const shouldShowFragranceGrid = !isEmptySearch && searchResults.length > 0;
+  const isAwaitingGenderSelection = !isSearching && selectedGender === null;
+  const isEmptyGenderFilter =
+    !isSearching && selectedGender !== null && matchingFragrances.length === 0;
+  const shouldShowFragranceGrid =
+    !isEmptySearch &&
+    (isSearching
+      ? searchResults.length > 0
+      : selectedGender !== null && matchingFragrances.length > 0);
 
   const matchingBrandIds = new Set(
     (isSearching ? searchResults : allBrandFragrances).map(
@@ -130,7 +137,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
     shouldAutoGlide: boolean = false
   ) => {
     setSelectedBrandId(brandId);
-    setSelectedGender('ALL');
+    setSelectedGender(null);
     if (searchQuery.trim()) {
       setSearchQuery('');
     }
@@ -169,7 +176,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
   // Clean "Est. 1854" so it never renders as "EST. EST. 1854"
   const formattedEstLabel = `EST. ${activeBrand.est.replace(/^est\.?\s*/i, '')}`;
 
-  const emptyGenderWaMessage = `Halo Concierge VORVAN, saya sedang mengeksplorasi rumah mode *${activeBrand.name}* kategori *[ ${selectedGender} ]* di halaman 19 HOUSES. Apakah terdapat koleksi *${activeBrand.name}* kategori *${selectedGender}* pada Extended Archive (693+ Koleksi)? Mohon informasi ketersediaan & penawaran harga privatnya.`;
+  const emptyGenderWaMessage = `Halo Concierge VORVAN, saya sedang mengeksplorasi rumah mode *${activeBrand.name}* kategori *[ ${selectedGender || ''} ]* di halaman 19 HOUSES. Apakah terdapat koleksi *${activeBrand.name}* kategori *${selectedGender || ''}* pada Extended Archive (693+ Koleksi)? Mohon informasi ketersediaan & penawaran harga privatnya.`;
   const emptyGenderWaUrl = `https://wa.me/628133866590?text=${encodeURIComponent(
     emptyGenderWaMessage
   )}`;
@@ -295,10 +302,10 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
         )}
       </div>
 
-      {/* 1. PITA GESER 19 MERK CEPAT — HIDDEN WHEN EMPTY SEARCH */}
+      {/* 1. PITA GESER 19 MERK CEPAT — HIDDEN WHEN EMPTY SEARCH, SOLID DARK BACKDROP & Z-40 */}
       {!isEmptySearch && visibleBrands.length > 0 && (
         <div
-          className="vorvan-quick-brand-bar"
+          className="vorvan-quick-brand-bar z-40"
           role="region"
           aria-label="Pita Geser Cepat 19 Merk"
           data-testid="vorvan-quick-brand-bar"
@@ -442,6 +449,16 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
                     );
                   })}
                 </div>
+
+                {/* SUBTLE PROMPT BEFORE USER CLICKS ANY GENDER CATEGORY */}
+                {isAwaitingGenderSelection && (
+                  <p
+                    data-testid="awaiting-gender-selection-hint"
+                    className="font-latin-italic italic text-sm sm:text-base text-[#D8BE82]/90 text-center pt-1.5 m-0"
+                  >
+                    Silakan pilih kategori koleksi di atas untuk membuka etalase flacon.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -455,14 +472,30 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
               <p className="font-latin-script text-2xl sm:text-3xl text-gold-champagne m-0">
                 L’Archive Privée Étendue
               </p>
-              <p className="font-brand text-[10px] sm:text-xs uppercase tracking-[0.22em] text-[#E5C87E] font-semibold">
-                {activeBrand.name} · KATEGORI [ {selectedGender} ]
-              </p>
+              <div
+                data-testid="empty-gender-filter-subtitle"
+                className="font-brand text-[10px] sm:text-xs uppercase tracking-[0.22em] text-[#E5C87E] font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2"
+              >
+                <span>{activeBrand.name}</span>
+                <span aria-hidden="true" className="hidden sm:inline">
+                  ·
+                </span>
+                <span className="whitespace-nowrap inline-block">
+                  KATEGORI{' '}
+                  <span className="whitespace-nowrap inline-block">
+                    [ {selectedGender} ]
+                  </span>
+                </span>
+              </div>
               <p
                 data-testid="empty-gender-filter-message"
                 className="font-latin-italic italic text-base sm:text-lg text-zinc-200 max-w-xl mx-auto leading-relaxed"
               >
-                “Seluruh koleksi etalase utama pada rumah mode ini dirancang sebagai komposisi UNISEX, atau tersedia melalui Extended Archive (693+ Koleksi).”
+                “Koleksi kategori{' '}
+                <span className="whitespace-nowrap inline-block font-semibold text-[#F5E6B8] not-italic">
+                  [ {selectedGender} ]
+                </span>{' '}
+                untuk rumah mode ini tidak ditampilkan pada etalase utama (81 SKU), namun tersedia lengkap melalui Extended Archive (693+ Koleksi dari 63+ Brand).”
               </p>
               <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-md mx-auto">
                 <button

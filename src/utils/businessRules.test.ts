@@ -1966,8 +1966,9 @@ test('30. AI Bot Readability (index.html static HTML + JSON-LD, robots.txt, llms
 
   // 4. Verify .vorvan-quick-brand-bar sticky & full-width CSS in src/index.css
   assert.ok(indexCss.includes('position: sticky;'));
-  assert.ok(indexCss.includes('z-index: 45;'));
-  assert.ok(indexCss.includes('backdrop-filter: blur(16px);'));
+  assert.ok(indexCss.includes('z-index: 40;'));
+  assert.ok(indexCss.includes('background: rgba(5, 5, 5, 0.96);'));
+  assert.ok(indexCss.includes('backdrop-filter: blur(12px);'));
   assert.ok(indexCss.includes('padding-inline: 16px;'));
 });
 
@@ -2552,7 +2553,7 @@ test('42. Hero narrative uses inspeksi kualitas segel Vault berlapis & jaminan k
   }
 });
 
-test('43. Strict 19 Houses gender filter: zero fallback to allBrandFragrances, shows empty-gender info card with [ LIHAT SEMUA KOLEKSI ] & [ TANYA CONCIERGE WA ] when count is 0, and auto-resets to ALL on brand switch', async () => {
+test('43. Strict 19 Houses gender filter: starts as null on open and brand switch with subtle prompt, zero fallback to allBrandFragrances, shows empty-gender info card with non-wrapping bracket & updated Extended Archive message when count is 0', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
 
@@ -2590,16 +2591,23 @@ test('43. Strict 19 Houses gender filter: zero fallback to allBrandFragrances, s
   assert.equal(filterFragrancesByBrandAndGender('creed', 'FEMME').length, 0);
   assert.equal(filterFragrancesByBrandAndGender('mfk', 'GENTLEMAN').length, 0);
 
-  // 2. BrandHierarchyExplorer has no fallback to allBrandFragrances when filteredByGender is empty
+  // 2. BrandHierarchyExplorer starts selectedGender at null, resets to null on brand switch, and shows subtle prompt before click
   assert.equal(
     explorerCode.includes('filteredByGender.length > 0'),
     false
   );
-  assert.ok(explorerCode.includes("setSelectedGender('ALL');"));
-  assert.ok(explorerCode.includes('data-testid="empty-gender-filter-card"'));
+  assert.ok(explorerCode.includes('>(null);'));
+  assert.ok(explorerCode.includes('setSelectedGender(null);'));
   assert.ok(
     explorerCode.includes(
-      'Seluruh koleksi etalase utama pada rumah mode ini dirancang sebagai komposisi UNISEX, atau tersedia melalui Extended Archive (693+ Koleksi).'
+      'Silakan pilih kategori koleksi di atas untuk membuka etalase flacon.'
+    )
+  );
+  assert.ok(explorerCode.includes('data-testid="empty-gender-filter-card"'));
+  assert.ok(explorerCode.includes('whitespace-nowrap inline-block'));
+  assert.ok(
+    explorerCode.includes(
+      'untuk rumah mode ini tidak ditampilkan pada etalase utama (81 SKU), namun tersedia lengkap melalui Extended Archive (693+ Koleksi dari 63+ Brand).'
     )
   );
   assert.ok(explorerCode.includes('[ LIHAT SEMUA KOLEKSI ]'));
