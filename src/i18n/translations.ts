@@ -192,7 +192,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         '. Kami menghadirkan mahakarya wewangian dari rumah mode dan atelier niche paling dihormati di Eropa melalui skema kuotasi privat (',
       narrativePriceOnRequest: 'Price on Request',
       narrativeSuffix:
-        '), otentikasi segel Vault berlapis, serta jaminan keaslian mutlak hingga ke tangan Anda.',
+        '), inspeksi kualitas segel Vault berlapis, serta jaminan keamanan pengiriman penuh hingga ke tangan Anda.',
       ctaExploreHouses: 'Eksplorasi 19 Rumah Parfum',
       ctaPrivateInvoice: 'Buka Private Invoice',
     },
@@ -270,7 +270,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         'Klasik kontemporer dari rumah mode Eropa terkemuka. Karakter berwibawa dan serbaguna yang memancarkan karisma bersih dari ruang rapat hingga malam gala.',
     },
     invoiceBanner: {
-      scriptCrown: 'Transaction Privée & Authentifiée',
+      scriptCrown: 'Transaction Privée & Sécurisée',
       kicker: 'PRIVATE WEB CHECKOUT SYSTEM',
       title: 'Sudah Mendapatkan Penawaran Harga dari Concierge Kami?',
       description:
@@ -300,7 +300,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       sendWaBtn: 'Kirim via WA',
     },
     returnPolicy: {
-      kicker: 'VORVAN AUTHENTICITY & CLIENT PROTECTION CHARTER',
+      kicker: 'VORVAN QUALITY INSPECTION & CLIENT PROTECTION CHARTER',
       title: 'Syarat, Ketentuan Pengiriman & Kebijakan Retur',
       subtitle:
         'Demi menjaga integritas produk parfum niche & desainer bernilai tinggi, setiap pengiriman dari Vault VORVAN tunduk pada protokol perlindungan ketat berikut.',
@@ -339,7 +339,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
     },
     footer: {
       brandDescription:
-        'Butik kurasi parfum mewah & private olfactory concierge. Seluruh merek dagang dan nama rumah parfum adalah milik masing-masing pemegang hak cipta. VORVAN menjamin keaslian 100% setiap flacon yang keluar dari ruang penyimpanan kami.',
+        'Butik kurasi parfum mewah & private olfactory concierge. Seluruh merek dagang dan nama rumah parfum adalah milik masing-masing pemegang hak cipta. VORVAN menerapkan inspeksi kualitas segel Vault berlapis, standar presisi Full-Size Sealed, serta jaminan keamanan pengiriman & fisik flacon pada setiap unit yang keluar dari ruang penyimpanan kami.',
       quickTrackTitle: 'Lacak Pengiriman Cepat',
       quickTrackSubtitle:
         'Masukkan nomor resi VORVAN atau nomor Private Invoice Anda:',
@@ -388,7 +388,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         '. We source iconic creations from Europe’s most revered couture houses and niche ateliers through bespoke private quotation (',
       narrativePriceOnRequest: 'Price on Request',
       narrativeSuffix:
-        '), multi-layer Vault seal authentication, and absolute provenance guarantee.',
+        '), multi-layered Vault seal quality inspection, Full-Size Sealed precision standard, and guaranteed shipping & flacon physical integrity.',
       ctaExploreHouses: 'Explore 19 Fragrance Houses',
       ctaPrivateInvoice: 'Open Private Invoice',
     },
@@ -466,7 +466,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         'Contemporary classics from leading European fashion houses. Versatile, commanding signatures from boardroom to evening gala.',
     },
     invoiceBanner: {
-      scriptCrown: 'Transaction Privée & Authentifiée',
+      scriptCrown: 'Transaction Privée & Sécurisée',
       kicker: 'PRIVATE WEB CHECKOUT SYSTEM',
       title: 'Already Received a Bespoke Quotation from Our Concierge?',
       description:
@@ -496,8 +496,8 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       sendWaBtn: 'Send via WA',
     },
     returnPolicy: {
-      kicker: 'VORVAN AUTHENTICITY & CLIENT PROTECTION CHARTER',
-      title: 'Shipping Terms, Authenticity & Return Charter',
+      kicker: 'VORVAN QUALITY INSPECTION & CLIENT PROTECTION CHARTER',
+      title: 'Shipping Terms, Physical Integrity & Return Charter',
       subtitle:
         'To safeguard the integrity of high-value niche and designer flacons, every shipment from the VORVAN Vault adheres to the following protection protocol.',
       clausePrefix: 'CLAUSE',
@@ -535,7 +535,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
     },
     footer: {
       brandDescription:
-        'Luxury fragrance curation boutique & private olfactory concierge. All trademarks belong to their respective owners. VORVAN guarantees 100% authenticity on every flacon leaving our vault.',
+        'Luxury fragrance curation boutique & private olfactory concierge. All trademarks belong to their respective owners. VORVAN upholds multi-layered Vault seal quality inspection, Full-Size Sealed precision standard, and guaranteed shipping & flacon physical integrity on every flacon leaving our vault.',
       quickTrackTitle: 'Quick Shipment Tracker',
       quickTrackSubtitle:
         'Enter your VORVAN waybill code or Private Invoice ID:',
@@ -584,7 +584,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         '. Nous réunissons les créations les plus nobles des maisons de couture et ateliers de niche européens sur cotation privée (',
       narrativePriceOnRequest: 'Prix sur Demande',
       narrativeSuffix:
-        '), avec authentification stricte des lots et garantie d’origine absolue.',
+        '), avec inspection rigoureuse des scellés du Caveau et garantie intégrale d’expédition jusqu’à vos mains.',
       ctaExploreHouses: 'Explorer les 19 Maisons',
       ctaPrivateInvoice: 'Facture Privée',
     },
@@ -614,7 +614,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
           subtitle: 'PRIVILÈGE DE COTATION PRIVÉE',
           title: 'Valorisation Juste & Exclusive',
           description:
-            'Des créations 100 % authentiques proposées à une valorisation confidentielle réservée aux connaisseurs.',
+            'Des flacons en présentation Full-Size Sealed proposés à une valorisation confidentielle réservée aux connaisseurs.',
         },
       ],
     },
@@ -662,7 +662,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         'Les grands classiques contemporains des maisons européennes, alliant charisme et élégance.',
     },
     invoiceBanner: {
-      scriptCrown: 'Transaction Privée & Authentifiée',
+      scriptCrown: 'Transaction Privée & Sécurisée',
       kicker: 'RÈGLEMENT PRIVÉ SÉCURISÉ',
       title: 'Vous Avez Reçu une Offre de Notre Conciergerie ?',
       description:
@@ -692,7 +692,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       sendWaBtn: 'Envoyer via WA',
     },
     returnPolicy: {
-      kicker: 'CHARTE D’AUTHENTICITÉ & PROTECTION VORVAN',
+      kicker: 'CHARTE D’INTÉGRITÉ PHYSIQUE & PROTECTION VORVAN',
       title: 'Conditions d’Expédition & Charte de Retour',
       subtitle:
         'Chaque flacon expédié depuis le Caveau VORVAN est protégé par notre protocole de garantie.',
@@ -731,7 +731,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
     },
     footer: {
       brandDescription:
-        'Boutique de haute parfumerie & conciergerie olfactive privée. VORVAN garantit l’authenticité à 100 % de chaque flacon.',
+        'Boutique de haute parfumerie & conciergerie olfactive privée. VORVAN assure l’inspection multicouche des scellés du Caveau et la sécurité d’expédition de chaque flacon.',
       quickTrackTitle: 'Suivi Rapide d’Expédition',
       quickTrackSubtitle:
         'Entrez votre numéro de suivi VORVAN ou Facture Privée :',
@@ -780,7 +780,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         '. نقدم أرقى العطور النيش والفاخرة من أعرق الدور الأوروبية عبر نظام التسعير الخاص (',
       narrativePriceOnRequest: 'السعر عند الطلب',
       narrativeSuffix:
-        ') مع فحص دقيق لرموز الدفعات وضمان الأصالة الكاملة.',
+        ') مع فحص جودة أختام الخزينة وضمان سلامة الشحن الكاملة.',
       ctaExploreHouses: 'استكشف 19 دار عطور عالمية',
       ctaPrivateInvoice: 'فاتورة خاصة',
     },
@@ -810,7 +810,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
           subtitle: 'امتياز القيمة العادلة',
           title: 'تسعير خاص للنخبة',
           description:
-            'عطور أصلية 100% بقيمة استثنائية مخصصة لعملائنا المميزين.',
+            'عطور بحجم كامل ومختومة (Full-Size Sealed) بقيمة استثنائية مخصصة لعملائنا المميزين.',
         },
       ],
     },
@@ -858,7 +858,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         'كلاسيكيات عصرية من أرقى دور الأزياء الأوروبية تجمع بين الجاذبية والحضور الواثق.',
     },
     invoiceBanner: {
-      scriptCrown: 'Transaction Privée & Authentifiée',
+      scriptCrown: 'Transaction Privée & Sécurisée',
       kicker: 'نظام الدفع الإلكتروني الخاص',
       title: 'هل حصلت على عرض سعر من مستشار العطور لدينا؟',
       description:
@@ -888,7 +888,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       sendWaBtn: 'إرسال عبر واتساب',
     },
     returnPolicy: {
-      kicker: 'ميثاق الأصالة وحماية العملاء لدى VORVAN',
+      kicker: 'ميثاق فحص الجودة وحماية العملاء لدى VORVAN',
       title: 'شروط الشحن وسياسة الاستبدال والضمان',
       subtitle:
         'تخضع كل شحنة تخرج من خزينة VORVAN لبروتوكول الحماية والضمان التالي.',
@@ -927,7 +927,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
     },
     footer: {
       brandDescription:
-        'بوتيك عطور فاخرة ومستشار عطري خاص. تضمن VORVAN أصالة كل زجاجة بنسبة 100%.',
+        'بوتيك عطور فاخرة ومستشار عطري خاص. تطبق VORVAN فحص جودة أختام الخزينة وضمان سلامة الشحن لكل زجاجة.',
       quickTrackTitle: 'التتبع السريع للشحنات',
       quickTrackSubtitle: 'أدخل رقم تتبع الشحنة أو رقم الفاتورة الخاصة:',
       quickTrackBtn: 'تتبع',
@@ -973,7 +973,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       narrativeMiddle:
         ' 私人典藏展厅。我们甄选欧洲最具声望的高定品牌与沙龙香氛工坊，采用专属私密报价（',
       narrativePriceOnRequest: 'Price on Request · 尊享询价',
-      narrativeSuffix: '）、多重批次防伪溯源与100%正品保障。',
+      narrativeSuffix: '）、金库多层封条品质检验与全程运输安全保障。',
       ctaExploreHouses: '探索 19 大高定香氛世家',
       ctaPrivateInvoice: '私人账单',
     },
@@ -1003,7 +1003,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
           subtitle: '私密询价特权',
           title: '理性且尊贵的藏家估值',
           description:
-            '以极具竞争力的私人礼宾报价，奉上100%欧洲原装正品高定香氛。',
+            '以极具竞争力的私人礼宾报价，奉上 Full-Size Sealed 完整塑封高定香氛。',
         },
       ],
     },
@@ -1051,7 +1051,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
         '来自欧洲顶级时装屋的现代经典之作，从商务会议到晚宴盛典皆散发从容魅力。',
     },
     invoiceBanner: {
-      scriptCrown: 'Transaction Privée & Authentifiée',
+      scriptCrown: 'Transaction Privée & Sécurisée',
       kicker: 'PRIVATE WEB CHECKOUT SYSTEM',
       title: '已收到我们礼宾顾问发送的专属报价？',
       description:
@@ -1081,14 +1081,14 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       sendWaBtn: '通过 WA 发送',
     },
     returnPolicy: {
-      kicker: 'VORVAN 正品保障与客户权益宪章',
+      kicker: 'VORVAN 品质检验与客户权益宪章',
       title: '国际运输条款与退换保障政策',
       subtitle:
         '为确保高价值沙龙及高定香氛的完好无损，所有自 VORVAN 金库发出的包裹均遵循以下保障协议。',
       clausePrefix: '条款',
       deadlineTitle: '理赔申报时效：物流显示“已签收”后 24 小时内',
       deadlineDesc:
-        '请将完整无剪辑的开箱视频及金库防伪全息封条照片发送至 VORVAN WhatsApp 礼宾部。',
+        '请将完整无剪辑的开箱视频及金库全息质量封条照片发送至 VORVAN WhatsApp 礼宾部。',
       understandBtn: '我已阅读并同意上述条款',
       clauses: [
         {
@@ -1101,7 +1101,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
           number: '02',
           title: '必须提供一镜到底无剪辑开箱视频',
           description:
-            '所有理赔申请必须附带从快递外包装完好未拆封状态开始、展示面单与防伪封条直至首次喷雾测试的连续无剪辑视频。',
+            '所有理赔申请必须附带从快递外包装完好未拆封状态开始、展示面单与金库质量封条直至首次喷雾测试的连续无剪辑视频。',
         },
         {
           number: '03',
@@ -1119,7 +1119,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
     },
     footer: {
       brandDescription:
-        '高定奢华香氛买手精品店与私人气味礼宾部。VORVAN 承诺金库发出的每一瓶香氛均为 100% 原装正品。',
+        '高定奢华香氛买手精品店与私人气味礼宾部。VORVAN 为金库发出的每一瓶香氛提供多层封条品质检验与运输安全保障。',
       quickTrackTitle: '快速物流追踪',
       quickTrackSubtitle: '输入您的 VORVAN 运单号或私人账单编号：',
       quickTrackBtn: '查询',

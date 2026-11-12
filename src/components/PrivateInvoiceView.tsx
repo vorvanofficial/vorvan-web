@@ -1040,7 +1040,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
             <div className="space-y-1.5 md:text-right">
               <span className="text-[10px] uppercase tracking-[0.22em] text-[#D8BE82] block">
-                Jaminan &amp; Otentikasi Vault
+                Inspeksi Kualitas Segel &amp; Jaminan Fisik Vault
               </span>
               <p className="text-zinc-200 font-medium">
                 Private Fragrance Curation · Direct International Archive · Segel Hologram VORVAN

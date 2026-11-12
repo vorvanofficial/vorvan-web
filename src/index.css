@@ -733,3 +733,34 @@
   font-weight: 600;
   text-align: center;
 }
+
+/* ============================================================================
+   BOTTOM NAVIGATION BAR — ANTI-GAP / ANTI-BLEED SEAL FOR MOBILE CHROME & iOS
+   ============================================================================ */
+.vorvan-bottom-nav-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background-color: #0B0A0E;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow:
+    0 24px 0 24px #0B0A0E,
+    0 -8px 24px rgba(0, 0, 0, 0.75);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.vorvan-bottom-nav-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 60px;
+  background-color: #0B0A0E;
+  pointer-events: none;
+}
+

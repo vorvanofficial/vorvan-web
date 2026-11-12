@@ -2149,7 +2149,7 @@ test('33. Cheat Sheet 81 SKU interactive discount input recalculates Potongan (n
   assert.ok(modalCode.includes('↺ Reset Default Excel'));
 });
 
-test('34. Official Instagram (@vorvanofficial — https://www.instagram.com/vorvanofficial/) is integrated in Header IG button, Showroom Official Social Archive card, Footer, and index.html JSON-LD sameAs', async () => {
+test('34. Official Instagram (@vorvanofficial — https://www.instagram.com/vorvanofficial/) is integrated in Header IG button, Footer, and index.html JSON-LD sameAs, while Showroom is streamlined without Instagram banner or PreOrderConciergeSection', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
 
@@ -2162,22 +2162,16 @@ test('34. Official Instagram (@vorvanofficial — https://www.instagram.com/vorv
     'utf8'
   );
 
-  // 1. Header IG button next to TG
+  // 1. Header IG button next to TG & Footer Instagram link
   assert.ok(appCode.includes('https://www.instagram.com/vorvanofficial/'));
   assert.ok(appCode.includes('data-testid="header-instagram-cta"'));
   assert.ok(appCode.includes('<span>IG</span>'));
-
-  // 2. Showroom Official Instagram Archive card before Footer
-  assert.ok(appCode.includes('data-testid="showroom-instagram-banner"'));
-  assert.ok(appCode.includes('OFFICIAL SOCIAL ARCHIVE · INSTAGRAM'));
-  assert.ok(appCode.includes('@vorvanofficial'));
-  assert.ok(
-    appCode.includes(
-      'Ikuti jurnal visual, update kedatangan Batch terbaru, dan kurasi eksklusif VORVAN di Instagram resmi kami.'
-    )
-  );
-  assert.ok(appCode.includes('KUNJUNGI INSTAGRAM @VORVANOFFICIAL'));
   assert.ok(appCode.includes('data-testid="footer-instagram-link"'));
+
+  // 2. Showroom does NOT contain the redundant Official Social Archive Instagram card or PreOrderConciergeSection
+  assert.ok(!appCode.includes('data-testid="showroom-instagram-banner"'));
+  assert.ok(!appCode.includes('OFFICIAL SOCIAL ARCHIVE · INSTAGRAM'));
+  assert.ok(!appCode.includes('<PreOrderConciergeSection'));
 
   // 3. index.html JSON-LD Organization sameAs contains https://www.instagram.com/vorvanofficial/
   const ldJsonMatches = [
@@ -2280,6 +2274,338 @@ test('37. APEX PRESTIGE and URBAN SIGNATURES are separated from SHOWROOM into de
   assert.ok(appCode.includes('data-testid="bottom-nav-track"'));
   assert.ok(appCode.includes('data-testid="bottom-nav-invoice"'));
 });
+
+test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 19 Houses Empty-Search WhatsApp & Telegram buttons, and removal of duplicate Explorer in Showroom work accurately', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const {
+    buildExtendedArchiveTelegramUrl,
+    buildExtendedArchiveWhatsAppMessage,
+    buildExtendedArchiveWhatsAppUrl,
+    searchCatalogFragrances81,
+  } = await import('./businessRules.ts');
+
+  // 1. Verify exact WhatsApp message with custom perfume input
+  const customMsg = buildExtendedArchiveWhatsAppMessage('Bvlgari Tygar 100ml');
+  assert.equal(
+    customMsg,
+    'Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (693+ tipe parfum / 63+ brand) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: Bvlgari Tygar 100ml. Terima kasih.'
+  );
+
+  // 2. Verify fallback when input is empty
+  const emptyMsg = buildExtendedArchiveWhatsAppMessage('   ');
+  assert.equal(
+    emptyMsg,
+    'Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (693+ tipe parfum / 63+ brand) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: [Tulis Merk / Nama Parfum di Sini]. Terima kasih.'
+  );
+
+  // 3. Verify WhatsApp & Telegram URLs point to official VORVAN accounts with encoded message
+  const waUrl = buildExtendedArchiveWhatsAppUrl('Parfums de Marly Layton');
+  assert.ok(waUrl.startsWith('https://wa.me/628133866590?text='));
+  assert.ok(decodeURIComponent(waUrl).includes('Parfums de Marly Layton'));
+
+  const tgUrl = buildExtendedArchiveTelegramUrl('Parfums de Marly Layton');
+  assert.ok(tgUrl.startsWith('https://t.me/vorvanofficial?text='));
+  assert.ok(decodeURIComponent(tgUrl).includes('Parfums de Marly Layton'));
+
+  // 4. Verify searchCatalogFragrances81 finds existing items and returns empty array for non-81 items
+  const lvMatches = searchCatalogFragrances81('Afternoon Swim');
+  assert.ok(lvMatches.length >= 1);
+  assert.equal(lvMatches[0].name, 'Afternoon Swim');
+
+  const nonListedMatches = searchCatalogFragrances81('Bvlgari Tygar');
+  assert.equal(nonListedMatches.length, 0);
+
+  // 5. Verify ExtendedArchiveBanner symmetrical layout & Showroom vs 19 Houses modes
+  const bannerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'ExtendedArchiveBanner.tsx'),
+    'utf8'
+  );
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf8'
+  );
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+
+  assert.ok(bannerCode.includes('✨ EXTENDED VAULT ARCHIVE'));
+  assert.ok(
+    bannerCode.includes('81 Kurasi Utama & 693+ Koleksi Tambahan Dunia')
+  );
+  assert.ok(
+    bannerCode.includes(
+      'Jelajahi 81 kurasi utama dari 19 Rumah Mode Eropa di katalog kami. Apabila parfum spesifik yang Anda cari belum tercantum, sistem pencarian kami terhubung dengan'
+    )
+  );
+  assert.ok(bannerCode.includes('JELAJAHI &amp; CARI DI 19 HOUSES'));
+  assert.ok(
+    bannerCode.includes(
+      'Pencarian "${cleanKeyword}" Tersedia Melalui Layanan Concierge'
+    )
+  );
+  assert.ok(
+    bannerCode.includes('TANYAKAN VIA WHATSAPP CONCIERGE')
+  );
+  assert.ok(
+    bannerCode.includes('TANYAKAN VIA TELEGRAM VIP')
+  );
+  assert.ok(bannerCode.includes('gap-[10px]'));
+  assert.ok(bannerCode.includes("maxWidth: '560px'"));
+  assert.ok(bannerCode.includes("textWrap: 'balance'"));
+  assert.ok(!bannerCode.includes('<input'));
+
+  // Verify BrandHierarchyExplorer is NOT duplicated inside Showroom block
+  const showroomBlockMatch = appCode.match(
+    /\{route\.view === 'showroom' && \([\s\S]*?\{\/\* DEDICATED TAB 2: APEX PRESTIGE/
+  );
+  assert.ok(showroomBlockMatch);
+  assert.ok(!showroomBlockMatch[0].includes('<BrandHierarchyExplorer'));
+  assert.ok(showroomBlockMatch[0].includes('mode="showroom"'));
+
+  // Verify 19 Houses only renders ExtendedArchiveBanner on empty search (no bottom duplicate)
+  assert.ok(explorerCode.includes('data-testid="houses-search-input"'));
+  assert.ok(
+    explorerCode.includes('const isEmptySearch = isSearching && searchResults.length === 0;')
+  );
+  assert.ok(
+    explorerCode.includes('testIdPrefix="houses-empty-search-extended-archive"')
+  );
+  assert.ok(
+    !explorerCode.includes('testIdPrefix="houses-extended-archive-banner"')
+  );
+});
+
+test('39. ExtendedArchiveBanner uses L’Archive Privée Étendue script crown & font-latin-italic, Catalog grids use 2-column mobile layout (grid-cols-2 gap-3), and FragranceCard shows strikethrough Retail price + Privilege 20%-30% OFF + 💬 TANYA HARGA & ✈️ while hiding final price on public storefront', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { VORVAN_81_CATALOG } = await import('../data/catalog.ts');
+
+  const bannerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'ExtendedArchiveBanner.tsx'),
+    'utf8'
+  );
+  const cardCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'FragranceCard.tsx'),
+    'utf8'
+  );
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf8'
+  );
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+
+  // 1. ExtendedArchiveBanner script crown & Semi-Latin italic description
+  assert.ok(bannerCode.includes('L’Archive Privée Étendue'));
+  assert.ok(bannerCode.includes('font-latin-script'));
+  assert.ok(bannerCode.includes('font-latin-italic italic'));
+
+  // 2. 2-column mobile catalog grid across 19 HOUSES, APEX, and URBAN
+  assert.ok(
+    explorerCode.includes(
+      'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6'
+    )
+  );
+  assert.ok(
+    appCode.includes(
+      'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6'
+    )
+  );
+
+  // 3. FragranceCard: aspect-[4/5], Ritel Butik strikethrough, Privilege 20%–30% OFF, Tanya Harga Final via Concierge, 💬 TANYA HARGA & ✈️
+  assert.ok(cardCode.includes('aspect-[4/5]'));
+  assert.ok(cardCode.includes('Ritel Butik:'));
+  assert.ok(cardCode.includes('line-through'));
+  assert.ok(cardCode.includes('Privilege 20%–30% OFF'));
+  assert.ok(cardCode.includes('Tanya Harga Final via Concierge'));
+  assert.ok(cardCode.includes('TANYA HARGA'));
+  assert.ok(cardCode.includes('💬'));
+  assert.ok(cardCode.includes('✈️'));
+
+  // Ensure FragranceCard does NOT expose skuPricing.price or skuPricing.disc on the public card
+  assert.ok(!cardCode.includes('skuPricing.price'));
+  assert.ok(!cardCode.includes('skuPricing?.price'));
+  assert.ok(!cardCode.includes('skuPricing.disc'));
+  assert.ok(!cardCode.includes('skuPricing?.disc'));
+
+  // 4. Ensure all 81 SKUs in VORVAN_81_CATALOG retain full retail, disc, cut, and final price for Admin Console
+  assert.equal(VORVAN_81_CATALOG.length, 81);
+  for (const sku of VORVAN_81_CATALOG) {
+    assert.ok(sku.retail > 0);
+    assert.ok(sku.disc > 0);
+    assert.ok(sku.price > 0 && sku.price < sku.retail);
+  }
+});
+
+test('40. 19 Houses animates cards with motion.div on scroll in/out across 19 Houses, APEX, and URBAN', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf8'
+  );
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+
+  for (const code of [explorerCode, appCode]) {
+    assert.ok(code.includes('<motion.div'));
+    assert.ok(code.includes('initial={{ opacity: 0, y: 32, scale: 0.95 }}'));
+    assert.ok(code.includes('whileInView={{ opacity: 1, y: 0, scale: 1 }}'));
+    assert.ok(
+      code.includes(
+        'viewport={{ once: false, amount: 0.12, margin: "0px 0px -20px 0px" }}'
+      )
+    );
+    assert.ok(
+      code.includes('transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}')
+    );
+  }
+});
+
+test('41. Mobile bottom navigation bar uses solid #0B0A0E anti-gap seal (.vorvan-bottom-nav-bar) so underlying text never bleeds at the bottom edge', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+  const cssCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'index.css'),
+    'utf8'
+  );
+
+  assert.ok(appCode.includes('vorvan-bottom-nav-bar'));
+  assert.ok(cssCode.includes('.vorvan-bottom-nav-bar'));
+  assert.ok(cssCode.includes('.vorvan-bottom-nav-bar::after'));
+  assert.ok(cssCode.includes('padding-bottom: env(safe-area-inset-bottom, 0px);'));
+});
+
+test('42. Hero narrative uses inspeksi kualitas segel Vault berlapis & jaminan keamanan pengiriman penuh, and zero keaslian/otentikasi/100% Original/100% Authentic strings remain across translations and codebase', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { TRANSLATIONS } = await import('../i18n/translations');
+
+  const idHeroFull =
+    TRANSLATIONS.ID.hero.narrativePrefix +
+    'VORVAN' +
+    TRANSLATIONS.ID.hero.narrativeMiddle +
+    TRANSLATIONS.ID.hero.narrativePriceOnRequest +
+    TRANSLATIONS.ID.hero.narrativeSuffix;
+
+  assert.equal(
+    idHeroFull,
+    'Selamat datang di ruang kurasi privat VORVAN. Kami menghadirkan mahakarya wewangian dari rumah mode dan atelier niche paling dihormati di Eropa melalui skema kuotasi privat (Price on Request), inspeksi kualitas segel Vault berlapis, serta jaminan keamanan pengiriman penuh hingga ke tangan Anda.'
+  );
+
+  assert.ok(
+    TRANSLATIONS.EN.hero.narrativeSuffix.includes(
+      'multi-layered Vault seal quality inspection'
+    )
+  );
+  assert.ok(
+    TRANSLATIONS.EN.hero.narrativeSuffix.includes(
+      'Full-Size Sealed precision standard'
+    )
+  );
+  assert.ok(
+    TRANSLATIONS.EN.hero.narrativeSuffix.includes(
+      'guaranteed shipping & flacon physical integrity'
+    )
+  );
+
+  const filesToScan = [
+    path.join(process.cwd(), 'src', 'i18n', 'translations.ts'),
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    path.join(process.cwd(), 'src', 'utils', 'businessRules.ts'),
+    path.join(process.cwd(), 'src', 'data', 'catalog.ts'),
+    path.join(process.cwd(), 'src', 'components', 'ReturnPolicySection.tsx'),
+    path.join(process.cwd(), 'src', 'components', 'PrivateInvoiceView.tsx'),
+    path.join(process.cwd(), 'index.html'),
+    path.join(process.cwd(), 'public', 'llms.txt'),
+  ];
+
+  const forbiddenTerms = [
+    /jaminan keaslian mutlak/i,
+    /\bkeaslian\b/i,
+    /\botentikasi\b/i,
+    /100%\s*original/i,
+    /100%\s*authentic/i,
+    /100%\s*authenticity/i,
+  ];
+
+  for (const filePath of filesToScan) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    for (const regex of forbiddenTerms) {
+      assert.equal(
+        regex.test(content),
+        false,
+        `Forbidden term ${regex} found in ${filePath}`
+      );
+    }
+  }
+});
+
+test('43. Strict 19 Houses gender filter: zero fallback to allBrandFragrances, shows empty-gender info card with [ LIHAT SEMUA KOLEKSI ] & [ TANYA CONCIERGE WA ] when count is 0, and auto-resets to ALL on brand switch', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf8'
+  );
+
+  // 1. Every brand + gender combination strictly returns ONLY items matching that gender
+  const genders: ('GENTLEMAN' | 'FEMME' | 'UNISEX')[] = [
+    'GENTLEMAN',
+    'FEMME',
+    'UNISEX',
+  ];
+  for (const brand of LUXURY_BRAND_HOUSES) {
+    const allItems = filterFragrancesByBrandAndGender(brand.id, 'ALL');
+    let sumByGender = 0;
+    for (const g of genders) {
+      const items = filterFragrancesByBrandAndGender(brand.id, g);
+      sumByGender += items.length;
+      for (const item of items) {
+        assert.equal(item.brandId, brand.id);
+        assert.equal(item.gender, g);
+      }
+    }
+    assert.equal(sumByGender, allItems.length);
+  }
+
+  // Verify specific zero-count cases return [] (e.g. le-labo GENTLEMAN/FEMME, creed FEMME, mfk GENTLEMAN)
+  assert.equal(
+    filterFragrancesByBrandAndGender('le-labo', 'GENTLEMAN').length,
+    0
+  );
+  assert.equal(filterFragrancesByBrandAndGender('le-labo', 'FEMME').length, 0);
+  assert.equal(filterFragrancesByBrandAndGender('creed', 'FEMME').length, 0);
+  assert.equal(filterFragrancesByBrandAndGender('mfk', 'GENTLEMAN').length, 0);
+
+  // 2. BrandHierarchyExplorer has no fallback to allBrandFragrances when filteredByGender is empty
+  assert.equal(
+    explorerCode.includes('filteredByGender.length > 0'),
+    false
+  );
+  assert.ok(explorerCode.includes("setSelectedGender('ALL');"));
+  assert.ok(explorerCode.includes('data-testid="empty-gender-filter-card"'));
+  assert.ok(
+    explorerCode.includes(
+      'Seluruh koleksi etalase utama pada rumah mode ini dirancang sebagai komposisi UNISEX, atau tersedia melalui Extended Archive (693+ Koleksi).'
+    )
+  );
+  assert.ok(explorerCode.includes('[ LIHAT SEMUA KOLEKSI ]'));
+  assert.ok(explorerCode.includes('[ TANYA CONCIERGE WA ]'));
+});
+
 
 
 

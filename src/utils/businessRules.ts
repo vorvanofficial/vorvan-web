@@ -1,6 +1,7 @@
 import {
   DEFAULT_VORVAN_SETTINGS,
   FRAGRANCE_CATALOG,
+  LUXURY_BRAND_HOUSES,
   PRIVATE_INVOICES_SEED,
   SHIPPING_ZONES,
   TRACKING_RECORDS_SEED,
@@ -668,10 +669,12 @@ export function filterFragrancesByBrandAndGender(
   brandId: BrandHouseId,
   gender: GenderCategory | 'ALL'
 ): FragranceItem[] {
+  const normalizedGender =
+    gender === 'ALL' ? 'ALL' : (gender.trim().toUpperCase() as GenderCategory);
   return FRAGRANCE_CATALOG.filter((item) => {
     if (item.brandId !== brandId) return false;
-    if (gender === 'ALL') return true;
-    return item.gender === gender;
+    if (normalizedGender === 'ALL') return true;
+    return item.gender.trim().toUpperCase() === normalizedGender;
   });
 }
 
@@ -1794,7 +1797,7 @@ export function buildBuyerInvoiceWhatsAppUrl(
     extraDiscLine +
     `• Total Tagihan: ${formattedTotal}\n` +
     `${shippingSummaryLine}\n\n` +
-    `Silakan klik tautan resmi berikut untuk melihat dokumen tagihan, panduan pembayaran, dan jaminan keaslian:\n` +
+    `Silakan klik tautan resmi berikut untuk melihat dokumen tagihan, panduan pembayaran, dan jaminan keamanan pengiriman & fisik flacon:\n` +
     `👉 Link Tagihan Resmi: ${invoiceUrl}\n\n` +
     `Pantau status pesanan Anda secara langsung:\n` +
     `👉 Link Status Pesanan: ${trackUrl}\n\n` +
@@ -2138,7 +2141,7 @@ export function buildTrackingFromCustomOrder(
         timestamp: tStage1,
         location: 'VORVAN Climate-Controlled Vault',
         title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Fungsi Sprayer)',
-        detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) telah melewati pemeriksaan fisik botol kaca, segel otentikasi Vault, dan tekanan sprayer untuk penyerahan tatap muka.`,
+        detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) telah melewati pemeriksaan fisik botol kaca, inspeksi kualitas segel Vault berlapis, dan tekanan sprayer untuk penyerahan tatap muka.`,
         completed: true,
         current: false,
       },
@@ -2175,7 +2178,7 @@ export function buildTrackingFromCustomOrder(
       estimatedArrival: COD_FACE_TO_FACE_STATUS_LABEL,
       vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
       boxInspectionNote:
-        'Transaksi COD / Serah Terima Tatap Muka Langsung: Pemeriksaan keaslian botol, segel otentikasi Vault, dan fungsi sprayer dilakukan secara langsung saat pertemuan.',
+        'Transaksi COD / Serah Terima Tatap Muka Langsung: Pemeriksaan fisik flacon, inspeksi kualitas segel Vault berlapis, dan fungsi sprayer dilakukan secara langsung saat pertemuan.',
       milestones: codMilestones,
       createdAtTimestampMs: order.createdAtTimestampMs,
       courierOfficialUrl: courierMeta.officialTrackUrl,
@@ -2276,7 +2279,7 @@ export function buildTrackingFromCustomOrder(
       timestamp: tStage1,
       location: 'VORVAN Climate-Controlled Vault',
       title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Fungsi Sprayer)',
-      detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) lolos pemeriksaan fisik botol kaca, segel otentikasi Vault, dan fungsi tekanan sprayer.`,
+      detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) lolos pemeriksaan fisik botol kaca, inspeksi kualitas segel Vault berlapis, dan fungsi tekanan sprayer.`,
       completed: stage >= 1,
       current: stage === 1,
     },
@@ -2447,7 +2450,7 @@ export function resolvePrivateInvoice(
     discountPct: discPct,
     shippingLabel: SHIPPING_ZONES.ZONA_1.label,
     notes:
-      'Tagihan privat terenkripsi VORVAN. Dilengkapi proteksi klaim video unboxing utuh & jaminan keaslian segel Vault.',
+      'Tagihan privat terenkripsi VORVAN. Dilengkapi proteksi klaim video unboxing utuh & inspeksi kualitas segel Vault berlapis.',
     items: [
       {
         sku: resolveArchiveRefCode(sampleFragrance.name, sampleFragrance.batchCode),
@@ -2905,4 +2908,81 @@ export function buildConciergeRecommendationWaText(
     `• *Harga Kurasi VORVAN (Hemat ${entry.disc}%):* *Rp ${formattedPrice}* (Full-Size Sealed · Private Fragrance Curation + Digital Certificate)`
   );
 }
+
+/**
+ * Builds the official WhatsApp message for THE EXTENDED PRIVATE ARCHIVE (693+ PARFUMS · 63+ MAISONS)
+ * Bespoke Vault Inquiry.
+ */
+export function buildExtendedArchiveWhatsAppMessage(
+  requestedPerfumeInput?: string
+): string {
+  const cleanInput = (requestedPerfumeInput || '').trim();
+  const targetPerfume = cleanInput || '[Tulis Merk / Nama Parfum di Sini]';
+  return `Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (693+ tipe parfum / 63+ brand) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: ${targetPerfume}. Terima kasih.`;
+}
+
+/**
+ * Builds the official WhatsApp URL for THE EXTENDED PRIVATE ARCHIVE (693+ PARFUMS · 63+ MAISONS)
+ * Bespoke Vault Inquiry.
+ */
+export function buildExtendedArchiveWhatsAppUrl(
+  requestedPerfumeInput?: string,
+  waNumber: string = VORVAN_WHATSAPP_NUMBER
+): string {
+  const rawDigits = (waNumber || VORVAN_WHATSAPP_NUMBER).replace(/\D/g, '');
+  const normalizedWa = rawDigits.startsWith('0')
+    ? `62${rawDigits.slice(1)}`
+    : rawDigits || VORVAN_WHATSAPP_NUMBER;
+  const message = buildExtendedArchiveWhatsAppMessage(requestedPerfumeInput);
+  return `https://wa.me/${normalizedWa}?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Builds the official Telegram VIP URL for THE EXTENDED PRIVATE ARCHIVE (693+ PARFUMS · 63+ MAISONS)
+ * Bespoke Vault Inquiry.
+ */
+export function buildExtendedArchiveTelegramUrl(
+  requestedPerfumeInput?: string,
+  telegramUsername: string = VORVAN_TELEGRAM_USERNAME
+): string {
+  const cleanUser =
+    (telegramUsername || VORVAN_TELEGRAM_USERNAME)
+      .replace(/^@/, '')
+      .trim() || VORVAN_TELEGRAM_USERNAME;
+  const message = buildExtendedArchiveWhatsAppMessage(requestedPerfumeInput);
+  return `https://t.me/${cleanUser}?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Searches across all 81 main curated fragrances in FRAGRANCE_CATALOG by brand house,
+ * shortName, perfume name, concentration, tagline, description, or olfactory notes.
+ */
+export function searchCatalogFragrances81(query: string): FragranceItem[] {
+  const clean = (query || '').trim().toLowerCase();
+  if (!clean) {
+    return FRAGRANCE_CATALOG;
+  }
+  const terms = clean.split(/\s+/).filter(Boolean);
+  return FRAGRANCE_CATALOG.filter((item) => {
+    const brandMeta = LUXURY_BRAND_HOUSES.find((b) => b.id === item.brandId);
+    const haystack = [
+      item.house,
+      item.brandId,
+      brandMeta?.name || '',
+      brandMeta?.shortName || '',
+      item.name,
+      item.concentration,
+      item.characterSummary,
+      item.editorialDescription,
+      item.pyramid.top.join(' '),
+      item.pyramid.heart.join(' '),
+      item.pyramid.base.join(' '),
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return terms.every((term) => haystack.includes(term));
+  });
+}
+
 

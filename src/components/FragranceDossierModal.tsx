@@ -4,7 +4,9 @@ import { FragranceItem } from '../types/fragrance';
 import {
   buildTelegramInquiryUrl,
   buildWhatsAppInquiryUrl,
+  formatIDRCurrency,
   resolveArchiveRefCode,
+  resolveVorvanSkuPricing,
 } from '../utils/businessRules';
 import { FlaconArt } from './FlaconArt';
 
@@ -29,6 +31,12 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
     initialVolume || fragrance.defaultVolume
   );
   const [clientNote, setClientNote] = useState<string>('');
+
+  const skuPricing =
+    resolveVorvanSkuPricing(fragrance.id) ||
+    resolveVorvanSkuPricing(fragrance.name);
+  const retailPriceIDR = skuPricing?.retail || 4500000;
+  const formattedRetail = formatIDRCurrency(retailPriceIDR);
 
   const whatsappUrl = buildWhatsAppInquiryUrl(
     fragrance,
@@ -84,7 +92,7 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12">
           {/* Left Flacon & Specs */}
           <div className="lg:col-span-5 bg-[#0D0D0F] p-6 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-zinc-800">
-            <div className="aspect-[4/3] w-full">
+            <div className="aspect-[4/5] w-full rounded-xl overflow-hidden border border-[#D4AF37]/20">
               <FlaconArt fragrance={fragrance} selectedVolume={selectedVolume} />
             </div>
 
@@ -122,7 +130,7 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
               >
                 {fragrance.name}
               </h2>
-              <p className="mt-3 text-sm text-zinc-300 leading-relaxed">
+              <p className="mt-3 font-latin-italic italic text-base text-zinc-200 leading-relaxed">
                 {fragrance.editorialDescription}
               </p>
 
@@ -166,12 +174,18 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
             {/* Concierge Action Module */}
             <div className="pt-4 border-t border-zinc-800 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <span className="text-[11px] uppercase tracking-[0.22em] text-zinc-400 block">
-                    Private Boutique Valuation
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    Price on Request — Cek Ketersediaan &amp; Penawaran
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs text-zinc-400">
+                    <span className="font-latin-italic italic">Ritel Butik:</span>
+                    <span className="line-through decoration-[#D4AF37]/85 text-zinc-300 font-mono-tabular">
+                      {formattedRetail}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-[#18140C] border border-[#D4AF37]/45 font-brand text-[9px] font-bold uppercase tracking-wider text-[#E5C87E]">
+                      Privilege 20%–30% OFF
+                    </span>
+                  </div>
+                  <span className="font-latin-italic italic text-base font-semibold text-[#F5E6B8] block">
+                    Tanya Harga Final via Concierge
                   </span>
                 </div>
 

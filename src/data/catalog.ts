@@ -3187,7 +3187,7 @@ export const PRIVATE_INVOICES_SEED: Record<string, PrivateInvoice> = {
     shippingInsuranceIDR: 45000,
     woodenCratePackagingIDR: 0,
     notes:
-      'Termasuk segel otentikasi Vault VORVAN, double-bubble thermal wrap, dan garansi klaim video unboxing utuh.',
+      'Termasuk inspeksi kualitas segel Vault berlapis VORVAN, double-bubble thermal wrap, dan garansi klaim video unboxing utuh.',
     items: [
       {
         sku: 'VRV-036',

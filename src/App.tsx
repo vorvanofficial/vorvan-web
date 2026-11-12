@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -59,6 +60,7 @@ import { WelcomeSplashScreen } from './components/WelcomeSplashScreen';
 import { FragranceCard } from './components/FragranceCard';
 import { FragranceDossierModal } from './components/FragranceDossierModal';
 import { BrandHierarchyExplorer } from './components/BrandHierarchyExplorer';
+import { ExtendedArchiveBanner } from './components/ExtendedArchiveBanner';
 import {
   AdminEmailRegistryModal,
   EmailGatewayModal,
@@ -66,10 +68,7 @@ import {
 import { PrivateInvoiceView } from './components/PrivateInvoiceView';
 import { OrderTrackingView } from './components/OrderTrackingView';
 import { ReturnPolicyContent } from './components/ReturnPolicySection';
-import {
-  B2BWholesaleModal,
-  PreOrderConciergeSection,
-} from './components/PreOrderAndB2BSection';
+import { B2BWholesaleModal } from './components/PreOrderAndB2BSection';
 import {
   LiquidLuxuryBackground,
   LuxuryScrollBubbles,
@@ -1229,7 +1228,7 @@ export default function App() {
           >
             <button
               type="button"
-              onClick={() => navigateToShowroom('brand-hierarchy-explorer')}
+              onClick={() => navigateToShowroom()}
               className={`font-brand text-[11px] font-medium uppercase tracking-[0.15em] hover:text-[#F5E6B8] transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 route.view === 'showroom' ? 'text-[#E5C87E]' : ''
               }`}
@@ -1238,7 +1237,7 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => navigateToShowroom('preorder-concierge')}
+              onClick={() => navigateToShowroom('showroom-extended-archive')}
               className="font-brand text-[11px] font-medium uppercase tracking-[0.15em] hover:text-[#F5E6B8] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               {t.nav.preOrder}
@@ -1521,9 +1520,7 @@ export default function App() {
                   <div className="pt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3.5 max-w-md sm:max-w-none mx-auto">
                     <button
                       type="button"
-                      onClick={() =>
-                        navigateToShowroom('brand-hierarchy-explorer')
-                      }
+                      onClick={() => navigateToTab('houses')}
                       className="w-full sm:w-auto min-h-[50px] px-7 py-3.5 rounded-xl btn-luxury-gold font-brand text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.99] flex items-center justify-center gap-3 cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <span>{t.hero.ctaExploreHouses}</span>
@@ -1666,24 +1663,31 @@ export default function App() {
               <CuratedHousesTicker />
             </section>
 
-            {/* 4. BRAND -> GENDER -> PARFUM INTERACTIVE HIERARCHY EXPLORER */}
-            <BrandHierarchyExplorer
-              registeredEmail={registeredEmail}
-              locale={locale}
-              onOpenDossier={(item, vol) =>
-                setSelectedDossier({ fragrance: item, volume: vol })
-              }
-              onInquireFragrance={(item, vol) =>
-                handleTriggerInquiry(item, vol)
-              }
-            />
+            {/* 3B. THE EXTENDED PRIVATE ARCHIVE (693+ PARFUMS · 63+ MAISONS) ANNOUNCEMENT IN SHOWROOM */}
+            <section
+              id="showroom-extended-archive"
+              data-testid="showroom-extended-archive-section"
+              className="relative py-14 sm:py-20 bg-[#0A090F] border-b border-[#D4AF37]/25 overflow-hidden"
+            >
+              <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <ScrollReveal variant="scale" delayMs={50}>
+                  <ExtendedArchiveBanner
+                    mode="showroom"
+                    whatsappNumber={siteSettings.whatsappNumber}
+                    telegramUsername={siteSettings.telegramUsername}
+                    onExploreHouses={() => navigateToTab('houses')}
+                    testIdPrefix="showroom-extended-archive"
+                  />
+                </ScrollReveal>
+              </div>
+            </section>
 
-            {/* 6. PRIVATE INVOICE & SECURE WEB CHECKOUT BANNER */}
-            <section className="relative overflow-hidden py-16 bg-[#0B0A0E]/65 border-t border-[#D4AF37]/25">
+            {/* 4. PRIVATE INVOICE & SECURE WEB CHECKOUT BANNER */}
+            <section className="relative overflow-hidden py-14 sm:py-20 bg-[#0B0A0E]/65">
               <ParallaxSectionBg
                 speed={0.15}
                 tone="champagne"
-                watermarkText="VI · TRANSACTION PRIVÉE"
+                watermarkText="IV · TRANSACTION PRIVÉE"
                 align="center"
                 testId="parallax-bg-invoice-banner"
               />
@@ -1725,53 +1729,8 @@ export default function App() {
               </div>
             </section>
 
-            {/* 7. PRE-ORDER CONCIERGE (XERJOFF & AMOUAGE) */}
-            <PreOrderConciergeSection
-              onOpenB2BModal={() => setB2BModalOpen(true)}
-              locale={locale}
-            />
-
-            {/* 8. RETURN POLICY & AUTHENTICITY GUARANTEE SECTION */}
+            {/* 5. RETURN POLICY & PHYSICAL INTEGRITY GUARANTEE SECTION */}
             <ReturnPolicyContent isModal={false} locale={locale} />
-
-            {/* 8B. OFFICIAL INSTAGRAM ARCHIVE BANNER (@VORVANOFFICIAL) BEFORE FOOTER */}
-            <section
-              id="official-instagram-archive"
-              data-testid="showroom-instagram-banner"
-              className="relative py-12 sm:py-16 border-t border-[#D4AF37]/30 overflow-hidden bg-gradient-to-b from-[#09080D] via-[#0B0A10] to-[#08070B]"
-            >
-              <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <ScrollReveal variant="scale" delayMs={60}>
-                  <div className="rounded-3xl p-6 sm:p-10 lg:p-12 bg-gradient-to-r from-[#13111A]/95 via-[#0E0D14]/95 to-[#15121D]/95 border border-[#D4AF37]/45 shadow-[0_24px_60px_rgba(0,0,0,0.65)] grid grid-cols-1 lg:grid-cols-12 gap-7 items-center text-center lg:text-left">
-                    <div className="lg:col-span-8 space-y-3">
-                      <div className="inline-flex items-center justify-center lg:justify-start gap-2 px-3 py-1 rounded-full bg-[#171522] border border-[#D4AF37]/40 font-brand text-[10px] sm:text-xs text-[#E5C87E] uppercase tracking-[0.24em]">
-                        <Instagram className="w-3.5 h-3.5 text-[#E5C87E] shrink-0" />
-                        <span>OFFICIAL SOCIAL ARCHIVE · INSTAGRAM</span>
-                      </div>
-                      <h2 className="font-serif-luxury text-2xl sm:text-4xl font-semibold text-gold-shimmer tracking-wide">
-                        @vorvanofficial
-                      </h2>
-                      <p className="font-latin-italic text-base sm:text-lg text-zinc-200 leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                        Ikuti jurnal visual, update kedatangan Batch terbaru, dan kurasi eksklusif VORVAN di Instagram resmi kami.
-                      </p>
-                    </div>
-                    <div className="lg:col-span-4 flex flex-col items-center lg:items-end justify-center">
-                      <a
-                        href={officialInstagramUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        data-testid="showroom-instagram-cta"
-                        className="w-full sm:w-auto lg:w-full min-h-[50px] py-3.5 px-6 rounded-xl btn-luxury-gold font-brand text-xs font-bold uppercase tracking-[0.16em] transition-all inline-flex items-center justify-center gap-2 cursor-pointer text-zinc-950"
-                      >
-                        <Instagram className="w-4 h-4 shrink-0 text-zinc-950" />
-                        <span>KUNJUNGI INSTAGRAM @VORVANOFFICIAL</span>
-                        <ArrowUpRight className="w-4 h-4 shrink-0 text-zinc-950" />
-                      </a>
-                    </div>
-                  </div>
-                </ScrollReveal>
-              </div>
-            </section>
           </>
         )}
 
@@ -1789,7 +1748,7 @@ export default function App() {
               align="left"
               testId="parallax-bg-apex"
             />
-            <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
               <ScrollReveal variant="up">
                 <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-10 border-b border-[#D4AF37]/25">
                   <div className="space-y-1.5">
@@ -1809,13 +1768,18 @@ export default function App() {
                 </div>
               </ScrollReveal>
 
-              <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-                {apexFragrances.map((fragrance, idx) => (
-                  <ScrollReveal
+              <div
+                data-testid="apex-fragrance-grid"
+                className="mt-8 sm:mt-10 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 items-stretch"
+              >
+                {apexFragrances.map((fragrance) => (
+                  <motion.div
                     key={fragrance.id}
-                    variant={idx % 2 === 0 ? 'up' : 'scale'}
-                    delayMs={idx * 80}
-                    className="h-full"
+                    initial={{ opacity: 0, y: 32, scale: 0.95 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                    viewport={{ once: false, amount: 0.12, margin: "0px 0px -20px 0px" }}
+                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    className="h-full will-change-transform transform-gpu"
                   >
                     <FragranceCard
                       fragrance={fragrance}
@@ -1828,7 +1792,7 @@ export default function App() {
                         handleTriggerInquiry(item, vol)
                       }
                     />
-                  </ScrollReveal>
+                  </motion.div>
                 ))}
               </div>
 
@@ -1870,7 +1834,7 @@ export default function App() {
               align="right"
               testId="parallax-bg-urban"
             />
-            <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
               <ScrollReveal variant="up">
                 <div className="flex flex-col md:flex-row items-center md:items-end justify-between text-center md:text-left gap-5 pb-10 border-b border-[#D4AF37]/25">
                   <div className="space-y-1.5">
@@ -1890,13 +1854,18 @@ export default function App() {
                 </div>
               </ScrollReveal>
 
-              <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-                {urbanFragrances.map((fragrance, idx) => (
-                  <ScrollReveal
+              <div
+                data-testid="urban-fragrance-grid"
+                className="mt-8 sm:mt-10 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 items-stretch"
+              >
+                {urbanFragrances.map((fragrance) => (
+                  <motion.div
                     key={fragrance.id}
-                    variant={idx % 2 === 0 ? 'up' : 'scale'}
-                    delayMs={idx * 80}
-                    className="h-full"
+                    initial={{ opacity: 0, y: 32, scale: 0.95 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                    viewport={{ once: false, amount: 0.12, margin: "0px 0px -20px 0px" }}
+                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    className="h-full will-change-transform transform-gpu"
                   >
                     <FragranceCard
                       fragrance={fragrance}
@@ -1909,7 +1878,7 @@ export default function App() {
                         handleTriggerInquiry(item, vol)
                       }
                     />
-                  </ScrollReveal>
+                  </motion.div>
                 ))}
               </div>
 
@@ -2121,7 +2090,7 @@ export default function App() {
       <nav
         aria-label="Mobile Bottom Navigation"
         data-testid="bottom-navigation-bar"
-        className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-[#0B0A0E]/96 backdrop-blur-md border-t border-[#D4AF37]/35 grid grid-cols-6 items-center px-1 sm:px-4"
+        className="vorvan-bottom-nav-bar fixed bottom-0 left-0 right-0 z-50 h-16 bg-[#0B0A0E] border-t border-[#D4AF37]/35 grid grid-cols-6 items-center px-1 sm:px-4"
       >
         <button
           type="button"

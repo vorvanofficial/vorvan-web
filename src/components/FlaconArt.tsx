@@ -63,7 +63,7 @@ const FlaconArtComponent: React.FC<FlaconArtProps> = ({
         }}
       />
 
-      {/* Authentic Perfume Bottle Photo with Champagne Spotlight Blend & Soft Radial Edge Mask */}
+      {/* Curated Perfume Bottle Photo with Champagne Spotlight Blend & Soft Radial Edge Mask */}
       <img
         src={imgSrc}
         alt={`${fragrance.house} — ${fragrance.name} (${activeVolume})`}

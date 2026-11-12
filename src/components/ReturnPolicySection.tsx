@@ -53,7 +53,7 @@ export const ReturnPolicyContent: React.FC<ReturnPolicyProps> = ({
             }`}
           >
             <p className="font-latin-script text-3xl sm:text-4xl text-gold-champagne text-center">
-              Charte d’Authenticité & Garantie
+              Charte d’Intégrité & Garantie
             </p>
             <p className="font-brand text-[10px] sm:text-xs uppercase tracking-[0.26em] text-[#E5C87E] font-semibold text-center">
               {t.kicker}
@@ -173,12 +173,12 @@ export const ReturnPolicyContent: React.FC<ReturnPolicyProps> = ({
   return (
     <section
       id="return-policy"
-      className="relative overflow-hidden py-16 sm:py-24 border-t border-[#D4AF37]/25 bg-[#0E0D13]/65"
+      className="relative overflow-hidden py-14 sm:py-20 border-t border-[#D4AF37]/25 bg-[#0E0D13]/65"
     >
       <ParallaxSectionBg
         speed={0.16}
         tone="obsidian"
-        watermarkText="VIII · CHARTE DE GARANTIE"
+        watermarkText="V · CHARTE DE GARANTIE"
         align="right"
         testId="parallax-bg-return-policy"
       />
