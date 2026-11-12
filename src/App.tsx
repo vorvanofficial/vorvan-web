@@ -364,7 +364,9 @@ export default function App() {
       if ('scrollRestoration' in window.history) {
         window.history.scrollRestoration = 'manual';
       }
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      if (window.scrollY !== 0) {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }
     }
     setShowSplash(false);
   }, []);
@@ -374,7 +376,7 @@ export default function App() {
     if ('scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual';
     }
-    if (!showSplash) {
+    if (!showSplash && window.scrollY !== 0) {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
   }, [showSplash]);
@@ -1252,6 +1254,14 @@ export default function App() {
           </div>
         </div>
       </header>
+      )}
+      {showSplash && (
+        <div
+          aria-hidden="true"
+          className="w-full shrink-0 pointer-events-none border-b border-transparent"
+        >
+          <div className="h-14 sm:h-16" />
+        </div>
       )}
 
       {/* Email Registration Confirmation Notification Bar (No Public Admin Button) */}

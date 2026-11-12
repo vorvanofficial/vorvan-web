@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getTranslation, SupportedLocale } from '../i18n/translations';
 
 interface WelcomeSplashScreenProps {
@@ -12,67 +12,104 @@ export const WelcomeSplashScreen: React.FC<WelcomeSplashScreenProps> = ({
   onEnterVault,
   locale = 'ID',
 }) => {
+  const [shouldRender, setShouldRender] = useState<boolean>(isOpen);
   const [progress, setProgress] = useState<number>(0);
   const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
+
+  const isExitingRef = useRef<boolean>(false);
+  const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unmountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const t = getTranslation(locale).splash;
+
+  const clearSplashTimers = useCallback(() => {
+    if (stepTimerRef.current !== null) {
+      clearInterval(stepTimerRef.current);
+      stepTimerRef.current = null;
+    }
+    if (autoExitTimerRef.current !== null) {
+      clearTimeout(autoExitTimerRef.current);
+      autoExitTimerRef.current = null;
+    }
+  }, []);
+
+  const triggerSmoothExit = useCallback(() => {
+    if (isExitingRef.current) return;
+    isExitingRef.current = true;
+    clearSplashTimers();
+
+    if (typeof window !== 'undefined' && window.scrollY !== 0) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+
+    setProgress(100);
+    // Mount Header & Bottom Bar underneath while splash is still opaque (0px layout shift),
+    // then smoothly dissolve the z-[9999] splash curtain over 420ms on the GPU.
+    onEnterVault();
+
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => {
+        setIsFadingOut(true);
+      });
+    } else {
+      setIsFadingOut(true);
+    }
+
+    unmountTimerRef.current = setTimeout(() => {
+      setShouldRender(false);
+    }, 440);
+  }, [clearSplashTimers, onEnterVault]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual';
     }
+
     if (!isOpen) {
-      if (typeof window !== 'undefined') {
-        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      if (!isExitingRef.current) {
+        setShouldRender(false);
       }
       return;
     }
 
-    if (typeof window !== 'undefined') {
+    setShouldRender(true);
+    setIsFadingOut(false);
+    isExitingRef.current = false;
+
+    if (typeof window !== 'undefined' && window.scrollY !== 0) {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
 
-    // Extended majestic duration (~5.4 seconds) so the welcome intro is never rushed
-    const stepTimer = setInterval(() => {
+    stepTimerRef.current = setInterval(() => {
       setProgress((prev) => (prev < 100 ? prev + 2 : 100));
     }, 96);
 
-    const fadeStartTimer = setTimeout(() => {
-      setIsFadingOut(true);
-    }, 5000);
-
-    const autoEnterTimer = setTimeout(() => {
-      if (typeof window !== 'undefined') {
-        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-      }
-      onEnterVault();
-    }, 5600);
+    autoExitTimerRef.current = setTimeout(() => {
+      triggerSmoothExit();
+    }, 5100);
 
     return () => {
-      clearInterval(stepTimer);
-      clearTimeout(fadeStartTimer);
-      clearTimeout(autoEnterTimer);
+      clearSplashTimers();
     };
-  }, [isOpen, onEnterVault]);
+  }, [isOpen, clearSplashTimers, triggerSmoothExit]);
 
-  if (!isOpen) return null;
-
-  const handleManualEnter = () => {
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-    }
-    setIsFadingOut(true);
-    setTimeout(() => {
-      if (typeof window !== 'undefined') {
-        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  useEffect(() => {
+    return () => {
+      if (unmountTimerRef.current !== null) {
+        clearTimeout(unmountTimerRef.current);
       }
-      onEnterVault();
-    }, 240);
-  };
+    };
+  }, []);
+
+  if (!shouldRender) return null;
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] bg-[#0B0A0E] flex flex-col items-center justify-between px-6 py-10 select-none transition-opacity duration-500 overflow-hidden ${
-        isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      className={`fixed inset-0 z-[9999] bg-[#0B0A0E] flex flex-col items-center justify-between px-6 py-10 select-none overflow-hidden touch-none transform-gpu will-change-[opacity,transform] transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        isFadingOut
+          ? 'opacity-0 scale-[1.015] pointer-events-none'
+          : 'opacity-100 scale-100'
       }`}
       data-testid="welcome-splash-screen"
     >
@@ -116,7 +153,7 @@ export const WelcomeSplashScreen: React.FC<WelcomeSplashScreenProps> = ({
 
           <button
             type="button"
-            onClick={handleManualEnter}
+            onClick={triggerSmoothExit}
             className="w-full py-3.5 px-5 sm:px-7 rounded-xl btn-luxury-gold font-brand text-[11px] sm:text-xs font-bold uppercase tracking-[0.16em] sm:tracking-[0.2em] text-center flex items-center justify-center transition-all active:scale-[0.99] cursor-pointer whitespace-nowrap shrink-0"
             data-testid="enter-vault-btn"
           >

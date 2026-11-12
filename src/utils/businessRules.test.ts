@@ -2606,7 +2606,7 @@ test('43. Strict 19 Houses gender filter: zero fallback to allBrandFragrances, s
   assert.ok(explorerCode.includes('[ TANYA CONCIERGE WA ]'));
 });
 
-test('44. Splash screen uses z-[9999] while hiding Header & Bottom Navigation Bar until entered, and CuratedHousesTicker uses a 22s linear infinite 2-set seamless marquee', async () => {
+test('44. Splash screen uses z-[9999] with unified GPU smooth exit, zero-CLS header spacer, hidden Header & Bottom Navigation Bar until entered, and 22s linear infinite 2-set seamless marquee', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
 
@@ -2623,10 +2623,18 @@ test('44. Splash screen uses z-[9999] while hiding Header & Bottom Navigation Ba
     'utf8'
   );
 
-  // 1. Splash screen z-[9999] & conditional rendering of Header and Bottom Bar
+  // 1. Splash screen z-[9999], unified GPU exit & conditional rendering of Header and Bottom Bar with zero-CLS spacer
   assert.ok(splashCode.includes('z-[9999]'));
+  assert.ok(splashCode.includes('triggerSmoothExit'));
+  assert.ok(splashCode.includes('clearSplashTimers'));
+  assert.ok(splashCode.includes('if (!shouldRender) return null;'));
   const showSplashGuards = appCode.match(/\{!showSplash && \(/g) || [];
   assert.equal(showSplashGuards.length, 2);
+  assert.ok(
+    appCode.includes(
+      'className="w-full shrink-0 pointer-events-none border-b border-transparent"'
+    )
+  );
 
   // 2. Seamless 2-set infinite marquee moving from translateX(0%) to translateX(-50%) over 22s linear infinite
   assert.ok(
