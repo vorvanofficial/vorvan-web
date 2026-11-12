@@ -71,7 +71,7 @@ export const WelcomeSplashScreen: React.FC<WelcomeSplashScreenProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-[#0B0A0E] flex flex-col items-center justify-between px-6 py-10 select-none transition-opacity duration-500 overflow-hidden ${
+      className={`fixed inset-0 z-[9999] bg-[#0B0A0E] flex flex-col items-center justify-between px-6 py-10 select-none transition-opacity duration-500 overflow-hidden ${
         isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
       data-testid="welcome-splash-screen"

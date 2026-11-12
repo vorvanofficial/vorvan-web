@@ -179,154 +179,45 @@ const STORAGE_LEADS_KEY = 'vorvan_concierge_leads_log';
 const STORAGE_LOCALE_KEY = 'vorvan_international_locale';
 
 /**
- * Viewport-Culled Hardware-Accelerated Ticker for Curated Fragrance Houses.
- * Avoids 13,000px+ GPU mega-textures so mobile pinch-zoom and scrolling stay at locked 60/120fps
- * and tiles are never evicted by the mobile browser compositor.
+ * Seamless Infinite Marquee for Curated Fragrance Houses.
+ * Duplicates the 19 houses into 2 consecutive flex sets moving from translateX(0%) to translateX(-50%)
+ * over 22s linear infinite so the row is immediately visible on load with zero empty gap.
  */
 const CuratedHousesTicker: React.FC = React.memo(() => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const isPausedRef = useRef<boolean>(false);
-  const offsetRef = useRef<number>(0);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const count = CURATED_FRAGRANCE_HOUSES.length;
-    const widths = new Float64Array(count);
-    const starts = new Float64Array(count);
-    const wasVisible = new Array<boolean>(count).fill(true);
-    let totalWidth = 0;
-    let viewportWidth = container.clientWidth || window.innerWidth || 390;
-
-    const applyPositions = (forceAll = false) => {
-      if (totalWidth <= 0) return;
-      const currentOffset = offsetRef.current;
-
-      for (let i = 0; i < count; i++) {
-        const el = itemRefs.current[i];
-        if (!el) continue;
-        const w = widths[i];
-        let x = (starts[i] - currentOffset) % totalWidth;
-        if (x < -w) {
-          x += totalWidth;
-        }
-
-        const isVisible = x <= viewportWidth + 120 && x + w >= -120;
-        if (isVisible) {
-          if (forceAll || !wasVisible[i]) {
-            el.style.visibility = 'visible';
-            wasVisible[i] = true;
-          }
-          el.style.transform = `translate3d(${x.toFixed(2)}px, 0px, 0px)`;
-        } else if (forceAll || wasVisible[i]) {
-          el.style.visibility = 'hidden';
-          el.style.transform = 'translate3d(-9999px, 0px, 0px)';
-          wasVisible[i] = false;
-        }
-      }
-    };
-
-    const measureLayout = () => {
-      if (!container) return;
-      viewportWidth = container.clientWidth || window.innerWidth || 390;
-      let runningStart = 0;
-      for (let i = 0; i < count; i++) {
-        const el = itemRefs.current[i];
-        const w = el ? el.offsetWidth || 310 : 310;
-        widths[i] = w;
-        starts[i] = runningStart;
-        runningStart += w;
-      }
-      totalWidth = runningStart;
-      if (totalWidth > 0) {
-        offsetRef.current = offsetRef.current % totalWidth;
-      }
-      applyPositions(true);
-    };
-
-    measureLayout();
-
-    if (typeof document !== 'undefined' && 'fonts' in document) {
-      (document as Document & { fonts: FontFaceSet }).fonts.ready
-        .then(() => {
-          measureLayout();
-        })
-        .catch(() => {});
-    }
-
-    let rafId: number | null = null;
-    let lastTime: number | null = null;
-    const speedPxPerSec = 52;
-
-    const tick = (now: number) => {
-      const dt =
-        lastTime !== null ? Math.min((now - lastTime) / 1000, 0.05) : 0;
-      lastTime = now;
-
-      if (!isPausedRef.current && totalWidth > 0 && dt > 0) {
-        offsetRef.current =
-          (offsetRef.current + dt * speedPxPerSec) % totalWidth;
-        applyPositions(false);
-      }
-
-      rafId = window.requestAnimationFrame(tick);
-    };
-
-    rafId = window.requestAnimationFrame(tick);
-
-    const handleResize = () => {
-      measureLayout();
-    };
-
-    window.addEventListener('resize', handleResize, { passive: true });
-    return () => {
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
-      }
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+  const seamlessHouses = [
+    ...CURATED_FRAGRANCE_HOUSES,
+    ...CURATED_FRAGRANCE_HOUSES,
+  ];
 
   return (
     <div
-      ref={containerRef}
       data-testid="curated-houses-marquee"
-      className="relative z-10 w-full overflow-hidden h-[56px] sm:h-[64px] select-none"
-      onMouseEnter={() => {
-        isPausedRef.current = true;
-      }}
-      onMouseLeave={() => {
-        isPausedRef.current = false;
-      }}
+      className="relative z-10 w-full overflow-hidden py-2 select-none"
     >
-      {CURATED_FRAGRANCE_HOUSES.map((brand, idx) => (
-        <div
-          key={brand.name}
-          ref={(el) => {
-            itemRefs.current[idx] = el;
-          }}
-          className="absolute top-0 left-0 h-full flex items-center gap-14 sm:gap-16 pr-14 sm:pr-16 shrink-0 group will-change-transform"
-          style={{
-            transform: 'translate3d(0px, 0px, 0px)',
-            backfaceVisibility: 'hidden',
-          }}
-        >
-          <div className="flex flex-col items-center justify-center text-center opacity-90 hover:opacity-100 transition-opacity">
-            <span className="font-brand text-base sm:text-xl tracking-[0.26em] text-[#F5E6B8] whitespace-nowrap">
-              {brand.name}
-            </span>
-            <span className="font-latin-italic text-xs tracking-widest text-[#D8BE82] mt-1 whitespace-nowrap">
-              {brand.origin} · {brand.est}
-            </span>
+      <div
+        data-testid="curated-houses-marquee-track"
+        className="animate-marquee items-center"
+      >
+        {seamlessHouses.map((brand, idx) => (
+          <div
+            key={`${brand.name}-${idx}`}
+            className="flex items-center gap-10 sm:gap-14 pr-10 sm:pr-14 shrink-0 group"
+          >
+            <div className="flex flex-col items-center justify-center text-center opacity-90 hover:opacity-100 transition-opacity">
+              <span className="font-brand text-base sm:text-xl tracking-[0.26em] text-[#F5E6B8] whitespace-nowrap">
+                {brand.name}
+              </span>
+              <span className="font-latin-italic text-xs tracking-widest text-[#D8BE82] mt-1 whitespace-nowrap">
+                {brand.origin} · {brand.est}
+              </span>
+            </div>
+            <span
+              className="w-1.5 h-1.5 rotate-45 bg-[#D4AF37]/70 inline-block shrink-0"
+              aria-hidden="true"
+            />
           </div>
-          <span
-            className="w-1.5 h-1.5 rotate-45 bg-[#D4AF37]/70 inline-block shrink-0"
-            aria-hidden="true"
-          />
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 });
@@ -1200,14 +1091,15 @@ export default function App() {
       <LiquidLuxuryBackground />
       <LuxuryScrollBubbles />
 
-      {/* STRICT 3-ZONE TOP BAR CONTRACT WITH INTERNATIONAL LANGUAGE SELECTOR & DUAL-CONCIERGE */}
-      <header
-        className={`sticky top-0 z-40 w-full max-w-[100vw] transition-colors duration-200 ${
-          isScrolled
-            ? 'bg-[#0B0A0E]/92 backdrop-blur-md border-b border-[#D4AF37]/35'
-            : 'bg-[#0B0A0E]/85 backdrop-blur-xs border-b border-[#D4AF37]/20'
-        }`}
-      >
+      {/* STRICT 3-ZONE TOP BAR CONTRACT WITH INTERNATIONAL LANGUAGE SELECTOR & DUAL-CONCIERGE (HIDDEN WHILE SPLASH SCREEN IS OPEN) */}
+      {!showSplash && (
+        <header
+          className={`sticky top-0 z-40 w-full max-w-[100vw] transition-colors duration-200 ${
+            isScrolled
+              ? 'bg-[#0B0A0E]/92 backdrop-blur-md border-b border-[#D4AF37]/35'
+              : 'bg-[#0B0A0E]/85 backdrop-blur-xs border-b border-[#D4AF37]/20'
+          }`}
+        >
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-1.5 sm:gap-4 lg:gap-6 px-[12px] sm:px-6 lg:px-8 h-14 sm:h-16">
           {/* Zone 1: Single brand element with semi-gold wordmark — 5x Tap Opens Secret Admin Gate */}
           <div className="flex items-center justify-start shrink-0">
@@ -1360,6 +1252,7 @@ export default function App() {
           </div>
         </div>
       </header>
+      )}
 
       {/* Email Registration Confirmation Notification Bar (No Public Admin Button) */}
       {emailToastMessage && (
@@ -2086,12 +1979,13 @@ export default function App() {
         </div>
       </footer>
 
-      {/* 6-TAB UNIFORM BOTTOM NAVIGATION BAR (SHOWROOM · APEX · URBAN · 19 HOUSES · CEK RESI · INVOICE) */}
-      <nav
-        aria-label="Mobile Bottom Navigation"
-        data-testid="bottom-navigation-bar"
-        className="vorvan-bottom-nav-bar fixed bottom-0 left-0 right-0 z-50 h-16 bg-[#0B0A0E] border-t border-[#D4AF37]/35 grid grid-cols-6 items-center px-1 sm:px-4"
-      >
+      {/* 6-TAB UNIFORM BOTTOM NAVIGATION BAR (HIDDEN WHILE SPLASH SCREEN IS OPEN) */}
+      {!showSplash && (
+        <nav
+          aria-label="Mobile Bottom Navigation"
+          data-testid="bottom-navigation-bar"
+          className="vorvan-bottom-nav-bar fixed bottom-0 left-0 right-0 z-50 h-16 bg-[#0B0A0E] border-t border-[#D4AF37]/35 grid grid-cols-6 items-center px-1 sm:px-4"
+        >
         <button
           type="button"
           onClick={() => navigateToTab('showroom')}
@@ -2188,6 +2082,7 @@ export default function App() {
           </span>
         </button>
       </nav>
+      )}
 
       {/* MODALS */}
       <FragranceDossierModal

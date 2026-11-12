@@ -145,10 +145,10 @@
 /* Marquee Carousel */
 @keyframes marquee-scroll {
   0% {
-    transform: translate3d(0%, 0, 0);
+    transform: translateX(0%);
   }
   100% {
-    transform: translate3d(-50%, 0, 0);
+    transform: translateX(-50%);
   }
 }
 
@@ -267,7 +267,8 @@
 .animate-marquee {
   display: flex;
   width: max-content;
-  animation: marquee-scroll 36s linear infinite;
+  animation: marquee-scroll 22s linear infinite;
+  will-change: transform;
 }
 
 .animate-marquee:hover {

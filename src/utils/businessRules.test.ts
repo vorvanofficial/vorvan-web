@@ -2606,6 +2606,41 @@ test('43. Strict 19 Houses gender filter: zero fallback to allBrandFragrances, s
   assert.ok(explorerCode.includes('[ TANYA CONCIERGE WA ]'));
 });
 
+test('44. Splash screen uses z-[9999] while hiding Header & Bottom Navigation Bar until entered, and CuratedHousesTicker uses a 22s linear infinite 2-set seamless marquee', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const splashCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'WelcomeSplashScreen.tsx'),
+    'utf8'
+  );
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+  const cssCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'index.css'),
+    'utf8'
+  );
+
+  // 1. Splash screen z-[9999] & conditional rendering of Header and Bottom Bar
+  assert.ok(splashCode.includes('z-[9999]'));
+  const showSplashGuards = appCode.match(/\{!showSplash && \(/g) || [];
+  assert.equal(showSplashGuards.length, 2);
+
+  // 2. Seamless 2-set infinite marquee moving from translateX(0%) to translateX(-50%) over 22s linear infinite
+  assert.ok(
+    appCode.includes(
+      '...CURATED_FRAGRANCE_HOUSES,\n    ...CURATED_FRAGRANCE_HOUSES'
+    )
+  );
+  assert.ok(appCode.includes('className="animate-marquee items-center"'));
+  assert.ok(cssCode.includes('transform: translateX(0%);'));
+  assert.ok(cssCode.includes('transform: translateX(-50%);'));
+  assert.ok(cssCode.includes('animation: marquee-scroll 22s linear infinite;'));
+});
+
+
 
 
 
