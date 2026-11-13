@@ -280,6 +280,7 @@ export interface CustomAdminOrder {
   shippingLabel?: string;
   shippingMethod: ShippingMethodType;
   isCOD?: boolean;
+  isDelivered?: boolean;
   awbNumber: string;
   resiInputAt?: number;
   shippingStage?: 1 | 2 | 3 | 4;

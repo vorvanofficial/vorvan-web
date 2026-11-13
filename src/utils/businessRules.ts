@@ -151,17 +151,29 @@ export function isCodShippingMethod(
 
 /**
  * Checks whether an expedition order has a valid AWB / Nomor Resi entered by Admin.
- * Returns false for COD (which is face-to-face) and false when AWB is still empty/pending.
+ * Returns false for COD (which is face-to-face), false when AWB is empty/pending,
+ * and false if AWB was mistakenly set to an invoice ID (`INV-VRV-...`).
  */
 export function hasValidCourierAwb(order: {
+  invoiceId?: string;
   shippingMethod?: string;
   awbNumber?: string;
 }): boolean {
   if (isCodShippingMethod(order.shippingMethod, order.awbNumber)) {
     return false;
   }
-  const cleanAwb = (order.awbNumber || '').trim();
-  return cleanAwb.length > 0;
+  const cleanAwb = (order.awbNumber || '').trim().toUpperCase();
+  if (!cleanAwb) return false;
+  const cleanInv = (order.invoiceId || '').trim().toUpperCase();
+  if (cleanInv && cleanAwb === cleanInv) return false;
+  if (
+    cleanAwb.startsWith('INV-VRV-') ||
+    cleanAwb.startsWith('PENDING-') ||
+    cleanAwb.startsWith('BELUM')
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function loadVorvanSettings(): VorvanSiteSettings {
@@ -349,21 +361,37 @@ export function loadCustomAdminOrders(): CustomAdminOrder[] {
             const storedProof = proofsMap[invKey];
             const proofImg =
               o.paymentProof || o.paymentProofUrl || storedProof?.proofUrl;
+            const isCod =
+              typeof o.isCOD === 'boolean'
+                ? o.isCOD
+                : isCodShippingMethod(o.shippingMethod, o.awbNumber);
+            const hasRealAwb = hasValidCourierAwb(o);
+            const sanitizedAwb = hasRealAwb ? (o.awbNumber || '').trim() : '';
+            const delivered = Boolean(o.isDelivered);
+            const resolvedStage: 1 | 2 | 3 | 4 = delivered
+              ? 4
+              : isCod || hasRealAwb
+              ? 3
+              : 1;
             if (proofImg) {
               return {
                 ...o,
+                awbNumber: sanitizedAwb,
+                isDelivered: delivered,
                 status: 'PAID' as const,
                 paymentProof: proofImg,
                 paymentProofUrl: proofImg,
                 paymentProofUploadedAt:
                   o.paymentProofUploadedAt || storedProof?.uploadedAt,
-                shippingStage: Math.min(
-                  4,
-                  Math.max(o.shippingStage || 2, 3)
-                ) as 1 | 2 | 3 | 4,
+                shippingStage: resolvedStage,
               };
             }
-            return o;
+            return {
+              ...o,
+              awbNumber: sanitizedAwb,
+              isDelivered: delivered,
+              shippingStage: resolvedStage,
+            };
           });
         }
       }
@@ -508,14 +536,27 @@ export function applyPaymentProofToOrders(
   const matchedInvoiceIds: string[] = [];
   const updatedOrders = orders.map((o, idx) => {
     if (!matchedIndexes.has(idx)) return o;
-    const nextStage = Math.min(
-      4,
-      Math.max((o.shippingStage || 2) + 1, 3)
-    ) as 1 | 2 | 3 | 4;
+    const isCod =
+      typeof o.isCOD === 'boolean'
+        ? o.isCOD
+        : isCodShippingMethod(o.shippingMethod, o.awbNumber);
+    const hasRealAwb = hasValidCourierAwb(o);
+    const sanitizedAwb = hasRealAwb ? (o.awbNumber || '').trim() : '';
+    const delivered = Boolean(o.isDelivered);
+    // Uploading payment proof MUST NEVER advance an order to Stage 4!
+    // Stage 4 is strictly reserved for `isDelivered === true` (Admin confirmation).
+    // Expedition without AWB stays at Stage 1; Expedition with AWB or COD is at Stage 3.
+    const nextStage: 1 | 2 | 3 | 4 = delivered
+      ? 4
+      : isCod || hasRealAwb
+      ? 3
+      : 1;
     matchedInvoiceIds.push(o.invoiceId);
     savePaymentProofRecord(o.invoiceId, proofBase64, uploadedAt);
     return {
       ...o,
+      awbNumber: sanitizedAwb,
+      isDelivered: delivered,
       status: 'PAID' as const,
       paymentProof: proofBase64,
       paymentProofUrl: proofBase64,
@@ -1220,12 +1261,13 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
 
   const hasResiTs =
     typeof order.resiInputAt === 'number' && order.resiInputAt > 0;
-  const hasOverride =
-    order.shippingStageOverride && order.shippingStageOverride !== 'AUTO';
+  const isStage4Delivered =
+    order.isDelivered === true ||
+    (order.isDelivered !== false && order.shippingStageOverride === 4);
 
-  if (hasResiTs || hasOverride) {
+  if (hasResiTs || isStage4Delivered) {
     const resiB36 = hasResiTs ? Math.round(order.resiInputAt!).toString(36) : '';
-    const overrideCode = hasOverride ? String(order.shippingStageOverride) : '';
+    const overrideCode = isStage4Delivered ? '4' : '';
     pipeFields.push(overrideCode ? `${resiB36}:${overrideCode}` : resiB36);
   }
 
@@ -1647,21 +1689,25 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
                 decodedResiInputAt = parsedMs;
               }
             }
-            if (
-              overridePart === '1' ||
-              overridePart === '2' ||
-              overridePart === '3' ||
-              overridePart === '4'
-            ) {
-              decodedStageOverride = Number(overridePart) as 1 | 2 | 3 | 4;
+            if (overridePart === '4') {
+              decodedStageOverride = 4;
             } else if (overridePart === 'AUTO') {
               decodedStageOverride = 'AUTO';
             }
           }
 
+          const isStage4Delivered = decodedStageOverride === 4;
+          const cleanDecodedAwb =
+            !isCod &&
+            awbNumber &&
+            awbNumber.toUpperCase() !== invoiceId.toUpperCase() &&
+            !awbNumber.toUpperCase().startsWith('INV-VRV-')
+              ? awbNumber
+              : '';
+
           return {
             invoiceId,
-            trackingId: awbNumber || invoiceId,
+            trackingId: cleanDecodedAwb || invoiceId,
             createdAt: 'Terverifikasi · WIB',
             buyerName: rawBuyer.trim(),
             buyerCity: cleanCity,
@@ -1681,9 +1727,15 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             shippingLabel,
             shippingMethod,
             isCOD: isCod,
-            awbNumber,
+            isDelivered: isStage4Delivered,
+            awbNumber: cleanDecodedAwb,
             resiInputAt: decodedResiInputAt,
-            shippingStageOverride: decodedStageOverride,
+            shippingStage: isStage4Delivered
+              ? 4
+              : isCod || cleanDecodedAwb
+              ? 3
+              : 1,
+            shippingStageOverride: isStage4Delivered ? 4 : 'AUTO',
             status,
           };
         }
@@ -2272,11 +2324,13 @@ export function isJavaDestinationCity(addressText: string): boolean {
 
 /**
  * Automatically computes the current shipping stage (1..4):
- * - If Admin confirmed package arrival (`shippingStage === 4` or `shippingStageOverride === 4`): Stage 4 (Paket Telah Diterima oleh Pembeli).
- * - Khusus Pesanan COD (`COD / VIP Hand-Delivery`): Begitu Invoice COD diterbitkan, tanpa perlu input nomor resi dan tanpa perlu klik tombol apa pun, Tahap 1, Tahap 2, dan Tahap 3 langsung menyala otomatis (`stage = 3`).
+ * - Stage 4 (`4/4 — PAKET TELAH DITERIMA OLEH PEMBELI`) is ONLY active when `order.isDelivered === true`
+ *   (or explicit `shippingStageOverride === 4` when `isDelivered !== false`), i.e., when Admin clicks
+ *   `[ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]`.
+ * - Khusus Pesanan COD (`COD / VIP Hand-Delivery`): Selama `isDelivered` masih `false`, otomatis berada di Tahap 3 (`3/4 — KURIR VIP COD DALAM PERJALANAN`).
  * - Khusus Pesanan Ekspedisi Reguler (JNE / J&T / Paxel / SiCepat / Pos / Anteraja):
- *   • Sebelum Nomor Resi diinput: Hanya Tahap 1 yang menyala (`stage = 1`).
- *   • Begitu Admin menginput Nomor Resi: Tahap 1, Tahap 2, dan Tahap 3 (Dalam Perjalanan menuju Kota Tujuan) langsung menyala otomatis (`stage = 3`).
+ *   • Sebelum Nomor Resi Asli diinput Admin (meskipun sudah upload bukti bayar / Lunas): Tetap berada di Tahap 1 (`1/4 — MENUNGGU INPUT NOMOR RESI EKSPEDISI`).
+ *   • Setelah Nomor Resi Asli diinput Admin (dan `isDelivered` masih `false`): Otomatis berada di Tahap 3 (`3/4 — DALAM PERJALANAN MENUJU KOTA TUJUAN`).
  */
 export function computeAutoShippingStage(
   order: CustomAdminOrder,
@@ -2284,17 +2338,10 @@ export function computeAutoShippingStage(
 ): 1 | 2 | 3 | 4 {
   void nowMs;
   if (
-    order.shippingStageOverride === 4 ||
-    order.shippingStage === 4
+    order.isDelivered === true ||
+    (order.isDelivered !== false && order.shippingStageOverride === 4)
   ) {
     return 4;
-  }
-
-  if (
-    order.shippingStageOverride &&
-    order.shippingStageOverride !== 'AUTO'
-  ) {
-    return order.shippingStageOverride;
   }
 
   const isCod =

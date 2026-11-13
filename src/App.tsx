@@ -541,22 +541,46 @@ export default function App() {
                   Boolean(proofImg) ||
                   o.status === 'PAID' ||
                   smartOrd.status === 'PAID';
+                const isCod =
+                  typeof smartOrd.isCOD === 'boolean'
+                    ? smartOrd.isCOD
+                    : typeof o.isCOD === 'boolean'
+                    ? o.isCOD
+                    : isCodShippingMethod(
+                        smartOrd.shippingMethod || o.shippingMethod,
+                        smartOrd.awbNumber || o.awbNumber
+                      );
+                const candidateAwb = o.awbNumber || smartOrd.awbNumber || '';
+                const hasRealAwb =
+                  !isCod &&
+                  Boolean(candidateAwb.trim()) &&
+                  candidateAwb.trim().toUpperCase() !==
+                    o.invoiceId.trim().toUpperCase() &&
+                  !candidateAwb.trim().toUpperCase().startsWith('INV-VRV-');
+                const cleanAwb = hasRealAwb ? candidateAwb.trim() : '';
+                const delivered = Boolean(o.isDelivered || smartOrd.isDelivered);
                 return {
                   ...o,
                   ...smartOrd,
+                  isCOD: isCod,
+                  isDelivered: delivered,
+                  awbNumber: cleanAwb,
                   status: isPaid ? ('PAID' as const) : smartOrd.status,
                   paymentProof: proofImg,
                   paymentProofUrl: proofImg,
                   paymentProofUploadedAt:
                     o.paymentProofUploadedAt || smartOrd.paymentProofUploadedAt,
-                  shippingStage: Math.min(
-                    4,
-                    Math.max(
-                      o.shippingStage || 2,
-                      smartOrd.shippingStage || 2,
-                      proofImg ? 3 : 2
-                    )
-                  ) as 1 | 2 | 3 | 4,
+                  shippingStage: (delivered
+                    ? 4
+                    : isCod || hasRealAwb
+                    ? 3
+                    : 1) as 1 | 2 | 3 | 4,
+                  shippingStageOverride: (delivered ? 4 : 'AUTO') as
+                    | 'AUTO'
+                    | 1
+                    | 2
+                    | 3
+                    | 4,
                 };
               })
             : [smartOrd, ...prev];
@@ -879,10 +903,13 @@ export default function App() {
       : (newOrder.awbNumber || '').trim().toUpperCase();
     const cleanNewOrder: CustomAdminOrder = {
       ...newOrder,
+      isCOD: isCod,
+      isDelivered: false,
+      awbNumber: cleanAwb,
       resiInputAt:
         !isCod && cleanAwb ? newOrder.resiInputAt || Date.now() : undefined,
       shippingStage: isCod ? 3 : cleanAwb ? 3 : 1,
-      shippingStageOverride: newOrder.shippingStageOverride || 'AUTO',
+      shippingStageOverride: 'AUTO',
       status: 'PENDING_PAYMENT',
       paymentProof: null,
       paymentProofUrl: null,
@@ -922,13 +949,13 @@ export default function App() {
       const isStage4Confirm = stageOrOverride === 4;
       const nextOrder: CustomAdminOrder = {
         ...o,
-        shippingStageOverride: stageOrOverride,
-        shippingStage:
-          stageOrOverride === 'AUTO'
-            ? o.awbNumber || o.isCOD
-              ? 3
-              : 1
-            : stageOrOverride,
+        isDelivered: isStage4Confirm,
+        shippingStageOverride: isStage4Confirm ? 4 : 'AUTO',
+        shippingStage: isStage4Confirm
+          ? 4
+          : o.awbNumber || o.isCOD
+          ? 3
+          : 1,
         status: isStage4Confirm ? 'PAID' : o.status,
       };
       updatedOrderRef = nextOrder;
@@ -985,27 +1012,22 @@ export default function App() {
             ? o.resiInputAt
             : Date.now()
           : undefined;
-      const effectiveOverride =
-        stageOverride !== undefined
-          ? stageOverride
-          : o.shippingStageOverride === 4
-          ? 4
-          : 'AUTO';
-      const nextStage: 1 | 2 | 3 | 4 =
-        effectiveOverride === 4 || o.shippingStage === 4
-          ? 4
-          : isCod || cleanAwb
-          ? 3
-          : 1;
+      const delivered = Boolean(o.isDelivered || stageOverride === 4);
+      const nextStage: 1 | 2 | 3 | 4 = delivered
+        ? 4
+        : isCod || cleanAwb
+        ? 3
+        : 1;
       const nextOrder: CustomAdminOrder = {
         ...o,
         shippingMethod,
         isCOD: isCod,
+        isDelivered: delivered,
         awbNumber: cleanAwb,
         resiInputAt: nextResiInputAt,
         trackingId: cleanAwb || o.invoiceId,
         shippingStage: nextStage,
-        shippingStageOverride: effectiveOverride,
+        shippingStageOverride: delivered ? 4 : 'AUTO',
       };
       updatedOrderRef = nextOrder;
       return nextOrder;
@@ -1074,16 +1096,32 @@ export default function App() {
       route.smartOrder &&
       route.smartOrder.invoiceId.trim().toUpperCase() === cleanTargetId
     ) {
+      const isCod = Boolean(
+        route.smartOrder.isCOD ||
+          isCodShippingMethod(
+            route.smartOrder.shippingMethod,
+            route.smartOrder.awbNumber
+          )
+      );
+      const cleanAwb = isCod
+        ? ''
+        : (route.smartOrder.awbNumber || '').trim();
+      const hasRealAwb =
+        !isCod &&
+        Boolean(cleanAwb) &&
+        cleanAwb.toUpperCase() !== cleanTargetId &&
+        !cleanAwb.toUpperCase().startsWith('INV-VRV-');
+      const delivered = Boolean(route.smartOrder.isDelivered);
       const updatedSmart: CustomAdminOrder = {
         ...route.smartOrder,
+        awbNumber: hasRealAwb ? cleanAwb : '',
+        isDelivered: delivered,
         status: 'PAID',
         paymentProof: proofBase64,
         paymentProofUrl: proofBase64,
         paymentProofUploadedAt: uploadedAt,
-        shippingStage: Math.min(
-          4,
-          Math.max((route.smartOrder.shippingStage || 2) + 1, 3)
-        ) as 1 | 2 | 3 | 4,
+        shippingStage: delivered ? 4 : isCod || hasRealAwb ? 3 : 1,
+        shippingStageOverride: delivered ? 4 : 'AUTO',
       };
       setRoute({
         ...route,

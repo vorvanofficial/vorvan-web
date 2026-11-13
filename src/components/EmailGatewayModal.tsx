@@ -776,6 +776,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       shippingLabel: cleanShipLabel,
       shippingMethod,
       isCOD: isCodOrder,
+      isDelivered: false,
       awbNumber: cleanAwb,
       resiInputAt: !isCodOrder && cleanAwb ? now.getTime() : undefined,
       shippingStage: isCodOrder ? 3 : cleanAwb ? 3 : 1,
@@ -2683,33 +2684,51 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         storedProof?.uploadedAt;
                       const isPaid =
                         Boolean(resolvedProof) || ord.status === 'PAID';
+                      const isCod =
+                        typeof ord.isCOD === 'boolean'
+                          ? ord.isCOD
+                          : isCodShippingMethod(
+                              ord.shippingMethod,
+                              ord.awbNumber
+                            );
+                      const hasAwb = hasValidCourierAwb(ord);
+                      const sanitizedAwb = hasAwb
+                        ? (ord.awbNumber || '').trim()
+                        : '';
+                      const isDeliveredOrder = Boolean(ord.isDelivered);
                       const effectiveOrder: CustomAdminOrder = resolvedProof
                         ? {
                             ...ord,
+                            isCOD: isCod,
+                            isDelivered: isDeliveredOrder,
+                            awbNumber: sanitizedAwb,
                             status: 'PAID',
                             paymentProof: resolvedProof,
                             paymentProofUrl: resolvedProof,
                             paymentProofUploadedAt: resolvedUploadedAt,
-                            shippingStage: Math.min(
-                              4,
-                              Math.max(ord.shippingStage || 2, 3)
-                            ) as 1 | 2 | 3 | 4,
+                            shippingStage: isDeliveredOrder
+                              ? 4
+                              : isCod || hasAwb
+                              ? 3
+                              : 1,
                           }
-                        : ord;
+                        : {
+                            ...ord,
+                            isCOD: isCod,
+                            isDelivered: isDeliveredOrder,
+                            awbNumber: sanitizedAwb,
+                            shippingStage: isDeliveredOrder
+                              ? 4
+                              : isCod || hasAwb
+                              ? 3
+                              : 1,
+                          };
                       const autoStage =
                         computeAutoShippingStage(effectiveOrder);
                       const courierMeta = resolveCourierMetadata(
                         effectiveOrder.shippingMethod,
                         effectiveOrder.awbNumber
                       );
-                      const isCod =
-                        typeof effectiveOrder.isCOD === 'boolean'
-                          ? effectiveOrder.isCOD
-                          : isCodShippingMethod(
-                              effectiveOrder.shippingMethod,
-                              effectiveOrder.awbNumber
-                            );
-                      const hasAwb = hasValidCourierAwb(effectiveOrder);
                       const orderQty = Math.max(
                         1,
                         Math.round(effectiveOrder.quantity || 1)
@@ -2883,18 +2902,33 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                         : `Ekspedisi ${courierMeta.displayName}`}{' '}
                                       — <span className="text-zinc-300 font-normal">{resolvedZoneLabel}</span>
                                     </div>
-                                    {isCod ? (
-                                      <div className="px-2 py-1 rounded bg-amber-950/70 border border-[#D4AF37]/60 text-[10px] font-semibold text-[#F5E6B8] leading-snug">
-                                        {COD_FACE_TO_FACE_STATUS_LABEL} · AUTO TAHAP {autoStage}/4
+                                    {autoStage === 4 ? (
+                                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-950/70 border border-emerald-500/50 text-[10px] font-mono-tabular font-bold text-emerald-300 leading-snug">
+                                        <span>
+                                          ● 4/4 — PAKET TELAH DITERIMA OLEH PEMBELI
+                                          {!isCod && hasAwb
+                                            ? ` (RESI: ${effectiveOrder.awbNumber})`
+                                            : ''}
+                                        </span>
                                       </div>
-                                    ) : !hasAwb && autoStage < 4 ? (
-                                      <div className="px-2 py-1 rounded bg-amber-950/60 border border-amber-500/50 text-[10px] font-semibold text-amber-300 leading-snug">
-                                        {PENDING_AWB_STATUS_LABEL}
+                                    ) : isCod ? (
+                                      <div className="px-2.5 py-1 rounded bg-amber-950/70 border border-[#D4AF37]/60 text-[10px] font-semibold text-[#F5E6B8] leading-snug space-y-0.5">
+                                        <div>{COD_FACE_TO_FACE_STATUS_LABEL}</div>
+                                        <div className="font-mono-tabular text-emerald-300 font-bold">
+                                          ● 3/4 — KURIR VIP COD DALAM PERJALANAN
+                                        </div>
+                                      </div>
+                                    ) : !hasAwb ? (
+                                      <div className="px-2.5 py-1 rounded bg-amber-950/60 border border-amber-500/50 text-[10px] font-semibold text-amber-300 leading-snug space-y-0.5">
+                                        <div>{PENDING_AWB_STATUS_LABEL}</div>
+                                        <div className="font-mono-tabular text-amber-200/90">
+                                          ● TAHAP 1/4 — MENUNGGU INPUT NOMOR RESI EKSPEDISI
+                                        </div>
                                       </div>
                                     ) : (
-                                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-mono-tabular text-emerald-300">
+                                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-mono-tabular font-semibold text-emerald-300 leading-snug">
                                         <span>
-                                          ● AUTO TAHAP {autoStage}/4 (RESI: {effectiveOrder.awbNumber || ord.invoiceId})
+                                          ● 3/4 — DALAM PERJALANAN MENUJU KOTA TUJUAN (RESI: {effectiveOrder.awbNumber})
                                         </span>
                                       </div>
                                     )}
@@ -2903,32 +2937,38 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                         className="pt-2"
                                         data-testid={`admin-stage-confirm-box-${ord.invoiceId}`}
                                       >
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            onUpdateCustomOrderStage(ord.invoiceId, 4);
-                                            if (
-                                              createdOrderResult &&
-                                              createdOrderResult.invoiceId.toUpperCase() ===
-                                                ord.invoiceId.toUpperCase()
-                                            ) {
-                                              setCreatedOrderResult({
-                                                ...createdOrderResult,
-                                                shippingStage: 4,
-                                                shippingStageOverride: 4,
-                                                status: 'PAID',
-                                              });
-                                            }
-                                          }}
-                                          className={`w-full sm:w-auto px-3.5 py-2 rounded-xl text-[10px] sm:text-[11px] font-brand font-bold uppercase tracking-wider transition-all border cursor-pointer ${
-                                            autoStage === 4
-                                              ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] shadow-[0_0_18px_rgba(212,175,55,0.45)]'
-                                              : 'bg-gradient-to-r from-[#1A160B] via-[#261F0E] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] text-[#F5E6B8] hover:text-zinc-950 border-[#D4AF37]/80 shadow-md'
-                                          }`}
-                                          data-testid={`btn-confirm-stage4-${ord.invoiceId}`}
-                                        >
-                                          [ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]
-                                        </button>
+                                        {autoStage === 4 ? (
+                                          <div
+                                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl btn-luxury-gold text-zinc-950 border border-[#F5E6B8] text-[10px] sm:text-[11px] font-brand font-bold uppercase tracking-wider shadow-[0_0_18px_rgba(212,175,55,0.45)]"
+                                            data-testid={`badge-stage4-active-${ord.invoiceId}`}
+                                          >
+                                            ✅ TAHAP 4 AKTIF (SELESAI)
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              onUpdateCustomOrderStage(ord.invoiceId, 4);
+                                              if (
+                                                createdOrderResult &&
+                                                createdOrderResult.invoiceId.toUpperCase() ===
+                                                  ord.invoiceId.toUpperCase()
+                                              ) {
+                                                setCreatedOrderResult({
+                                                  ...createdOrderResult,
+                                                  isDelivered: true,
+                                                  shippingStage: 4,
+                                                  shippingStageOverride: 4,
+                                                  status: 'PAID',
+                                                });
+                                              }
+                                            }}
+                                            className="w-full sm:w-auto px-3.5 py-2 rounded-xl text-[10px] sm:text-[11px] font-brand font-bold uppercase tracking-wider transition-all border cursor-pointer bg-gradient-to-r from-[#1A160B] via-[#261F0E] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] text-[#F5E6B8] hover:text-zinc-950 border-[#D4AF37]/80 shadow-md"
+                                            data-testid={`btn-confirm-stage4-${ord.invoiceId}`}
+                                          >
+                                            [ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]
+                                          </button>
+                                        )}
                                       </div>
                                     )}
                                   </div>

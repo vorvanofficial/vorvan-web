@@ -2,6 +2,8 @@ import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
 import {
   applyPaymentProofToOrders,
   buildSmartShareUrl,
+  hasValidCourierAwb,
+  isCodShippingMethod,
   loadDeletedInvoiceIds,
   loadDeletedLeadEmails,
   loadPaymentProofsMap,
@@ -915,21 +917,35 @@ export function mergeCustomAdminOrders(
           Boolean(mergedProof) ||
           ord.status === 'PAID' ||
           local.status === 'PAID';
-        const mergedStage = Math.min(
-          4,
-          Math.max(
-            local.shippingStage || 2,
-            ord.shippingStage || 2,
-            mergedProof ? 3 : 2
-          )
-        ) as 1 | 2 | 3 | 4;
+        const mergedDelivered = Boolean(ord.isDelivered || local.isDelivered);
+        const mergedMethod = ord.shippingMethod || local.shippingMethod;
+        const mergedIsCod =
+          typeof ord.isCOD === 'boolean'
+            ? ord.isCOD
+            : typeof local.isCOD === 'boolean'
+            ? local.isCOD
+            : isCodShippingMethod(mergedMethod, ord.awbNumber || local.awbNumber);
+        const candidateAwb = ord.awbNumber || local.awbNumber || '';
+        const hasRealAwb = hasValidCourierAwb({
+          invoiceId: key,
+          shippingMethod: mergedMethod,
+          awbNumber: candidateAwb,
+        });
+        const cleanAwb = hasRealAwb ? candidateAwb.trim() : '';
+        const mergedStage: 1 | 2 | 3 | 4 = mergedDelivered
+          ? 4
+          : mergedIsCod || hasRealAwb
+          ? 3
+          : 1;
 
         byInvoiceId.set(key, {
           ...local,
           ...ord,
+          isCOD: mergedIsCod,
+          isDelivered: mergedDelivered,
+          awbNumber: cleanAwb,
           resiInputAt: ord.resiInputAt ?? local.resiInputAt,
-          shippingStageOverride:
-            ord.shippingStageOverride ?? local.shippingStageOverride,
+          shippingStageOverride: mergedDelivered ? 4 : 'AUTO',
           paymentProof: mergedProof,
           paymentProofUrl: mergedProof,
           paymentProofUploadedAt:
@@ -939,8 +955,20 @@ export function mergeCustomAdminOrders(
         });
       } else {
         const proofImg = ord.paymentProof || ord.paymentProofUrl;
+        const isCod =
+          typeof ord.isCOD === 'boolean'
+            ? ord.isCOD
+            : isCodShippingMethod(ord.shippingMethod, ord.awbNumber);
+        const hasRealAwb = hasValidCourierAwb(ord);
+        const cleanAwb = hasRealAwb ? (ord.awbNumber || '').trim() : '';
+        const delivered = Boolean(ord.isDelivered);
         byInvoiceId.set(key, {
           ...ord,
+          isCOD: isCod,
+          isDelivered: delivered,
+          awbNumber: cleanAwb,
+          shippingStage: delivered ? 4 : isCod || hasRealAwb ? 3 : 1,
+          shippingStageOverride: delivered ? 4 : 'AUTO',
           paymentProof: proofImg,
           paymentProofUrl: proofImg,
           status: proofImg ? 'PAID' : ord.status,

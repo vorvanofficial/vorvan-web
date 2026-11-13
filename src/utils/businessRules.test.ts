@@ -2992,9 +2992,60 @@ test('Invoice bottom confirmation section is centered across devices, QRIS & is 
   );
   assert.equal(trackCod.milestones[3].completed, false);
 
-  // 6. Admin clicks single button '[ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]' -> Stage 4 (Paket Telah Diterima oleh Pembeli) lights up!
+  // 6. Uploading payment proof on Expedition WITHOUT Resi MUST stay at Stage 1 and MUST keep awbNumber empty (never INV-VRV-...)
+  const { applyPaymentProofToOrders, removePaymentProofRecord } = await import(
+    './businessRules.ts'
+  );
+  const expNoResi = {
+    ...orderWithoutResi,
+    invoiceId: 'INV-VRV-9915',
+    awbNumber: '',
+    isDelivered: false,
+    shippingStage: 1 as const,
+    status: 'PENDING_PAYMENT' as const,
+  };
+  const expWithResiAt3 = {
+    ...orderWithResi,
+    invoiceId: 'INV-VRV-9916',
+    awbNumber: 'JT-9988776655',
+    isDelivered: false,
+    shippingStage: 3 as const,
+    status: 'PENDING_PAYMENT' as const,
+  };
+  removePaymentProofRecord('INV-VRV-9915');
+  removePaymentProofRecord('INV-VRV-9916');
+
+  const proofNoResiRes = applyPaymentProofToOrders(
+    [expNoResi],
+    'INV-VRV-9915',
+    'data:image/jpeg;base64,TESTPROOF',
+    '13 Nov 2026 · 12:00 WIB'
+  );
+  assert.equal(proofNoResiRes.updatedOrders[0].status, 'PAID');
+  assert.equal(proofNoResiRes.updatedOrders[0].awbNumber, '');
+  assert.equal(proofNoResiRes.updatedOrders[0].isDelivered, false);
+  assert.equal(proofNoResiRes.updatedOrders[0].shippingStage, 1);
+  assert.equal(computeAutoShippingStage(proofNoResiRes.updatedOrders[0]), 1);
+
+  // Uploading payment proof on Expedition WITH Resi (already at Stage 3) MUST stay at Stage 3 (NEVER jump to Stage 4!)
+  const proofWithResiRes = applyPaymentProofToOrders(
+    [expWithResiAt3],
+    'INV-VRV-9916',
+    'data:image/jpeg;base64,TESTPROOF',
+    '13 Nov 2026 · 12:05 WIB'
+  );
+  assert.equal(proofWithResiRes.updatedOrders[0].status, 'PAID');
+  assert.equal(proofWithResiRes.updatedOrders[0].isDelivered, false);
+  assert.equal(proofWithResiRes.updatedOrders[0].shippingStage, 3);
+  assert.equal(computeAutoShippingStage(proofWithResiRes.updatedOrders[0]), 3);
+
+  removePaymentProofRecord('INV-VRV-9915');
+  removePaymentProofRecord('INV-VRV-9916');
+
+  // 7. Admin clicks single button '[ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]' (isDelivered = true) -> Stage 4 lights up!
   const confirmedCodOrder = {
     ...codOrder,
+    isDelivered: true,
     shippingStage: 4 as const,
     shippingStageOverride: 4 as const,
     status: 'PAID' as const,
@@ -3007,7 +3058,7 @@ test('Invoice bottom confirmation section is centered across devices, QRIS & is 
     trackCodStage4.milestones[3].title.includes('Paket Telah Diterima oleh Pembeli')
   );
 
-  // Verify Admin Tab 2 UI has the single clear Stage 4 button and no old 3-button group
+  // Verify Admin Tab 2 UI has the single clear Stage 4 button and "✅ TAHAP 4 AKTIF (SELESAI)" badge
   const emailGatewayCode = fs.readFileSync(
     path.join(process.cwd(), 'src', 'components', 'EmailGatewayModal.tsx'),
     'utf8'
@@ -3018,15 +3069,20 @@ test('Invoice bottom confirmation section is centered across devices, QRIS & is 
     ),
     'Admin Tab 2 must display [ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]'
   );
+  assert.ok(
+    emailGatewayCode.includes('✅ TAHAP 4 AKTIF (SELESAI)'),
+    'Admin Tab 2 must display ✅ TAHAP 4 AKTIF (SELESAI) when Stage 4 is active'
+  );
   assert.equal(
     emailGatewayCode.includes('Paksa Tahap 3'),
     false,
     'Admin Tab 2 must not contain old Paksa Tahap 3 button'
   );
 
-  // Smart URL round-trip preserves resiInputAt and shippingStageOverride: 4
+  // Smart URL round-trip preserves resiInputAt and isDelivered: true
   const forcedStage4Order = {
     ...orderWithResi,
+    isDelivered: true,
     shippingStage: 4 as const,
     shippingStageOverride: 4 as const,
   };
@@ -3034,6 +3090,7 @@ test('Invoice bottom confirmation section is centered across devices, QRIS & is 
   const decoded = decodeSmartOrderParam(encoded);
   assert.ok(decoded);
   assert.equal(decoded!.resiInputAt, resiTime);
+  assert.equal(decoded!.isDelivered, true);
   assert.equal(decoded!.shippingStageOverride, 4);
 });
 
