@@ -1043,7 +1043,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 Inspeksi Kualitas Segel &amp; Jaminan Fisik Vault
               </span>
               <p className="text-zinc-200 font-medium">
-                Private Fragrance Curation · Direct International Archive · Segel Hologram VORVAN
+                Private Fragrance Curation · Direct International Archive · Segel &amp; Sertifikat Kurasi Resmi VORVAN
               </p>
               <p className="text-zinc-400 leading-relaxed">{baseInvoice.notes}</p>
             </div>
@@ -1473,7 +1473,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   Silakan centang kotak persetujuan Syarat &amp; Ketentuan di
                   atas terlebih dahulu untuk membuka{' '}
                   <strong className="text-[#F5E6B8]">
-                    Rincian Rekening Resmi, QRIS &amp; International Payment
+                    Rincian Rekening Resmi &amp; Pembayaran
                   </strong>{' '}
                   serta Tombol Konfirmasi Pembayaran.
                 </p>
@@ -1985,14 +1985,21 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
             {/* BOTTOM CONFIRMATION BUTTONS: 2 TOMBOL KONFIRMASI EMAS */}
             <div className="pt-6 border-t border-[#D4AF37]/30 space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                <p className="font-brand text-xs uppercase tracking-[0.18em] text-[#F5E6B8] font-semibold">
+              <div
+                className="flex flex-col items-center justify-center text-center w-full mx-auto gap-2"
+                data-testid="invoice-bottom-confirmation-header"
+              >
+                <p
+                  className="font-brand text-xs uppercase tracking-[0.18em] text-[#F5E6B8] font-semibold text-center w-full mx-auto block"
+                  data-testid="invoice-bottom-confirmation-title"
+                >
                   Sudah Melakukan Pembayaran atau Siap Konfirmasi Pesanan?
                 </p>
                 <button
                   type="button"
                   onClick={() => onOpenOrderTracking(baseInvoice.invoiceId)}
-                  className="text-xs text-[#E5C87E] hover:text-white underline underline-offset-4 cursor-pointer"
+                  className="text-xs text-[#E5C87E] hover:text-white underline underline-offset-4 cursor-pointer text-center w-full mx-auto block"
+                  data-testid="invoice-bottom-tracking-link"
                 >
                   Lacak Status Resi Pengiriman →
                 </button>

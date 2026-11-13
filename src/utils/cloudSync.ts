@@ -2,10 +2,15 @@ import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
 import {
   applyPaymentProofToOrders,
   buildSmartShareUrl,
+  loadDeletedInvoiceIds,
   loadDeletedLeadEmails,
   loadPaymentProofsMap,
+  markInvoiceIdDeleted,
   markLeadEmailDeleted,
+  normalizeInvoiceIdKey,
   reindexVisitorLeads,
+  removePaymentProofRecord,
+  saveDeletedInvoiceIds,
   savePaymentProofRecord,
   unmarkLeadEmailDeleted,
 } from './businessRules';
@@ -321,9 +326,19 @@ export async function sendPaymentProofWebhook(params: {
  */
 export async function saveSharedCloudLeadsAndOrders(
   leads: ConciergeEmailLead[],
-  orders: CustomAdminOrder[]
+  orders: CustomAdminOrder[],
+  explicitDeletedInvoiceIds?: Iterable<string>
 ): Promise<boolean> {
   let anySuccess = false;
+
+  const combinedDeletedInvoiceIds = loadDeletedInvoiceIds();
+  if (explicitDeletedInvoiceIds) {
+    for (const rawId of explicitDeletedInvoiceIds) {
+      const clean = normalizeInvoiceIdKey(rawId);
+      if (clean) combinedDeletedInvoiceIds.add(clean);
+    }
+    saveDeletedInvoiceIds(combinedDeletedInvoiceIds);
+  }
 
   // 1. Fixed KVDB Shared Endpoint (PUT JSON array of leads)
   try {
@@ -340,9 +355,10 @@ export async function saveSharedCloudLeadsAndOrders(
     // Ignore and continue to secondary fixed KV endpoint
   }
 
-  // 2. Fixed RESTful Cloud KV Object Endpoint (PUT full { leads, orders } JSON)
+  // 2. Fixed RESTful Cloud KV Object Endpoint (PUT full { leads, orders, vorvan_deleted_invoice_ids } JSON)
   try {
-    // First pull existing cloud object so an Incognito tab with fresh localStorage never overwrites older cloud leads
+    // First pull existing cloud object so an Incognito tab with fresh localStorage never overwrites older cloud leads,
+    // while strictly enforcing vorvan_deleted_invoice_ids so deleted invoices are permanently purged from Cloud.
     let cloudExistingLeads: ConciergeEmailLead[] = [];
     let cloudExistingOrders: CustomAdminOrder[] = [];
     try {
@@ -355,13 +371,33 @@ export async function saveSharedCloudLeadsAndOrders(
           data?: {
             leads?: ConciergeEmailLead[];
             orders?: CustomAdminOrder[];
+            vorvan_deleted_invoice_ids?: string[];
+            deletedInvoiceIds?: string[];
           };
         };
+        if (Array.isArray(json?.data?.vorvan_deleted_invoice_ids)) {
+          for (const id of json.data.vorvan_deleted_invoice_ids) {
+            const clean = normalizeInvoiceIdKey(id);
+            if (clean) combinedDeletedInvoiceIds.add(clean);
+          }
+        }
+        if (Array.isArray(json?.data?.deletedInvoiceIds)) {
+          for (const id of json.data.deletedInvoiceIds) {
+            const clean = normalizeInvoiceIdKey(id);
+            if (clean) combinedDeletedInvoiceIds.add(clean);
+          }
+        }
+        saveDeletedInvoiceIds(combinedDeletedInvoiceIds);
+
         if (Array.isArray(json?.data?.leads)) {
           cloudExistingLeads = json.data.leads;
         }
         if (Array.isArray(json?.data?.orders)) {
-          cloudExistingOrders = json.data.orders;
+          cloudExistingOrders = json.data.orders.filter(
+            (o) =>
+              o?.invoiceId &&
+              !combinedDeletedInvoiceIds.has(normalizeInvoiceIdKey(o.invoiceId))
+          );
         }
       }
     } catch {
@@ -371,8 +407,14 @@ export async function saveSharedCloudLeadsAndOrders(
     const mergedLeadsPayload = mergeVisitorLeads(cloudExistingLeads, leads);
     const mergedOrdersPayload = mergeCustomAdminOrders(
       cloudExistingOrders,
-      orders
+      orders,
+      combinedDeletedInvoiceIds
+    ).filter(
+      (o) =>
+        o?.invoiceId &&
+        !combinedDeletedInvoiceIds.has(normalizeInvoiceIdKey(o.invoiceId))
     );
+    const deletedIdsArray = Array.from(combinedDeletedInvoiceIds);
 
     const putRes = await fetch(VORVAN_RESTFUL_KV_URL, {
       method: 'PUT',
@@ -385,6 +427,8 @@ export async function saveSharedCloudLeadsAndOrders(
         data: {
           leads: mergedLeadsPayload,
           orders: mergedOrdersPayload,
+          vorvan_deleted_invoice_ids: deletedIdsArray,
+          deletedInvoiceIds: deletedIdsArray,
           updatedAt: new Date().toISOString(),
         },
       }),
@@ -467,7 +511,7 @@ export async function pullCloudVaultState(): Promise<{
 } | null> {
   const leadsByEmail = new Map<string, ConciergeEmailLead>();
   const ordersById = new Map<string, CustomAdminOrder>();
-  const deletedInvoiceIds = new Set<string>();
+  const deletedInvoiceIds = loadDeletedInvoiceIds();
   const deletedLeadEmails = loadDeletedLeadEmails();
   const proofsByInv = new Map<
     string,
@@ -516,10 +560,32 @@ export async function pullCloudVaultState(): Promise<{
         data?: {
           leads?: ConciergeEmailLead[];
           orders?: CustomAdminOrder[];
+          vorvan_deleted_invoice_ids?: string[];
+          deletedInvoiceIds?: string[];
         };
       };
       if (restJson?.data) {
         fetchedAny = true;
+        if (Array.isArray(restJson.data.vorvan_deleted_invoice_ids)) {
+          for (const rawId of restJson.data.vorvan_deleted_invoice_ids) {
+            const clean = normalizeInvoiceIdKey(rawId);
+            if (clean) {
+              deletedInvoiceIds.add(clean);
+              markInvoiceIdDeleted(clean);
+              removePaymentProofRecord(clean);
+            }
+          }
+        }
+        if (Array.isArray(restJson.data.deletedInvoiceIds)) {
+          for (const rawId of restJson.data.deletedInvoiceIds) {
+            const clean = normalizeInvoiceIdKey(rawId);
+            if (clean) {
+              deletedInvoiceIds.add(clean);
+              markInvoiceIdDeleted(clean);
+              removePaymentProofRecord(clean);
+            }
+          }
+        }
         if (Array.isArray(restJson.data.leads)) {
           for (const lead of restJson.data.leads) {
             registerLead(lead);
@@ -528,7 +594,8 @@ export async function pullCloudVaultState(): Promise<{
         if (Array.isArray(restJson.data.orders)) {
           for (const ord of restJson.data.orders) {
             if (ord?.invoiceId) {
-              const invKey = ord.invoiceId.trim().toUpperCase();
+              const invKey = normalizeInvoiceIdKey(ord.invoiceId);
+              if (!invKey || deletedInvoiceIds.has(invKey)) continue;
               const proofImg = ord.paymentProof || ord.paymentProofUrl;
               if (proofImg) {
                 proofsByInv.set(invKey, {
@@ -571,6 +638,11 @@ export async function pullCloudVaultState(): Promise<{
         .filter(Boolean);
 
       const streamLeads: ConciergeEmailLead[] = [];
+      const streamUpsertOrders: CustomAdminOrder[] = [];
+      const streamStatusUpdates: {
+        invoiceId: string;
+        status: 'PENDING_PAYMENT' | 'PAID';
+      }[] = [];
       const chunkCollector = new Map<
         string,
         {
@@ -580,6 +652,34 @@ export async function pullCloudVaultState(): Promise<{
         }
       >();
 
+      // Pass 1: Collect all delete tombstones first so deleted invoices are never resurrected by older stream packets
+      for (const line of lines) {
+        try {
+          const outer = JSON.parse(line) as {
+            event?: string;
+            message?: string;
+          };
+          if (outer.event !== 'message' || !outer.message) continue;
+          const packet = JSON.parse(outer.message) as CloudVaultPacket;
+          if (!packet || typeof packet !== 'object' || !('kind' in packet)) {
+            continue;
+          }
+          if (packet.kind === 'VORVAN_ORDER_DELETE' && packet.invoiceId) {
+            const invKey = normalizeInvoiceIdKey(packet.invoiceId);
+            if (invKey) {
+              deletedInvoiceIds.add(invKey);
+              markInvoiceIdDeleted(invKey);
+              removePaymentProofRecord(invKey);
+              ordersById.delete(invKey);
+              proofsByInv.delete(invKey);
+            }
+          }
+        } catch {
+          // Ignore malformed lines
+        }
+      }
+
+      // Pass 2: Process remaining stream packets while strictly filtering out deletedInvoiceIds
       for (const line of lines) {
         try {
           const outer = JSON.parse(line) as {
@@ -612,51 +712,38 @@ export async function pullCloudVaultState(): Promise<{
             packet.kind === 'VORVAN_ORDER_UPSERT' &&
             packet.order?.invoiceId
           ) {
-            const invKey = packet.order.invoiceId.trim().toUpperCase();
-            deletedInvoiceIds.delete(invKey);
-            const existing = ordersById.get(invKey);
-            const proofImg =
-              packet.order.paymentProof ||
-              packet.order.paymentProofUrl ||
-              existing?.paymentProof ||
-              existing?.paymentProofUrl;
-            ordersById.set(invKey, {
-              ...packet.order,
-              status:
-                proofImg || existing?.status === 'PAID'
-                  ? 'PAID'
-                  : packet.order.status,
-              paymentProof: proofImg,
-              paymentProofUrl: proofImg,
-              paymentProofUploadedAt:
-                packet.order.paymentProofUploadedAt ||
-                existing?.paymentProofUploadedAt,
-            });
+            const invKey = normalizeInvoiceIdKey(packet.order.invoiceId);
+            if (!invKey || deletedInvoiceIds.has(invKey)) continue;
+            streamUpsertOrders.push(packet.order);
           } else if (
             packet.kind === 'VORVAN_ORDER_STATUS' &&
             packet.invoiceId
           ) {
-            const invKey = packet.invoiceId.trim().toUpperCase();
-            const existing = ordersById.get(invKey);
-            if (existing) {
-              ordersById.set(invKey, {
-                ...existing,
-                status: packet.status,
-              });
-            }
+            const invKey = normalizeInvoiceIdKey(packet.invoiceId);
+            if (!invKey || deletedInvoiceIds.has(invKey)) continue;
+            streamStatusUpdates.push({
+              invoiceId: invKey,
+              status: packet.status,
+            });
           } else if (
             packet.kind === 'VORVAN_ORDER_DELETE' &&
             packet.invoiceId
           ) {
-            const invKey = packet.invoiceId.trim().toUpperCase();
-            deletedInvoiceIds.add(invKey);
-            ordersById.delete(invKey);
+            const invKey = normalizeInvoiceIdKey(packet.invoiceId);
+            if (invKey) {
+              deletedInvoiceIds.add(invKey);
+              markInvoiceIdDeleted(invKey);
+              removePaymentProofRecord(invKey);
+              ordersById.delete(invKey);
+              proofsByInv.delete(invKey);
+            }
           } else if (
             packet.kind === 'VORVAN_PAYMENT_PROOF' &&
             packet.invoiceId &&
             packet.paymentProofUrl
           ) {
-            const invKey = packet.invoiceId.trim().toUpperCase();
+            const invKey = normalizeInvoiceIdKey(packet.invoiceId);
+            if (!invKey || deletedInvoiceIds.has(invKey)) continue;
             proofsByInv.set(invKey, {
               proofUrl: packet.paymentProofUrl,
               uploadedAt: packet.uploadedAt,
@@ -672,7 +759,9 @@ export async function pullCloudVaultState(): Promise<{
             typeof packet.chunkIndex === 'number' &&
             typeof packet.totalChunks === 'number'
           ) {
-            const key = `${packet.invoiceId.trim().toUpperCase()}__${packet.ts}`;
+            const invKey = normalizeInvoiceIdKey(packet.invoiceId);
+            if (!invKey || deletedInvoiceIds.has(invKey)) continue;
+            const key = `${invKey}__${packet.ts}`;
             const entry = chunkCollector.get(key) || {
               totalChunks: packet.totalChunks,
               uploadedAt: packet.uploadedAt,
@@ -685,7 +774,6 @@ export async function pullCloudVaultState(): Promise<{
               for (let i = 0; i < entry.totalChunks; i++) {
                 fullProof += entry.chunks.get(i) || '';
               }
-              const invKey = packet.invoiceId.trim().toUpperCase();
               proofsByInv.set(invKey, {
                 proofUrl: fullProof,
                 uploadedAt: entry.uploadedAt,
@@ -695,6 +783,37 @@ export async function pullCloudVaultState(): Promise<{
           }
         } catch {
           // Ignore malformed lines
+        }
+      }
+
+      for (const ord of streamUpsertOrders) {
+        const invKey = normalizeInvoiceIdKey(ord.invoiceId);
+        if (!invKey || deletedInvoiceIds.has(invKey)) continue;
+        const existing = ordersById.get(invKey);
+        const proofImg =
+          ord.paymentProof ||
+          ord.paymentProofUrl ||
+          existing?.paymentProof ||
+          existing?.paymentProofUrl;
+        ordersById.set(invKey, {
+          ...ord,
+          status:
+            proofImg || existing?.status === 'PAID' ? 'PAID' : ord.status,
+          paymentProof: proofImg,
+          paymentProofUrl: proofImg,
+          paymentProofUploadedAt:
+            ord.paymentProofUploadedAt || existing?.paymentProofUploadedAt,
+        });
+      }
+
+      for (const st of streamStatusUpdates) {
+        if (deletedInvoiceIds.has(st.invoiceId)) continue;
+        const existing = ordersById.get(st.invoiceId);
+        if (existing) {
+          ordersById.set(st.invoiceId, {
+            ...existing,
+            status: st.status,
+          });
         }
       }
 
@@ -711,10 +830,17 @@ export async function pullCloudVaultState(): Promise<{
     // Ignore stream fetch error
   }
 
+  saveDeletedInvoiceIds(deletedInvoiceIds);
+
   if (!fetchedAny) return null;
 
-  let currentOrders = Array.from(ordersById.values());
+  let currentOrders = Array.from(ordersById.values()).filter(
+    (ord) =>
+      ord?.invoiceId &&
+      !deletedInvoiceIds.has(normalizeInvoiceIdKey(ord.invoiceId))
+  );
   for (const [invKey, proofData] of proofsByInv.entries()) {
+    if (deletedInvoiceIds.has(invKey)) continue;
     const applied = applyPaymentProofToOrders(
       currentOrders,
       invKey,
@@ -748,29 +874,36 @@ export function mergeVisitorLeads(
 }
 
 /**
- * Merges locally stored custom admin orders with cloud-synced orders without duplicates.
+ * Merges locally stored custom admin orders with cloud-synced orders without duplicates,
+ * strictly filtering out any invoice ID present in `vorvan_deleted_invoice_ids` or `deletedInvoiceIds`.
  * Automatically promotes status to PAID and attaches paymentProof whenever a proof exists
  * in local orders, cloud orders, or paymentProofsMap.
  */
 export function mergeCustomAdminOrders(
   localOrders: CustomAdminOrder[],
   cloudOrders: CustomAdminOrder[],
-  deletedInvoiceIds: Set<string> = new Set()
+  deletedInvoiceIds: Set<string> = loadDeletedInvoiceIds()
 ): CustomAdminOrder[] {
+  const effectiveDeletedIds = loadDeletedInvoiceIds();
+  for (const rawId of deletedInvoiceIds) {
+    const clean = normalizeInvoiceIdKey(rawId);
+    if (clean) effectiveDeletedIds.add(clean);
+  }
+
   const byInvoiceId = new Map<string, CustomAdminOrder>();
 
   for (const ord of localOrders) {
     if (!ord?.invoiceId) continue;
-    const key = ord.invoiceId.trim().toUpperCase();
-    if (!deletedInvoiceIds.has(key)) {
+    const key = normalizeInvoiceIdKey(ord.invoiceId);
+    if (key && !effectiveDeletedIds.has(key)) {
       byInvoiceId.set(key, ord);
     }
   }
 
   for (const ord of cloudOrders) {
     if (!ord?.invoiceId) continue;
-    const key = ord.invoiceId.trim().toUpperCase();
-    if (!deletedInvoiceIds.has(key)) {
+    const key = normalizeInvoiceIdKey(ord.invoiceId);
+    if (key && !effectiveDeletedIds.has(key)) {
       const local = byInvoiceId.get(key);
       if (local) {
         const mergedProof =
@@ -794,6 +927,9 @@ export function mergeCustomAdminOrders(
         byInvoiceId.set(key, {
           ...local,
           ...ord,
+          resiInputAt: ord.resiInputAt ?? local.resiInputAt,
+          shippingStageOverride:
+            ord.shippingStageOverride ?? local.shippingStageOverride,
           paymentProof: mergedProof,
           paymentProofUrl: mergedProof,
           paymentProofUploadedAt:
@@ -820,10 +956,12 @@ export function mergeCustomAdminOrders(
   // Also apply any proofs stored in local/memory paymentProofsMap
   const proofsMap = loadPaymentProofsMap();
   for (const [invKey, record] of Object.entries(proofsMap)) {
+    const cleanKey = normalizeInvoiceIdKey(invKey);
+    if (effectiveDeletedIds.has(cleanKey)) continue;
     if (record?.proofUrl) {
       const res = applyPaymentProofToOrders(
         mergedList,
-        invKey,
+        cleanKey,
         record.proofUrl,
         record.uploadedAt
       );

@@ -281,7 +281,9 @@ export interface CustomAdminOrder {
   shippingMethod: ShippingMethodType;
   isCOD?: boolean;
   awbNumber: string;
+  resiInputAt?: number;
   shippingStage?: 1 | 2 | 3 | 4;
+  shippingStageOverride?: 'AUTO' | 1 | 2 | 3 | 4;
   status: 'PENDING_PAYMENT' | 'PAID';
   buyerEmail?: string;
   buyerPhone?: string;

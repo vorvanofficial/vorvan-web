@@ -308,7 +308,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       deadlineTitle:
         'Batas Waktu Pelaporan Klaim: Maksimal 1×24 Jam Sejak Status Resi “Delivered”',
       deadlineDesc:
-        'Kirimkan video unboxing utuh beserta foto kode segel hologram Vault langsung ke WhatsApp Concierge VORVAN.',
+        'Kirimkan video unboxing utuh beserta foto Kartu Sertifikat Kurasi & Garansi Resmi (Official Curation & Warranty Card · Concierge Support Card) langsung ke WhatsApp Concierge VORVAN.',
       understandBtn: 'Saya Memahami Ketentuan Ini',
       clauses: [
         {
@@ -504,7 +504,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       deadlineTitle:
         'Claim Reporting Window: Maximum 1×24 Hours After “Delivered” Status',
       deadlineDesc:
-        'Submit your uncut unboxing video along with a photo of the Vault hologram seal code directly to VORVAN WhatsApp Concierge.',
+        'Submit your uncut unboxing video along with a photo of the Official Curation & Warranty Card (Concierge Support Card) directly to VORVAN WhatsApp Concierge.',
       understandBtn: 'I Acknowledge This Charter',
       clauses: [
         {
@@ -517,7 +517,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
           number: '02',
           title: 'Mandatory Continuous Uncut Unboxing Video',
           description:
-            'Every claim MUST include a single continuous, unedited unboxing video starting from the sealed courier parcel showing the waybill, VORVAN hologram seal, and first spray test.',
+            'Every claim MUST include a single continuous, unedited unboxing video starting from the sealed courier parcel showing the waybill, Official Curation & Warranty Card, and first spray test.',
         },
         {
           number: '03',
@@ -700,7 +700,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       deadlineTitle:
         'Délai de Déclaration : Maximum 24 Heures Après Réception',
       deadlineDesc:
-        'Transmettez votre vidéo d’ouverture continue sans coupure ainsi que le code scellé hologramme à notre Conciergerie WhatsApp.',
+        'Transmettez votre vidéo d’ouverture continue sans coupure ainsi que la Carte Officielle de Curation & Garantie (Official Curation & Warranty Card) à notre Conciergerie WhatsApp.',
       understandBtn: 'J’Accepte cette Charte',
       clauses: [
         {
@@ -896,7 +896,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       deadlineTitle:
         'المهلة القصوى للإبلاغ: 24 ساعة من حالة "تم التسليم"',
       deadlineDesc:
-        'يرجى إرسال فيديو فتح الصندوق كاملاً دون تقطيع مع صورة ختم الهولوغرام إلى واتساب VORVAN.',
+        'يرجى إرسال فيديو فتح الصندوق كاملاً دون تقطيع مع صورة بطاقة الانتقاء والضمان الرسمية (Official Curation & Warranty Card) إلى واتساب VORVAN.',
       understandBtn: 'أوافق على هذه الشروط',
       clauses: [
         {
@@ -1088,7 +1088,7 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       clausePrefix: '条款',
       deadlineTitle: '理赔申报时效：物流显示“已签收”后 24 小时内',
       deadlineDesc:
-        '请将完整无剪辑的开箱视频及金库全息质量封条照片发送至 VORVAN WhatsApp 礼宾部。',
+        '请将完整无剪辑的开箱视频及官方甄选与保修证书卡 (Official Curation & Warranty Card) 照片发送至 VORVAN WhatsApp 礼宾部。',
       understandBtn: '我已阅读并同意上述条款',
       clauses: [
         {

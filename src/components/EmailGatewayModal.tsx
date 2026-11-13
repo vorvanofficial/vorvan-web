@@ -241,7 +241,10 @@ interface AdminEmailRegistryModalProps {
   onClose: () => void;
   onUpdateSettings: (nextSettings: VorvanSiteSettings) => void;
   onCreateCustomOrder: (newOrder: CustomAdminOrder) => void;
-  onUpdateCustomOrderStage: (invoiceId: string, stage: 1 | 2 | 3 | 4) => void;
+  onUpdateCustomOrderStage: (
+    invoiceId: string,
+    stage: 'AUTO' | 1 | 2 | 3 | 4
+  ) => void;
   onUpdateCustomOrderStatus: (
     invoiceId: string,
     status: 'PENDING_PAYMENT' | 'PAID'
@@ -249,7 +252,8 @@ interface AdminEmailRegistryModalProps {
   onUpdateCustomOrderResi?: (
     invoiceId: string,
     shippingMethod: ShippingMethodType,
-    awbNumber: string
+    awbNumber: string,
+    stageOverride?: 'AUTO' | 1 | 2 | 3 | 4
   ) => void;
   onUpdateCustomOrderPricing?: (updatedOrder: CustomAdminOrder) => void;
   onDeleteCustomOrder: (invoiceId: string) => void;
@@ -355,6 +359,9 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
   const [editCourierMethod, setEditCourierMethod] =
     useState<ShippingMethodType>('JNE');
   const [editAwbInput, setEditAwbInput] = useState<string>('');
+  const [editStageOverride, setEditStageOverride] = useState<
+    'AUTO' | 1 | 2 | 3 | 4
+  >('AUTO');
 
   // Tab 2: Settings form state
   const [formSettings, setFormSettings] = useState<VorvanSiteSettings>(settings);
@@ -770,7 +777,9 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
       shippingMethod,
       isCOD: isCodOrder,
       awbNumber: cleanAwb,
-      shippingStage: isCodOrder ? 2 : cleanAwb ? 2 : 1,
+      resiInputAt: !isCodOrder && cleanAwb ? now.getTime() : undefined,
+      shippingStage: isCodOrder ? 3 : cleanAwb ? 3 : 1,
+      shippingStageOverride: 'AUTO',
       status: 'PENDING_PAYMENT',
       paymentProof: null,
       paymentProofUrl: null,
@@ -2876,17 +2885,50 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                     </div>
                                     {isCod ? (
                                       <div className="px-2 py-1 rounded bg-amber-950/70 border border-[#D4AF37]/60 text-[10px] font-semibold text-[#F5E6B8] leading-snug">
-                                        {COD_FACE_TO_FACE_STATUS_LABEL}
+                                        {COD_FACE_TO_FACE_STATUS_LABEL} · AUTO TAHAP {autoStage}/4
                                       </div>
-                                    ) : !hasAwb ? (
+                                    ) : !hasAwb && autoStage < 4 ? (
                                       <div className="px-2 py-1 rounded bg-amber-950/60 border border-amber-500/50 text-[10px] font-semibold text-amber-300 leading-snug">
                                         {PENDING_AWB_STATUS_LABEL}
                                       </div>
                                     ) : (
                                       <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-mono-tabular text-emerald-300">
                                         <span>
-                                          ● AUTO TAHAP {autoStage}/4 (RESI: {effectiveOrder.awbNumber})
+                                          ● AUTO TAHAP {autoStage}/4 (RESI: {effectiveOrder.awbNumber || ord.invoiceId})
                                         </span>
+                                      </div>
+                                    )}
+                                    {onUpdateCustomOrderStage && (
+                                      <div
+                                        className="pt-2"
+                                        data-testid={`admin-stage-confirm-box-${ord.invoiceId}`}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            onUpdateCustomOrderStage(ord.invoiceId, 4);
+                                            if (
+                                              createdOrderResult &&
+                                              createdOrderResult.invoiceId.toUpperCase() ===
+                                                ord.invoiceId.toUpperCase()
+                                            ) {
+                                              setCreatedOrderResult({
+                                                ...createdOrderResult,
+                                                shippingStage: 4,
+                                                shippingStageOverride: 4,
+                                                status: 'PAID',
+                                              });
+                                            }
+                                          }}
+                                          className={`w-full sm:w-auto px-3.5 py-2 rounded-xl text-[10px] sm:text-[11px] font-brand font-bold uppercase tracking-wider transition-all border cursor-pointer ${
+                                            autoStage === 4
+                                              ? 'btn-luxury-gold text-zinc-950 border-[#F5E6B8] shadow-[0_0_18px_rgba(212,175,55,0.45)]'
+                                              : 'bg-gradient-to-r from-[#1A160B] via-[#261F0E] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] text-[#F5E6B8] hover:text-zinc-950 border-[#D4AF37]/80 shadow-md'
+                                          }`}
+                                          data-testid={`btn-confirm-stage4-${ord.invoiceId}`}
+                                        >
+                                          [ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]
+                                        </button>
                                       </div>
                                     )}
                                   </div>
@@ -3013,6 +3055,9 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                 );
                                 setEditAwbInput(
                                   isCod ? '' : effectiveOrder.awbNumber || ''
+                                );
+                                setEditStageOverride(
+                                  effectiveOrder.shippingStageOverride || 'AUTO'
                                 );
                               }}
                               data-testid={`admin-edit-resi-btn-${ord.invoiceId}`}
@@ -3563,8 +3608,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                     <span className="text-amber-300 font-semibold">
                       &quot;{PENDING_AWB_STATUS_LABEL}&quot;
                     </span>
-                    . Begitu Nomor Resi diisi dan disimpan, pelacakan perjalanan paket di halaman{' '}
-                    <strong className="text-[#F5E6B8]">CEK RESI</strong> langsung aktif otomatis.
+                    . Begitu Nomor Resi diisi dan disimpan, Tahap 1, Tahap 2, dan Tahap 3 (Dalam Perjalanan menuju Kota Tujuan) langsung menyala otomatis di halaman CEK RESI.
                   </p>
                 </div>
               )}
@@ -3598,6 +3642,16 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                       ...createdOrderResult,
                       shippingMethod: editCourierMethod,
                       awbNumber: cleanAwb,
+                      resiInputAt:
+                        !isCodShippingMethod(editCourierMethod) && cleanAwb
+                          ? editingResiOrder.resiInputAt || Date.now()
+                          : undefined,
+                      shippingStage:
+                        editingResiOrder.shippingStage === 4
+                          ? 4
+                          : isCodShippingMethod(editCourierMethod) || cleanAwb
+                          ? 3
+                          : 1,
                       trackingId: cleanAwb || editingResiOrder.invoiceId,
                     });
                   }

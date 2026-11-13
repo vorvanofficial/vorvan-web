@@ -3151,7 +3151,7 @@ export const PRIVATE_INVOICES_SEED: Record<string, PrivateInvoice> = {
     shippingInsuranceIDR: 45000,
     woodenCratePackagingIDR: 0,
     notes:
-      'Tagihan resmi Private Fragrance Curation VORVAN. Unit lolos inspeksi fisik Direct International Curation Eropa, segel hologram Vault, serta perlindungan klaim video unboxing utuh.',
+      'Tagihan resmi Private Fragrance Curation VORVAN. Unit lolos inspeksi fisik Direct International Curation Eropa, Kartu Sertifikat Kurasi & Garansi Resmi (Official Curation & Warranty Card · Concierge Support Card), serta perlindungan klaim video unboxing utuh.',
     items: [
       {
         sku: 'VRV-036',

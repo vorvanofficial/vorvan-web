@@ -217,16 +217,135 @@ export function saveVorvanSettings(settings: VorvanSiteSettings): void {
   }
 }
 
-export function loadCustomAdminOrders(): CustomAdminOrder[] {
+export const VORVAN_DELETED_INVOICES_STORAGE_KEY = 'vorvan_deleted_invoice_ids';
+
+const memoryDeletedInvoiceIds = new Set<string>();
+
+function getLocalStorageHelper(): Storage | null {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
-      const raw = window.localStorage.getItem(VORVAN_CUSTOM_ORDERS_STORAGE_KEY);
+      return window.localStorage;
+    }
+    if (typeof localStorage !== 'undefined' && localStorage) {
+      return localStorage;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+export function normalizeInvoiceIdKey(invoiceId: string): string {
+  return (invoiceId || '').trim().replace(/^#+/, '').toUpperCase();
+}
+
+export function loadDeletedInvoiceIds(): Set<string> {
+  const result = new Set<string>(memoryDeletedInvoiceIds);
+  try {
+    const storage = getLocalStorageHelper();
+    if (storage) {
+      const raw = storage.getItem(VORVAN_DELETED_INVOICES_STORAGE_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw) as string[];
+        if (Array.isArray(arr)) {
+          for (const id of arr) {
+            if (typeof id === 'string') {
+              const clean = normalizeInvoiceIdKey(id);
+              if (clean) {
+                result.add(clean);
+                memoryDeletedInvoiceIds.add(clean);
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return result;
+}
+
+export function saveDeletedInvoiceIds(ids: Iterable<string>): Set<string> {
+  const merged = loadDeletedInvoiceIds();
+  for (const id of ids) {
+    if (typeof id === 'string') {
+      const clean = normalizeInvoiceIdKey(id);
+      if (clean) {
+        merged.add(clean);
+        memoryDeletedInvoiceIds.add(clean);
+      }
+    }
+  }
+  try {
+    const storage = getLocalStorageHelper();
+    if (storage) {
+      storage.setItem(
+        VORVAN_DELETED_INVOICES_STORAGE_KEY,
+        JSON.stringify(Array.from(merged))
+      );
+    }
+  } catch {
+    // ignore
+  }
+  return merged;
+}
+
+export function markInvoiceIdDeleted(invoiceId: string): Set<string> {
+  const clean = normalizeInvoiceIdKey(invoiceId);
+  if (!clean) return loadDeletedInvoiceIds();
+  memoryDeletedInvoiceIds.add(clean);
+  return saveDeletedInvoiceIds([clean]);
+}
+
+export function unmarkInvoiceIdDeleted(invoiceId: string): Set<string> {
+  const clean = normalizeInvoiceIdKey(invoiceId);
+  if (!clean) return loadDeletedInvoiceIds();
+  memoryDeletedInvoiceIds.delete(clean);
+  const current = loadDeletedInvoiceIds();
+  current.delete(clean);
+  try {
+    const storage = getLocalStorageHelper();
+    if (storage) {
+      storage.setItem(
+        VORVAN_DELETED_INVOICES_STORAGE_KEY,
+        JSON.stringify(Array.from(current))
+      );
+    }
+  } catch {
+    // ignore
+  }
+  return current;
+}
+
+export function clearDeletedInvoiceIdsForTest(): void {
+  memoryDeletedInvoiceIds.clear();
+  try {
+    const storage = getLocalStorageHelper();
+    if (storage) {
+      storage.removeItem(VORVAN_DELETED_INVOICES_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function loadCustomAdminOrders(): CustomAdminOrder[] {
+  try {
+    const storage = getLocalStorageHelper();
+    if (storage) {
+      const raw = storage.getItem(VORVAN_CUSTOM_ORDERS_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
+          const deletedIds = loadDeletedInvoiceIds();
           const proofsMap = loadPaymentProofsMap();
-          return (parsed as CustomAdminOrder[]).map((o) => {
-            const invKey = (o.invoiceId || '').trim().toUpperCase();
+          const filtered = (parsed as CustomAdminOrder[]).filter((o) => {
+            const invKey = normalizeInvoiceIdKey(o?.invoiceId || '');
+            return Boolean(invKey) && !deletedIds.has(invKey);
+          });
+          return filtered.map((o) => {
+            const invKey = normalizeInvoiceIdKey(o.invoiceId);
             const storedProof = proofsMap[invKey];
             const proofImg =
               o.paymentProof || o.paymentProofUrl || storedProof?.proofUrl;
@@ -257,10 +376,16 @@ export function loadCustomAdminOrders(): CustomAdminOrder[] {
 
 export function saveCustomAdminOrders(orders: CustomAdminOrder[]): void {
   try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(
+    const storage = getLocalStorageHelper();
+    if (storage) {
+      const deletedIds = loadDeletedInvoiceIds();
+      const cleanOrders = (orders || []).filter((o) => {
+        const invKey = normalizeInvoiceIdKey(o?.invoiceId || '');
+        return Boolean(invKey) && !deletedIds.has(invKey);
+      });
+      storage.setItem(
         VORVAN_CUSTOM_ORDERS_STORAGE_KEY,
-        JSON.stringify(orders)
+        JSON.stringify(cleanOrders)
       );
     }
   } catch {
@@ -1080,7 +1205,7 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
   const buyer = sanitize(order.buyerName);
   const city = sanitize(order.buyerCity);
 
-  const compactPipe = [
+  const pipeFields = [
     invShort,
     fragField,
     priceField,
@@ -1091,9 +1216,20 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
     city,
     sanitize(order.buyerEmail || ''),
     sanitize(order.buyerPhone || ''),
-  ].join('|');
+  ];
 
-  return toBase64Url(compactPipe);
+  const hasResiTs =
+    typeof order.resiInputAt === 'number' && order.resiInputAt > 0;
+  const hasOverride =
+    order.shippingStageOverride && order.shippingStageOverride !== 'AUTO';
+
+  if (hasResiTs || hasOverride) {
+    const resiB36 = hasResiTs ? Math.round(order.resiInputAt!).toString(36) : '';
+    const overrideCode = hasOverride ? String(order.shippingStageOverride) : '';
+    pipeFields.push(overrideCode ? `${resiB36}:${overrideCode}` : resiB36);
+  }
+
+  return toBase64Url(pipeFields.join('|'));
 }
 
 export const STORAGE_CHEATSHEET_DISCOUNTS_KEY =
@@ -1390,6 +1526,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             rawCity = 'Indonesia',
             rawEmail = '',
             rawPhone = '',
+            rawResiMeta = '',
           ] = parts;
 
           const invTrim = (rawInvShort || '').trim().toUpperCase();
@@ -1500,6 +1637,28 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
                   )
                 );
 
+          let decodedResiInputAt: number | undefined;
+          let decodedStageOverride: 'AUTO' | 1 | 2 | 3 | 4 | undefined;
+          if (rawResiMeta && rawResiMeta.trim()) {
+            const [resiB36Part, overridePart] = rawResiMeta.trim().split(':');
+            if (resiB36Part) {
+              const parsedMs = parseInt(resiB36Part, 36);
+              if (Number.isFinite(parsedMs) && parsedMs > 0) {
+                decodedResiInputAt = parsedMs;
+              }
+            }
+            if (
+              overridePart === '1' ||
+              overridePart === '2' ||
+              overridePart === '3' ||
+              overridePart === '4'
+            ) {
+              decodedStageOverride = Number(overridePart) as 1 | 2 | 3 | 4;
+            } else if (overridePart === 'AUTO') {
+              decodedStageOverride = 'AUTO';
+            }
+          }
+
           return {
             invoiceId,
             trackingId: awbNumber || invoiceId,
@@ -1523,6 +1682,8 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             shippingMethod,
             isCOD: isCod,
             awbNumber,
+            resiInputAt: decodedResiInputAt,
+            shippingStageOverride: decodedStageOverride,
             status,
           };
         }
@@ -2084,57 +2245,96 @@ function formatWibDateTimeFromMs(timestampMs: number): string {
 }
 
 /**
- * Automatically computes the current shipping stage (1..4) based on elapsed time
- * since the AWB/order was issued by Admin — zero manual editing required.
- * Before AWB is filled (for non-COD orders), stays at Stage 1 (Menunggu Pembayaran / Sedang Dikemas).
+ * Detects whether a buyer's destination city/address is on Java island (Pulau Jawa — 48h Stage 4 threshold)
+ * vs Outside Java (Luar Jawa — 72h Stage 4 threshold).
+ */
+export function isJavaDestinationCity(addressText: string): boolean {
+  const txt = (addressText || '').toLowerCase().trim();
+  if (!txt) return true;
+  if (
+    /bali|denpasar|badung|gianyar|tabanan|buleleng|lombok|mataram|bima|sumbawa|ntb|ntt|kupang|labuan bajo|sumatera|sumatra|medan|palembang|lampung|bandar lampung|pekanbaru|batam|padang|bukittinggi|aceh|banda aceh|jambi|bengkulu|bangka|belitung|pangkalpinang|riau|tanjungpinang|kalimantan|pontianak|singkawang|balikpapan|samarinda|bontang|banjarmasin|banjarbaru|palangkaraya|tarakan|sulawesi|makassar|manado|bitung|palu|kendari|baubau|gorontalo|mamuju|parepare|maluku|ambon|ternate|tidore|papua|jayapura|sorong|merauke|timika|biak|manokwari|luar jawa/.test(
+      txt
+    )
+  ) {
+    return false;
+  }
+  const zone = autoDetectShippingZoneByCity(txt);
+  if (
+    zone &&
+    (zone.zoneKey === 'ZONA_2' ||
+      zone.zoneKey === 'ZONA_3' ||
+      zone.zoneKey === 'ZONA_4')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Automatically computes the current shipping stage (1..4):
+ * - If Admin confirmed package arrival (`shippingStage === 4` or `shippingStageOverride === 4`): Stage 4 (Paket Telah Diterima oleh Pembeli).
+ * - Khusus Pesanan COD (`COD / VIP Hand-Delivery`): Begitu Invoice COD diterbitkan, tanpa perlu input nomor resi dan tanpa perlu klik tombol apa pun, Tahap 1, Tahap 2, dan Tahap 3 langsung menyala otomatis (`stage = 3`).
+ * - Khusus Pesanan Ekspedisi Reguler (JNE / J&T / Paxel / SiCepat / Pos / Anteraja):
+ *   • Sebelum Nomor Resi diinput: Hanya Tahap 1 yang menyala (`stage = 1`).
+ *   • Begitu Admin menginput Nomor Resi: Tahap 1, Tahap 2, dan Tahap 3 (Dalam Perjalanan menuju Kota Tujuan) langsung menyala otomatis (`stage = 3`).
  */
 export function computeAutoShippingStage(
   order: CustomAdminOrder,
   nowMs: number = Date.now()
 ): 1 | 2 | 3 | 4 {
-  if (isCodShippingMethod(order.shippingMethod, order.awbNumber)) {
-    return order.status === 'PAID' || order.paymentProof ? 3 : 2;
+  void nowMs;
+  if (
+    order.shippingStageOverride === 4 ||
+    order.shippingStage === 4
+  ) {
+    return 4;
+  }
+
+  if (
+    order.shippingStageOverride &&
+    order.shippingStageOverride !== 'AUTO'
+  ) {
+    return order.shippingStageOverride;
+  }
+
+  const isCod =
+    typeof order.isCOD === 'boolean'
+      ? order.isCOD
+      : isCodShippingMethod(order.shippingMethod, order.awbNumber);
+
+  if (isCod) {
+    return 3;
   }
 
   if (!hasValidCourierAwb(order)) {
     return 1;
   }
 
-  const issuedAtMs = order.createdAtTimestampMs || nowMs;
-  const elapsedMinutes = Math.max(0, (nowMs - issuedAtMs) / 60000);
-
-  let autoStage: 1 | 2 | 3 | 4 = 2;
-  if (elapsedMinutes >= 180) {
-    autoStage = 4;
-  } else if (elapsedMinutes >= 15) {
-    autoStage = 3;
-  } else {
-    autoStage = 2;
-  }
-
-  if (order.shippingStage && order.shippingStage > autoStage) {
-    return order.shippingStage;
-  }
-  return autoStage;
+  return 3;
 }
 
 export function buildTrackingFromCustomOrder(
   order: CustomAdminOrder,
   nowMs: number = Date.now()
 ): TrackingRecord {
-  const isCod = isCodShippingMethod(order.shippingMethod, order.awbNumber);
+  const isCod =
+    typeof order.isCOD === 'boolean'
+      ? order.isCOD
+      : isCodShippingMethod(order.shippingMethod, order.awbNumber);
   const hasAwb = hasValidCourierAwb(order);
   const stage = computeAutoShippingStage(order, nowMs);
   const courierMeta = resolveCourierMetadata(
     order.shippingMethod,
     order.awbNumber
   );
-  const baseMs = order.createdAtTimestampMs || nowMs;
+  const baseMs = order.createdAtTimestampMs || order.resiInputAt || nowMs;
+  const resiBaseMs = order.resiInputAt || order.createdAtTimestampMs || nowMs;
   const tStage1 = order.createdAtTimestampMs
     ? formatWibDateTimeFromMs(baseMs)
     : order.createdAt;
 
-  // 1. Dedicated Face-to-Face COD Hand-Delivery Logic (No Expedition AWB)
+  // 1. Dedicated Face-to-Face COD / VIP Hand-Delivery Logic (No Expedition AWB)
+  // Stages 1, 2, and 3 light up automatically upon COD invoice creation; Stage 4 lights up when Admin confirms delivery.
   if (isCod) {
     const codMilestones: TrackingMilestone[] = [
       {
@@ -2142,27 +2342,35 @@ export function buildTrackingFromCustomOrder(
         location: 'VORVAN Climate-Controlled Vault',
         title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Fungsi Sprayer)',
         detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) telah melewati pemeriksaan fisik botol kaca, inspeksi kualitas segel Vault berlapis, dan tekanan sprayer untuk penyerahan tatap muka.`,
-        completed: true,
-        current: false,
+        completed: stage >= 1,
+        current: stage === 1,
+      },
+      {
+        timestamp: formatWibDateTimeFromMs(baseMs + 2 * 60000),
+        location: `VORVAN VIP Dispatch · ${order.buyerCity}`,
+        title: '2. Penjadwalan & Penyerahan Unit ke Kurir VIP COD VORVAN',
+        detail: `Transaksi ini menggunakan layanan COD / VIP Hand-Delivery bersama klien (${order.buyerName}) di ${order.buyerCity} tanpa menggunakan kurir paket ekspedisi.`,
+        completed: stage >= 2,
+        current: stage === 2,
       },
       {
         timestamp: formatWibDateTimeFromMs(baseMs + 5 * 60000),
-        location: `Titik Pertemuan VIP · ${order.buyerCity}`,
-        title: '2. Koordinasi Jadwal Pertemuan Tatap Muka Langsung (Face-to-Face)',
-        detail: `Transaksi ini menggunakan layanan COD / Serah Terima Tatap Muka Langsung bersama klien (${order.buyerName}) di ${order.buyerCity} tanpa menggunakan kurir paket ekspedisi.`,
-        completed: true,
-        current: order.status !== 'PAID' && !order.paymentProof,
+        location: `Jalur Pengantaran VIP → ${order.buyerCity}`,
+        title: `3. Dalam Pengantaran Kurir VIP COD menuju ${order.buyerCity}`,
+        detail: `Unit sedang dalam pengantaran oleh Kurir VIP COD VORVAN menuju lokasi penerima (${order.buyerName} — ${order.buyerCity}).`,
+        completed: stage >= 3,
+        current: stage === 3,
       },
       {
         timestamp:
-          order.status === 'PAID' || order.paymentProof
+          stage >= 4
             ? order.paymentProofUploadedAt || formatWibDateTimeFromMs(nowMs)
-            : 'Saat Pertemuan Tatap Muka',
+            : 'Menunggu Konfirmasi Serah Terima',
         location: order.buyerCity,
-        title: '3. Serah Terima Langsung & Inspeksi Bersama Klien',
-        detail: `Penyerahan flacon parfum secara langsung (Hand-Delivery) dan pengecekan fisik unit bersama ${order.buyerName}.`,
-        completed: Boolean(order.status === 'PAID' || order.paymentProof),
-        current: Boolean(order.status === 'PAID' || order.paymentProof),
+        title: '4. Paket Telah Diterima oleh Pembeli',
+        detail: `Penyerahan flacon parfum secara langsung (VIP Hand-Delivery) dan pengecekan fisik unit bersama ${order.buyerName} di ${order.buyerCity} telah selesai.`,
+        completed: stage >= 4,
+        current: stage === 4,
       },
     ];
 
@@ -2175,7 +2383,10 @@ export function buildTrackingFromCustomOrder(
       awbNumber: 'Tanpa Resi Ekspedisi (Tatap Muka)',
       fragranceSummary: `${order.house} — ${order.fragranceName} (${order.volume})`,
       statusLabel: COD_FACE_TO_FACE_STATUS_LABEL,
-      estimatedArrival: COD_FACE_TO_FACE_STATUS_LABEL,
+      estimatedArrival:
+        stage >= 4
+          ? 'PAKET TELAH DITERIMA OLEH PEMBELI (SELESAI)'
+          : COD_FACE_TO_FACE_STATUS_LABEL,
       vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
       boxInspectionNote:
         'Transaksi COD / Serah Terima Tatap Muka Langsung: Pemeriksaan fisik flacon, inspeksi kualitas segel Vault berlapis, dan fungsi sprayer dilakukan secara langsung saat pertemuan.',
@@ -2188,8 +2399,8 @@ export function buildTrackingFromCustomOrder(
     };
   }
 
-  // 2. Expedition Order BEFORE Admin Inputs Follow-Up AWB (Resi Belum Tersedia)
-  if (!hasAwb) {
+  // 2. Expedition Order BEFORE Admin Inputs Follow-Up AWB (Resi Belum Tersedia & Stage < 4)
+  if (!hasAwb && stage < 4) {
     const pendingMilestones: TrackingMilestone[] = [
       {
         timestamp: tStage1,
@@ -2217,7 +2428,7 @@ export function buildTrackingFromCustomOrder(
       {
         timestamp: 'Menunggu Pengiriman',
         location: `Transit Hub Antar-Kota → ${order.buyerCity}`,
-        title: '3. Perjalanan Paket & Gudang Sortir Ekspedisi',
+        title: `3. Dalam Perjalanan menuju ${order.buyerCity}`,
         detail: `Pelacakan perjalanan paket menuju ${order.buyerCity} akan aktif begitu Nomor Resi tersedia.`,
         completed: false,
         current: false,
@@ -2225,7 +2436,7 @@ export function buildTrackingFromCustomOrder(
       {
         timestamp: 'Menunggu Pengiriman',
         location: order.buyerCity,
-        title: '4. Pengantaran Kurir ke Alamat Penerima',
+        title: '4. Paket Telah Diterima oleh Pembeli',
         detail: `Pengantaran oleh kurir ${courierMeta.displayName} menuju ${order.buyerName} (${order.buyerCity}).`,
         completed: false,
         current: false,
@@ -2254,24 +2465,26 @@ export function buildTrackingFromCustomOrder(
     };
   }
 
-  // 3. Expedition Order WITH Valid AWB Entered by Admin (Active Tracking)
-  const tStage2 = order.createdAtTimestampMs
-    ? formatWibDateTimeFromMs(baseMs + 4 * 60000)
+  // 3. Expedition Order WITH Valid AWB Entered by Admin (Stages 1, 2, 3 immediately active; Stage 4 active on Admin confirmation)
+  const tStage2 = order.resiInputAt
+    ? formatWibDateTimeFromMs(order.resiInputAt)
+    : order.createdAtTimestampMs
+    ? formatWibDateTimeFromMs(resiBaseMs + 4 * 60000)
     : order.createdAt;
   const tStage3 =
     stage >= 3
-      ? formatWibDateTimeFromMs(baseMs + 15 * 60000)
-      : 'Terjadwal Otomatis · Sorting Hub';
+      ? formatWibDateTimeFromMs(resiBaseMs + 5 * 60000)
+      : 'Menunggu Pengiriman';
   const tStage4 =
     stage >= 4
-      ? formatWibDateTimeFromMs(baseMs + 180 * 60000)
-      : 'Terjadwal Otomatis · Kurir Pengantar';
+      ? formatWibDateTimeFromMs(nowMs)
+      : 'Menunggu Konfirmasi Paket Tiba';
 
   const stageLabels: Record<1 | 2 | 3 | 4, string> = {
     1: 'AUTO-TRACKING AKTIF — LOLOS QC VAULT VORVAN',
     2: `AUTO-TRACKING AKTIF — DISERAHKAN KE MANIFEST ${courierMeta.displayName.toUpperCase()}`,
-    3: `AUTO-TRACKING AKTIF — TRANSIT HUB ANTAR-KOTA (${courierMeta.displayName.toUpperCase()})`,
-    4: `AUTO-TRACKING AKTIF — MENUJU ALAMAT PENERIMA (${courierMeta.displayName.toUpperCase()})`,
+    3: `AUTO-TRACKING AKTIF — DALAM PERJALANAN MENUJU ${order.buyerCity.toUpperCase()} (${courierMeta.displayName.toUpperCase()})`,
+    4: `PAKET TELAH DITERIMA OLEH PEMBELI — SELESAI (${courierMeta.displayName.toUpperCase()})`,
   };
 
   const milestones: TrackingMilestone[] = [
@@ -2286,24 +2499,24 @@ export function buildTrackingFromCustomOrder(
     {
       timestamp: tStage2,
       location: `Manifest ${courierMeta.displayName} · VORVAN Dispatch Hub`,
-      title: '2. Diserahkan ke Manifest Kurir & Segel Wajib Video Unboxing',
-      detail: `Dikemas berlapis pelindung aman, dipasang segel wajib video unboxing utuh, dan terdaftar otomatis pada manifest ${courierMeta.displayName} (AWB: ${order.awbNumber}).`,
+      title: '2. Penyerahan ke Ekspedisi & Penerbitan Nomor Resi Asli',
+      detail: `Dikemas berlapis pelindung aman, dipasang segel wajib video unboxing utuh, dan diserahkan ke ekspedisi ${courierMeta.displayName} dengan Nomor Resi Asli (AWB: ${order.awbNumber || order.invoiceId}).`,
       completed: stage >= 2,
       current: stage === 2,
     },
     {
       timestamp: tStage3,
       location: `Sorting Center & Transit Hub Antar-Kota → ${order.buyerCity}`,
-      title: '3. Transit Hub Antar-Kota & Gudang Sortir Ekspedisi',
-      detail: `Paket dipindai pada jaringan distribusi ${courierMeta.displayName} dan bergerak melintasi hub transit utama menuju ${order.buyerCity}.`,
+      title: `3. Dalam Perjalanan menuju ${order.buyerCity}`,
+      detail: `Paket dipindai pada jaringan distribusi ${courierMeta.displayName} dan sedang dalam perjalanan menuju Kota Tujuan (${order.buyerCity}).`,
       completed: stage >= 3,
       current: stage === 3,
     },
     {
       timestamp: tStage4,
       location: order.buyerCity,
-      title: '4. Menuju Alamat Penerima (With Delivery Courier)',
-      detail: `Pengantaran oleh kurir ${courierMeta.displayName} menuju alamat ${order.buyerName} (${order.buyerCity}). Wajib merekam video unboxing utuh tanpa jeda sejak paket masih tersegel.`,
+      title: '4. Paket Telah Diterima oleh Pembeli',
+      detail: `Paket telah diterima oleh pembeli (${order.buyerName} — ${order.buyerCity}) melalui kurir ${courierMeta.displayName}. Wajib merekam video unboxing utuh tanpa jeda sejak paket masih tersegel.`,
       completed: stage >= 4,
       current: stage === 4,
     },
@@ -2315,10 +2528,13 @@ export function buildTrackingFromCustomOrder(
     recipientName: order.buyerName,
     destination: order.buyerCity,
     courierService: courierMeta.displayName,
-    awbNumber: order.awbNumber,
+    awbNumber: order.awbNumber || order.invoiceId,
     fragranceSummary: `${order.house} — ${order.fragranceName} (${order.volume})`,
     statusLabel: stageLabels[stage],
-    estimatedArrival: `Terintegrasi Manifest Resmi ${courierMeta.displayName}`,
+    estimatedArrival:
+      stage >= 4
+        ? 'PAKET TELAH DITERIMA OLEH PEMBELI (SELESAI)'
+        : `Terintegrasi Manifest Resmi ${courierMeta.displayName}`,
     vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
     boxInspectionNote:
       'WAJIB VIDEO UNBOXING UTUH TANPA JEDA sejak paket masih tersegel untuk klaim garansi botol pecah atau semprotan/atomizer macet pabrik.',

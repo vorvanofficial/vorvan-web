@@ -345,12 +345,13 @@ test('Automated courier tracking helpers compute time-based stages, Binderbyte U
     'https://api.binderbyte.com/v1/track?api_key=TEST_KEY_123&courier=sicepat&awb=SCP-0049182731'
   );
 
-  const issuedAt = 1700000000000;
+  const resiInputAt = 1700000000000;
   const baseOrder = {
     invoiceId: 'INV-VRV-4020',
     trackingId: 'PX-8812901',
     createdAt: '29 Okt 2026 · 10:00 WIB',
-    createdAtTimestampMs: issuedAt,
+    createdAtTimestampMs: resiInputAt - 3600000,
+    resiInputAt,
     buyerName: 'Ibu Clarissa',
     buyerCity: 'Jakarta Selatan',
     house: 'Maison Francis Kurkdjian',
@@ -364,24 +365,28 @@ test('Automated courier tracking helpers compute time-based stages, Binderbyte U
     status: 'PAID' as const,
   };
 
-  // Immediately after issuance -> Stage 2 (QC Vault + Handed to Courier Manifest)
-  assert.equal(computeAutoShippingStage(baseOrder, issuedAt + 2 * 60000), 2);
-  // After 30 minutes -> Automatically Stage 3 (Inter-city Transit Hub)
-  assert.equal(computeAutoShippingStage(baseOrder, issuedAt + 30 * 60000), 3);
-  // After 4 hours -> Automatically Stage 4 (With Delivery Courier to Recipient)
-  assert.equal(computeAutoShippingStage(baseOrder, issuedAt + 240 * 60000), 4);
+  // As soon as Nomor Resi is present -> Stages 1, 2, and 3 automatically active (stage = 3)
+  assert.equal(computeAutoShippingStage(baseOrder, resiInputAt + 2 * 60000), 3);
 
-  const trackAt4Hours = buildTrackingFromCustomOrder(
-    baseOrder,
-    issuedAt + 240 * 60000
+  // When Admin confirms package arrival (Stage 4) -> Stage 4 active
+  const confirmedOrder = {
+    ...baseOrder,
+    shippingStage: 4 as const,
+    shippingStageOverride: 4 as const,
+  };
+  assert.equal(computeAutoShippingStage(confirmedOrder, resiInputAt + 10 * 60000), 4);
+
+  const trackConfirmed = buildTrackingFromCustomOrder(
+    confirmedOrder,
+    resiInputAt + 10 * 60000
   );
-  assert.equal(trackAt4Hours.courierService, 'Paxel');
+  assert.equal(trackConfirmed.courierService, 'Paxel');
   assert.equal(
-    trackAt4Hours.courierOfficialUrl,
+    trackConfirmed.courierOfficialUrl,
     'https://paxel.co/id/lacak-kiriman'
   );
-  assert.equal(trackAt4Hours.milestones[3].completed, true);
-  assert.equal(trackAt4Hours.milestones[3].current, true);
+  assert.equal(trackConfirmed.milestones[3].completed, true);
+  assert.equal(trackConfirmed.milestones[3].current, true);
 });
 
 test('loadVorvanSettings includes official Bank BRI credentials and auto-updates legacy localStorage entries', async () => {
@@ -2539,6 +2544,9 @@ test('42. Hero narrative uses inspeksi kualitas segel Vault berlapis & jaminan k
     /100%\s*original/i,
     /100%\s*authentic/i,
     /100%\s*authenticity/i,
+    /hologram/i,
+    /ber-qr\s*code/i,
+    /qr-coded/i,
   ];
 
   for (const filePath of filesToScan) {
@@ -2551,6 +2559,24 @@ test('42. Hero narrative uses inspeksi kualitas segel Vault berlapis & jaminan k
       );
     }
   }
+
+  assert.ok(
+    TRANSLATIONS.ID.returnPolicy.deadlineDesc.includes(
+      'Kartu Sertifikat Kurasi & Garansi Resmi (Official Curation & Warranty Card · Concierge Support Card)'
+    )
+  );
+  assert.ok(
+    TRANSLATIONS.EN.returnPolicy.deadlineDesc.includes(
+      'Official Curation & Warranty Card (Concierge Support Card)'
+    )
+  );
+  const invoiceViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'PrivateInvoiceView.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    invoiceViewCode.includes('Segel &amp; Sertifikat Kurasi Resmi VORVAN')
+  );
 });
 
 test('43. Strict 19 Houses gender filter: starts as null on open and brand switch with subtle prompt, zero fallback to allBrandFragrances, shows empty-gender info card with non-wrapping bracket & updated Extended Archive message when count is 0', async () => {
@@ -2655,6 +2681,363 @@ test('44. Splash screen uses z-[9999] with unified GPU smooth exit, zero-CLS hea
   assert.ok(cssCode.includes('transform: translateX(-50%);'));
   assert.ok(cssCode.includes('animation: marquee-scroll 22s linear infinite;'));
 });
+
+test('45. Admin invoice delete permanently removes invoice in localStorage and Cloud KV via vorvan_deleted_invoice_ids blacklist and never resurrects on refresh or Cloud sync', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const {
+    VORVAN_DELETED_INVOICES_STORAGE_KEY,
+    clearDeletedInvoiceIdsForTest,
+    loadCustomAdminOrders,
+    loadDeletedInvoiceIds,
+    markInvoiceIdDeleted,
+    normalizeInvoiceIdKey,
+    saveCustomAdminOrders,
+  } = await import('./businessRules.ts');
+  const {
+    VORVAN_RESTFUL_KV_URL,
+    mergeCustomAdminOrders,
+    pullCloudVaultState,
+    saveSharedCloudLeadsAndOrders,
+  } = await import('./cloudSync.ts');
+
+  clearDeletedInvoiceIdsForTest();
+
+  // Mock localStorage to verify exact key 'vorvan_deleted_invoice_ids'
+  const mockStore = new Map<string, string>();
+  const origLocalStorage = (globalThis as Record<string, unknown>).localStorage;
+  const origFetch = globalThis.fetch;
+
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (k: string) => (mockStore.has(k) ? mockStore.get(k)! : null),
+    setItem: (k: string, v: string) => {
+      mockStore.set(k, v);
+    },
+    removeItem: (k: string) => {
+      mockStore.delete(k);
+    },
+  };
+
+  try {
+    assert.equal(
+      VORVAN_DELETED_INVOICES_STORAGE_KEY,
+      'vorvan_deleted_invoice_ids'
+    );
+    assert.equal(normalizeInvoiceIdKey('#inv-vrv-2289'), 'INV-VRV-2289');
+
+    const deletedTargetOrder = {
+      invoiceId: 'INV-VRV-2289',
+      trackingId: 'JNE-2289',
+      createdAt: '12 Nov 2026 · 10:00 WIB',
+      buyerName: 'Bpk. Kevan',
+      buyerCity: 'Jakarta',
+      house: 'Dior',
+      fragranceName: 'Sauvage Elixir',
+      concentration: 'Extrait',
+      volume: '100ml',
+      batchCode: 'DR-2289',
+      dealPriceIDR: 3150000,
+      shippingMethod: 'JNE' as const,
+      awbNumber: 'JNE-2289',
+      shippingStage: 2 as const,
+      status: 'PENDING_PAYMENT' as const,
+    };
+
+    const survivingOrder = {
+      invoiceId: 'INV-VRV-3301',
+      trackingId: 'JNE-3301',
+      createdAt: '12 Nov 2026 · 11:00 WIB',
+      buyerName: 'Ibu Nadia',
+      buyerCity: 'Surabaya',
+      house: 'Chanel',
+      fragranceName: 'Coco Mademoiselle',
+      concentration: 'Eau de Parfum',
+      volume: '100ml',
+      batchCode: 'CH-3301',
+      dealPriceIDR: 2950000,
+      shippingMethod: 'JNE' as const,
+      awbNumber: 'JNE-3301',
+      shippingStage: 2 as const,
+      status: 'PAID' as const,
+    };
+
+    // Save both initially
+    saveCustomAdminOrders([deletedTargetOrder, survivingOrder]);
+    assert.equal(loadCustomAdminOrders().length, 2);
+
+    // Admin deletes #INV-VRV-2289
+    markInvoiceIdDeleted('#INV-VRV-2289');
+
+    const storedBlacklistRaw = mockStore.get('vorvan_deleted_invoice_ids');
+    assert.ok(storedBlacklistRaw, 'vorvan_deleted_invoice_ids must be stored in localStorage');
+    const parsedBlacklist = JSON.parse(storedBlacklistRaw!) as string[];
+    assert.ok(parsedBlacklist.includes('INV-VRV-2289'));
+    assert.ok(loadDeletedInvoiceIds().has('INV-VRV-2289'));
+
+    // Even if localStorage still had INV-VRV-2289 before overwrite, loadCustomAdminOrders filters it out
+    const loadedAfterDelete = loadCustomAdminOrders();
+    assert.equal(loadedAfterDelete.length, 1);
+    assert.equal(loadedAfterDelete[0].invoiceId, 'INV-VRV-3301');
+
+    // mergeCustomAdminOrders must never resurrect INV-VRV-2289 even if passed in cloudOrders
+    const mergedOrders = mergeCustomAdminOrders(
+      [survivingOrder],
+      [deletedTargetOrder, survivingOrder]
+    );
+    assert.equal(mergedOrders.length, 1);
+    assert.equal(mergedOrders[0].invoiceId, 'INV-VRV-3301');
+
+    // Verify saveSharedCloudLeadsAndOrders overwrites Cloud KV and strips INV-VRV-2289 from existing cloud orders
+    let cloudOrdersPayloadWritten: Record<string, unknown> | null = null;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || 'GET').toUpperCase();
+      if (url === VORVAN_RESTFUL_KV_URL && method === 'GET') {
+        // Cloud previously still held INV-VRV-2289
+        return new Response(
+          JSON.stringify({
+            data: {
+              orders: [deletedTargetOrder, survivingOrder],
+              vorvan_deleted_invoice_ids: [],
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url === VORVAN_RESTFUL_KV_URL && method === 'PUT') {
+        cloudOrdersPayloadWritten = JSON.parse(String(init?.body || '{}'));
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      // NTFY poll returns an older VORVAN_ORDER_UPSERT for INV-VRV-2289 followed by VORVAN_ORDER_DELETE
+      if (url.includes('/json?poll=1')) {
+        const line1 = JSON.stringify({
+          message: JSON.stringify({
+            kind: 'VORVAN_ORDER_UPSERT',
+            order: deletedTargetOrder,
+            ts: 1000,
+          }),
+        });
+        const line2 = JSON.stringify({
+          message: JSON.stringify({
+            kind: 'VORVAN_ORDER_UPSERT',
+            order: survivingOrder,
+            ts: 1001,
+          }),
+        });
+        return new Response(`${line1}\n${line2}\n`, { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+
+    await saveSharedCloudLeadsAndOrders([], [survivingOrder], ['INV-VRV-2289']);
+    assert.ok(cloudOrdersPayloadWritten, 'Cloud KV PUT must be called');
+    const writtenData = (
+      cloudOrdersPayloadWritten as {
+        data: {
+          orders: { invoiceId: string }[];
+          vorvan_deleted_invoice_ids: string[];
+        };
+      }
+    ).data;
+    assert.equal(writtenData.orders.length, 1);
+    assert.equal(writtenData.orders[0].invoiceId, 'INV-VRV-3301');
+    assert.ok(writtenData.vorvan_deleted_invoice_ids.includes('INV-VRV-2289'));
+
+    // Verify pullCloudVaultState filters out INV-VRV-2289 even if Cloud KV or NTFY stream still had an older upsert
+    const pulled = await pullCloudVaultState();
+    assert.ok(pulled);
+    assert.ok(pulled!.deletedInvoiceIds.has('INV-VRV-2289'));
+    assert.equal(
+      pulled!.orders.some((o) => o.invoiceId === 'INV-VRV-2289'),
+      false,
+      'pullCloudVaultState must never return a blacklisted invoice'
+    );
+    assert.equal(
+      pulled!.orders.some((o) => o.invoiceId === 'INV-VRV-3301'),
+      true
+    );
+
+    // Verify App.tsx handleDeleteCustomOrder calls markInvoiceIdDeleted & saveSharedCloudLeadsAndOrders
+    const appCode = fs.readFileSync(
+      path.join(process.cwd(), 'src', 'App.tsx'),
+      'utf8'
+    );
+    assert.ok(appCode.includes('markInvoiceIdDeleted(cleanId);'));
+    assert.ok(
+      appCode.includes(
+        'void saveSharedCloudLeadsAndOrders(emailLeads, updated, [cleanId]);'
+      )
+    );
+  } finally {
+    clearDeletedInvoiceIdsForTest();
+    (globalThis as Record<string, unknown>).localStorage = origLocalStorage;
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('Invoice bottom confirmation section is centered across devices, QRIS & is removed from locked payment box, and CEK RESI stages 1-4 auto-progress from resiInputAt with manual override', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const {
+    computeAutoShippingStage,
+    buildTrackingFromCustomOrder,
+    encodeSmartOrderParam,
+    decodeSmartOrderParam,
+    isJavaDestinationCity,
+  } = await import('./businessRules.ts');
+
+  const invoiceViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'PrivateInvoiceView.tsx'),
+    'utf8'
+  );
+
+  // 1. Locked payment box says "Rincian Rekening Resmi & Pembayaran" without "QRIS &"
+  assert.ok(
+    invoiceViewCode.includes('Rincian Rekening Resmi &amp; Pembayaran') ||
+      invoiceViewCode.includes('Rincian Rekening Resmi & Pembayaran'),
+    'PrivateInvoiceView must contain "Rincian Rekening Resmi & Pembayaran"'
+  );
+  assert.equal(
+    invoiceViewCode.includes('QRIS &amp; Pembayaran') ||
+      invoiceViewCode.includes('QRIS & Pembayaran'),
+    false,
+    'PrivateInvoiceView must NOT contain "QRIS &"'
+  );
+
+  // 2. Bottom confirmation heading and link have text-center w-full mx-auto block
+  assert.ok(
+    invoiceViewCode.includes('data-testid="invoice-bottom-confirmation-header"')
+  );
+  assert.ok(
+    invoiceViewCode.includes('data-testid="invoice-bottom-confirmation-title"')
+  );
+  assert.ok(
+    invoiceViewCode.includes('text-center w-full mx-auto block'),
+    'Bottom confirmation heading and sub-link must have text-center w-full mx-auto block'
+  );
+
+  // 3. Auto-tracking stage progression based on resiInputAt
+  const t0 = 1710000000000;
+  const orderWithoutResi = {
+    invoiceId: 'INV-VRV-9910',
+    trackingId: 'PENDING-RESI-9910',
+    createdAt: '13 Nov 2026 · 10:00 WIB',
+    createdAtTimestampMs: t0,
+    buyerName: 'Bapak Hendra',
+    buyerCity: 'Surabaya, Jawa Timur',
+    house: 'Creed',
+    fragranceName: 'Aventus',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    batchCode: 'CRD-26A',
+    dealPriceIDR: 4950000,
+    shippingMethod: 'J&T Express' as const,
+    awbNumber: '',
+    status: 'PAID' as const,
+  };
+
+  // 3. Expedition Regular: Before Resi is input -> Only Stage 1 active
+  assert.equal(computeAutoShippingStage(orderWithoutResi, t0 + 10 * 3600 * 1000), 1);
+  const trackBeforeResi = buildTrackingFromCustomOrder(
+    orderWithoutResi,
+    t0 + 10 * 3600 * 1000
+  );
+  assert.equal(trackBeforeResi.milestones[0].completed, true);
+  assert.equal(trackBeforeResi.milestones[0].current, true);
+  assert.equal(trackBeforeResi.milestones[1].completed, false);
+  assert.equal(trackBeforeResi.milestones[2].completed, false);
+  assert.equal(trackBeforeResi.milestones[3].completed, false);
+
+  // 4. Expedition Regular: As soon as Admin inputs Nomor Resi -> Stages 1, 2, and 3 (Dalam Perjalanan menuju Kota Tujuan) immediately light up automatically!
+  const resiTime = t0 + 2 * 3600 * 1000;
+  const orderWithResi = {
+    ...orderWithoutResi,
+    awbNumber: 'JT-9988776655',
+    trackingId: 'JT-9988776655',
+    resiInputAt: resiTime,
+  };
+  assert.equal(isJavaDestinationCity(orderWithResi.buyerCity), true);
+  assert.equal(computeAutoShippingStage(orderWithResi, resiTime), 3);
+  const trackWithResi = buildTrackingFromCustomOrder(orderWithResi, resiTime);
+  assert.equal(trackWithResi.milestones[0].completed, true);
+  assert.equal(trackWithResi.milestones[1].completed, true);
+  assert.equal(trackWithResi.milestones[2].completed, true);
+  assert.equal(trackWithResi.milestones[2].current, true);
+  assert.ok(
+    trackWithResi.milestones[2].title.includes('Dalam Perjalanan menuju')
+  );
+  assert.equal(trackWithResi.milestones[3].completed, false);
+
+  // 5. COD / VIP Hand-Delivery: Immediately upon COD Invoice issuance (without AWB and without manual button click), Stages 1, 2, and 3 light up automatically!
+  const codOrder = {
+    ...orderWithoutResi,
+    invoiceId: 'INV-VRV-9912',
+    shippingMethod: 'COD / Tatap Muka' as const,
+    isCOD: true,
+    awbNumber: '',
+    status: 'PENDING_PAYMENT' as const,
+  };
+  assert.equal(computeAutoShippingStage(codOrder, t0), 3);
+  const trackCod = buildTrackingFromCustomOrder(codOrder, t0);
+  assert.equal(trackCod.milestones.length, 4);
+  assert.equal(trackCod.milestones[0].completed, true);
+  assert.equal(trackCod.milestones[1].completed, true);
+  assert.equal(trackCod.milestones[2].completed, true);
+  assert.equal(trackCod.milestones[2].current, true);
+  assert.ok(
+    trackCod.milestones[2].detail.includes(
+      'Unit sedang dalam pengantaran oleh Kurir VIP COD VORVAN menuju lokasi penerima'
+    ),
+    'COD Stage 3 must contain the exact VIP COD courier detail text'
+  );
+  assert.equal(trackCod.milestones[3].completed, false);
+
+  // 6. Admin clicks single button '[ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]' -> Stage 4 (Paket Telah Diterima oleh Pembeli) lights up!
+  const confirmedCodOrder = {
+    ...codOrder,
+    shippingStage: 4 as const,
+    shippingStageOverride: 4 as const,
+    status: 'PAID' as const,
+  };
+  assert.equal(computeAutoShippingStage(confirmedCodOrder, t0), 4);
+  const trackCodStage4 = buildTrackingFromCustomOrder(confirmedCodOrder, t0);
+  assert.equal(trackCodStage4.milestones[3].completed, true);
+  assert.equal(trackCodStage4.milestones[3].current, true);
+  assert.ok(
+    trackCodStage4.milestones[3].title.includes('Paket Telah Diterima oleh Pembeli')
+  );
+
+  // Verify Admin Tab 2 UI has the single clear Stage 4 button and no old 3-button group
+  const emailGatewayCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'EmailGatewayModal.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    emailGatewayCode.includes(
+      '[ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]'
+    ),
+    'Admin Tab 2 must display [ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]'
+  );
+  assert.equal(
+    emailGatewayCode.includes('Paksa Tahap 3'),
+    false,
+    'Admin Tab 2 must not contain old Paksa Tahap 3 button'
+  );
+
+  // Smart URL round-trip preserves resiInputAt and shippingStageOverride: 4
+  const forcedStage4Order = {
+    ...orderWithResi,
+    shippingStage: 4 as const,
+    shippingStageOverride: 4 as const,
+  };
+  const encoded = encodeSmartOrderParam(forcedStage4Order);
+  const decoded = decodeSmartOrderParam(encoded);
+  assert.ok(decoded);
+  assert.equal(decoded!.resiInputAt, resiTime);
+  assert.equal(decoded!.shippingStageOverride, 4);
+});
+
+
 
 
 

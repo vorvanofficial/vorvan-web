@@ -638,37 +638,58 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
             </div>
 
             <div className="relative pl-6 border-l-2 border-[#D4AF37]/40 space-y-7">
-              {activeRecord.milestones.map((m, idx) => (
-                <div key={idx} className="relative">
-                  <span
-                    className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                      m.current
-                        ? 'bg-[#F5E6B8] border-[#D4AF37] ring-4 ring-[#D4AF37]/25'
-                        : m.completed
-                        ? 'bg-emerald-400 border-emerald-950'
-                        : 'bg-zinc-900 border-zinc-600'
+              {activeRecord.milestones.map((m, idx) => {
+                const isStage4Completed = idx === 3 && m.completed;
+                return (
+                  <div
+                    key={idx}
+                    className={`relative ${
+                      isStage4Completed
+                        ? 'p-4 rounded-xl bg-gradient-to-r from-[#1E190C] via-[#27200F] to-[#17130A] border border-[#D4AF37]/80 shadow-[0_0_24px_rgba(212,175,55,0.22)]'
+                        : ''
                     }`}
-                  />
+                    data-testid={`tracking-milestone-${idx + 1}`}
+                  >
+                    <span
+                      className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        isStage4Completed || m.current
+                          ? 'bg-[#F5E6B8] border-[#D4AF37] ring-4 ring-[#D4AF37]/30'
+                          : m.completed
+                          ? 'bg-[#D4AF37] border-[#F5E6B8]'
+                          : 'bg-zinc-900 border-zinc-600'
+                      }`}
+                    />
 
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <h4
-                      className={`text-sm sm:text-base font-semibold ${
-                        m.completed ? 'text-white' : 'text-zinc-500'
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <h4
+                        className={`text-sm sm:text-base font-semibold ${
+                          isStage4Completed
+                            ? 'text-[#F5E6B8] font-bold'
+                            : m.completed
+                            ? 'text-white'
+                            : 'text-zinc-500'
+                        }`}
+                      >
+                        {m.title}
+                      </h4>
+                      <span className="font-mono-tabular text-xs text-[#E5C87E]">
+                        {m.timestamp}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-[#D8BE82] mt-0.5">{m.location}</p>
+                    <p
+                      className={`text-xs mt-1.5 leading-relaxed ${
+                        isStage4Completed
+                          ? 'text-[#F5E6B8] font-medium'
+                          : 'text-zinc-300'
                       }`}
                     >
-                      {m.title}
-                    </h4>
-                    <span className="font-mono-tabular text-xs text-[#E5C87E]">
-                      {m.timestamp}
-                    </span>
+                      {m.detail}
+                    </p>
                   </div>
-
-                  <p className="text-xs text-[#D8BE82] mt-0.5">{m.location}</p>
-                  <p className="text-xs text-zinc-300 mt-1.5 leading-relaxed">
-                    {m.detail}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="pt-4 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">

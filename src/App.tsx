@@ -37,8 +37,11 @@ import {
   encodeSmartOrderParam,
   isCodShippingMethod,
   loadCustomAdminOrders,
+  loadDeletedInvoiceIds,
   loadVorvanSettings,
+  markInvoiceIdDeleted,
   markLeadEmailDeleted,
+  normalizeInvoiceIdKey,
   parseAutoOpenInvoiceUrl,
   reindexVisitorLeads,
   removePaymentProofRecord,
@@ -468,17 +471,22 @@ export default function App() {
       });
     }
 
-    if (cloudData.orders.length > 0 || cloudData.deletedInvoiceIds.size > 0) {
+    const deletedIds = new Set<string>([
+      ...loadDeletedInvoiceIds(),
+      ...cloudData.deletedInvoiceIds,
+    ]);
+
+    if (cloudData.orders.length > 0 || deletedIds.size > 0) {
       setCustomOrders((prev) => {
         const latestLocal = mergeCustomAdminOrders(
           prev,
           loadCustomAdminOrders(),
-          cloudData.deletedInvoiceIds
+          deletedIds
         );
         const merged = mergeCustomAdminOrders(
           latestLocal,
           cloudData.orders,
-          cloudData.deletedInvoiceIds
+          deletedIds
         );
         saveCustomAdminOrders(merged);
         return merged;
@@ -491,7 +499,11 @@ export default function App() {
     if (adminLogModalOpen) {
       setCustomOrders((prev) => {
         const stored = loadCustomAdminOrders();
-        const merged = mergeCustomAdminOrders(prev, stored);
+        const merged = mergeCustomAdminOrders(
+          prev,
+          stored,
+          loadDeletedInvoiceIds()
+        );
         saveCustomAdminOrders(merged);
         return merged;
       });
@@ -504,7 +516,10 @@ export default function App() {
     if (typeof window === 'undefined') return;
     if (route.view === 'invoice' || route.view === 'track') {
       const smartOrd = route.smartOrder;
-      if (smartOrd) {
+      if (
+        smartOrd &&
+        !loadDeletedInvoiceIds().has(normalizeInvoiceIdKey(smartOrd.invoiceId))
+      ) {
         setCustomOrders((prev) => {
           const exists = prev.some(
             (o) =>
@@ -855,8 +870,19 @@ export default function App() {
 
   const handleCreateCustomOrder = (newOrder: CustomAdminOrder) => {
     removePaymentProofRecord(newOrder.invoiceId);
+    const isCod = Boolean(
+      newOrder.isCOD ||
+        isCodShippingMethod(newOrder.shippingMethod, newOrder.awbNumber)
+    );
+    const cleanAwb = isCod
+      ? ''
+      : (newOrder.awbNumber || '').trim().toUpperCase();
     const cleanNewOrder: CustomAdminOrder = {
       ...newOrder,
+      resiInputAt:
+        !isCod && cleanAwb ? newOrder.resiInputAt || Date.now() : undefined,
+      shippingStage: isCod ? 3 : cleanAwb ? 3 : 1,
+      shippingStageOverride: newOrder.shippingStageOverride || 'AUTO',
       status: 'PENDING_PAYMENT',
       paymentProof: null,
       paymentProofUrl: null,
@@ -887,13 +913,37 @@ export default function App() {
 
   const handleUpdateCustomOrderStage = (
     invoiceId: string,
-    stage: 1 | 2 | 3 | 4
+    stageOrOverride: 'AUTO' | 1 | 2 | 3 | 4
   ) => {
-    const updated = customOrders.map((o) =>
-      o.invoiceId === invoiceId ? { ...o, shippingStage: stage } : o
-    );
+    const cleanTargetId = invoiceId.trim().toUpperCase();
+    let updatedOrderRef: CustomAdminOrder | null = null;
+    const updated = customOrders.map((o) => {
+      if (o.invoiceId.trim().toUpperCase() !== cleanTargetId) return o;
+      const isStage4Confirm = stageOrOverride === 4;
+      const nextOrder: CustomAdminOrder = {
+        ...o,
+        shippingStageOverride: stageOrOverride,
+        shippingStage:
+          stageOrOverride === 'AUTO'
+            ? o.awbNumber || o.isCOD
+              ? 3
+              : 1
+            : stageOrOverride,
+        status: isStage4Confirm ? 'PAID' : o.status,
+      };
+      updatedOrderRef = nextOrder;
+      return nextOrder;
+    });
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
+    void saveSharedCloudLeadsAndOrders(emailLeads, updated);
+    if (updatedOrderRef) {
+      void pushCloudVaultPacket({
+        kind: 'VORVAN_ORDER_UPSERT',
+        order: updatedOrderRef,
+        ts: Date.now(),
+      });
+    }
   };
 
   const handleUpdateCustomOrderStatus = (
@@ -918,7 +968,8 @@ export default function App() {
   const handleUpdateCustomOrderResi = (
     invoiceId: string,
     shippingMethod: ShippingMethodType,
-    awbNumber: string
+    awbNumber: string,
+    stageOverride?: 'AUTO' | 1 | 2 | 3 | 4
   ) => {
     const cleanTargetId = invoiceId.trim().toUpperCase();
     const isCod = isCodShippingMethod(shippingMethod);
@@ -927,18 +978,34 @@ export default function App() {
 
     const updated = customOrders.map((o) => {
       if (o.invoiceId.trim().toUpperCase() !== cleanTargetId) return o;
-      const nextStage: 1 | 2 | 3 | 4 = isCod
-        ? (Math.max(o.shippingStage || 2, 2) as 1 | 2 | 3 | 4)
-        : cleanAwb
-        ? (Math.max(o.shippingStage || 2, 2) as 1 | 2 | 3 | 4)
-        : 1;
+      const prevAwb = (o.awbNumber || '').trim().toUpperCase();
+      const nextResiInputAt =
+        !isCod && cleanAwb
+          ? prevAwb === cleanAwb && o.resiInputAt
+            ? o.resiInputAt
+            : Date.now()
+          : undefined;
+      const effectiveOverride =
+        stageOverride !== undefined
+          ? stageOverride
+          : o.shippingStageOverride === 4
+          ? 4
+          : 'AUTO';
+      const nextStage: 1 | 2 | 3 | 4 =
+        effectiveOverride === 4 || o.shippingStage === 4
+          ? 4
+          : isCod || cleanAwb
+          ? 3
+          : 1;
       const nextOrder: CustomAdminOrder = {
         ...o,
         shippingMethod,
         isCOD: isCod,
         awbNumber: cleanAwb,
+        resiInputAt: nextResiInputAt,
         trackingId: cleanAwb || o.invoiceId,
         shippingStage: nextStage,
+        shippingStageOverride: effectiveOverride,
       };
       updatedOrderRef = nextOrder;
       return nextOrder;
@@ -1026,14 +1093,21 @@ export default function App() {
   };
 
   const handleDeleteCustomOrder = (invoiceId: string) => {
-    removePaymentProofRecord(invoiceId);
-    const updated = customOrders.filter((o) => o.invoiceId !== invoiceId);
+    const cleanId = normalizeInvoiceIdKey(invoiceId);
+    if (!cleanId) return;
+    markInvoiceIdDeleted(cleanId);
+    removePaymentProofRecord(cleanId);
+    const updated = customOrders.filter(
+      (o) => normalizeInvoiceIdKey(o.invoiceId) !== cleanId
+    );
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
 
+    // Immediately overwrite Cloud KV & broadcast delete packet so deleted invoices never return on refresh/sync
+    void saveSharedCloudLeadsAndOrders(emailLeads, updated, [cleanId]);
     void pushCloudVaultPacket({
       kind: 'VORVAN_ORDER_DELETE',
-      invoiceId,
+      invoiceId: cleanId,
       ts: Date.now(),
     });
   };
