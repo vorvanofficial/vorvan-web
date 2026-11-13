@@ -2,6 +2,7 @@ import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
 import {
   applyPaymentProofToOrders,
   buildSmartShareUrl,
+  extractOrderAwb,
   hasValidCourierAwb,
   isCodShippingMethod,
   loadDeletedInvoiceIds,
@@ -9,11 +10,13 @@ import {
   loadPaymentProofsMap,
   markInvoiceIdDeleted,
   markLeadEmailDeleted,
+  mergeStoredWithSmartOrder,
   normalizeInvoiceIdKey,
   reindexVisitorLeads,
   removePaymentProofRecord,
   saveDeletedInvoiceIds,
   savePaymentProofRecord,
+  syncOrderDynamicResiFields,
   unmarkLeadEmailDeleted,
 } from './businessRules';
 
@@ -792,20 +795,15 @@ export async function pullCloudVaultState(): Promise<{
         const invKey = normalizeInvoiceIdKey(ord.invoiceId);
         if (!invKey || deletedInvoiceIds.has(invKey)) continue;
         const existing = ordersById.get(invKey);
-        const proofImg =
-          ord.paymentProof ||
-          ord.paymentProofUrl ||
-          existing?.paymentProof ||
-          existing?.paymentProofUrl;
-        ordersById.set(invKey, {
-          ...ord,
-          status:
-            proofImg || existing?.status === 'PAID' ? 'PAID' : ord.status,
-          paymentProof: proofImg,
-          paymentProofUrl: proofImg,
-          paymentProofUploadedAt:
-            ord.paymentProofUploadedAt || existing?.paymentProofUploadedAt,
-        });
+        if (existing) {
+          const ordHasResi = Boolean(extractOrderAwb(ord));
+          const merged = ordHasResi
+            ? mergeStoredWithSmartOrder(ord, existing)
+            : mergeStoredWithSmartOrder(existing, ord);
+          ordersById.set(invKey, merged);
+        } else {
+          ordersById.set(invKey, syncOrderDynamicResiFields(ord));
+        }
       }
 
       for (const st of streamStatusUpdates) {
@@ -836,11 +834,13 @@ export async function pullCloudVaultState(): Promise<{
 
   if (!fetchedAny) return null;
 
-  let currentOrders = Array.from(ordersById.values()).filter(
-    (ord) =>
-      ord?.invoiceId &&
-      !deletedInvoiceIds.has(normalizeInvoiceIdKey(ord.invoiceId))
-  );
+  let currentOrders = Array.from(ordersById.values())
+    .filter(
+      (ord) =>
+        ord?.invoiceId &&
+        !deletedInvoiceIds.has(normalizeInvoiceIdKey(ord.invoiceId))
+    )
+    .map((ord) => syncOrderDynamicResiFields(ord));
   for (const [invKey, proofData] of proofsByInv.entries()) {
     if (deletedInvoiceIds.has(invKey)) continue;
     const applied = applyPaymentProofToOrders(
@@ -898,7 +898,7 @@ export function mergeCustomAdminOrders(
     if (!ord?.invoiceId) continue;
     const key = normalizeInvoiceIdKey(ord.invoiceId);
     if (key && !effectiveDeletedIds.has(key)) {
-      byInvoiceId.set(key, ord);
+      byInvoiceId.set(key, syncOrderDynamicResiFields(ord));
     }
   }
 
@@ -908,70 +908,24 @@ export function mergeCustomAdminOrders(
     if (key && !effectiveDeletedIds.has(key)) {
       const local = byInvoiceId.get(key);
       if (local) {
-        const mergedProof =
-          ord.paymentProof ||
-          ord.paymentProofUrl ||
-          local.paymentProof ||
-          local.paymentProofUrl;
-        const isPaid =
-          Boolean(mergedProof) ||
-          ord.status === 'PAID' ||
-          local.status === 'PAID';
-        const mergedDelivered = Boolean(ord.isDelivered || local.isDelivered);
-        const mergedMethod = ord.shippingMethod || local.shippingMethod;
-        const mergedIsCod =
-          typeof ord.isCOD === 'boolean'
-            ? ord.isCOD
-            : typeof local.isCOD === 'boolean'
-            ? local.isCOD
-            : isCodShippingMethod(mergedMethod, ord.awbNumber || local.awbNumber);
-        const candidateAwb = ord.awbNumber || local.awbNumber || '';
-        const hasRealAwb = hasValidCourierAwb({
-          invoiceId: key,
-          shippingMethod: mergedMethod,
-          awbNumber: candidateAwb,
-        });
-        const cleanAwb = hasRealAwb ? candidateAwb.trim() : '';
-        const mergedStage: 1 | 2 | 3 | 4 = mergedDelivered
-          ? 4
-          : mergedIsCod || hasRealAwb
-          ? 3
-          : 1;
-
-        byInvoiceId.set(key, {
-          ...local,
-          ...ord,
-          isCOD: mergedIsCod,
-          isDelivered: mergedDelivered,
-          awbNumber: cleanAwb,
-          resiInputAt: ord.resiInputAt ?? local.resiInputAt,
-          shippingStageOverride: mergedDelivered ? 4 : 'AUTO',
-          paymentProof: mergedProof,
-          paymentProofUrl: mergedProof,
-          paymentProofUploadedAt:
-            ord.paymentProofUploadedAt || local.paymentProofUploadedAt,
-          status: isPaid ? 'PAID' : ord.status,
-          shippingStage: mergedStage,
-        });
+        const cloudUpdated = ord.updatedAtMs || ord.resiInputAt || 0;
+        const localUpdated = local.updatedAtMs || local.resiInputAt || 0;
+        const cloudAwb = extractOrderAwb(ord);
+        const localAwb = extractOrderAwb(local);
+        const primary =
+          cloudUpdated > localUpdated || (Boolean(cloudAwb) && !localAwb)
+            ? ord
+            : local;
+        const secondary = primary === ord ? local : ord;
+        byInvoiceId.set(key, mergeStoredWithSmartOrder(primary, secondary));
       } else {
-        const proofImg = ord.paymentProof || ord.paymentProofUrl;
-        const isCod =
-          typeof ord.isCOD === 'boolean'
-            ? ord.isCOD
-            : isCodShippingMethod(ord.shippingMethod, ord.awbNumber);
-        const hasRealAwb = hasValidCourierAwb(ord);
-        const cleanAwb = hasRealAwb ? (ord.awbNumber || '').trim() : '';
-        const delivered = Boolean(ord.isDelivered);
+        const synced = syncOrderDynamicResiFields(ord);
+        const proofImg = synced.paymentProof || synced.paymentProofUrl;
         byInvoiceId.set(key, {
-          ...ord,
-          isCOD: isCod,
-          isDelivered: delivered,
-          awbNumber: cleanAwb,
-          shippingStage: delivered ? 4 : isCod || hasRealAwb ? 3 : 1,
-          shippingStageOverride: delivered ? 4 : 'AUTO',
+          ...synced,
           paymentProof: proofImg,
           paymentProofUrl: proofImg,
-          status: proofImg ? 'PAID' : ord.status,
+          status: proofImg ? 'PAID' : synced.status,
         });
       }
     }

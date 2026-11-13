@@ -150,6 +150,46 @@ export function isCodShippingMethod(
 }
 
 /**
+ * Dynamically extracts the clean courier AWB / Nomor Resi from any resi field
+ * (`awbNumber`, `resi`, `trackingNumber`, `noResi`) while rejecting placeholder or invoice codes.
+ */
+export function extractOrderAwb(order: {
+  invoiceId?: string;
+  shippingMethod?: string;
+  courier?: string;
+  isCOD?: boolean;
+  awbNumber?: string;
+  resi?: string;
+  trackingNumber?: string;
+  noResi?: string;
+}): string {
+  const method = order.shippingMethod || order.courier || '';
+  const candidateRaw =
+    order.awbNumber ||
+    order.resi ||
+    order.trackingNumber ||
+    order.noResi ||
+    '';
+  if (order.isCOD === true || isCodShippingMethod(method, candidateRaw)) {
+    return '';
+  }
+  const cleanAwb = candidateRaw.trim();
+  if (!cleanAwb) return '';
+  const upperAwb = cleanAwb.toUpperCase();
+  const cleanInv = (order.invoiceId || '').trim().toUpperCase();
+  if (cleanInv && upperAwb === cleanInv) return '';
+  if (
+    upperAwb.startsWith('INV-VRV-') ||
+    upperAwb.startsWith('PENDING-') ||
+    upperAwb.startsWith('BELUM') ||
+    upperAwb.includes('TANPA RESI')
+  ) {
+    return '';
+  }
+  return cleanAwb;
+}
+
+/**
  * Checks whether an expedition order has a valid AWB / Nomor Resi entered by Admin.
  * Returns false for COD (which is face-to-face), false when AWB is empty/pending,
  * and false if AWB was mistakenly set to an invoice ID (`INV-VRV-...`).
@@ -157,23 +197,226 @@ export function isCodShippingMethod(
 export function hasValidCourierAwb(order: {
   invoiceId?: string;
   shippingMethod?: string;
+  courier?: string;
+  isCOD?: boolean;
   awbNumber?: string;
+  resi?: string;
+  trackingNumber?: string;
+  noResi?: string;
 }): boolean {
-  if (isCodShippingMethod(order.shippingMethod, order.awbNumber)) {
-    return false;
+  return Boolean(extractOrderAwb(order));
+}
+
+export const VORVAN_COD_AGREED_STORAGE_KEY = 'vorvan_cod_agreed_v1';
+
+export interface CodAgreedRecord {
+  agreed: boolean;
+  agreedAt: string;
+  ts: number;
+}
+
+const memoryCodAgreedMap: Record<string, CodAgreedRecord> = {};
+
+export function loadCodAgreedMap(): Record<string, CodAgreedRecord> {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(VORVAN_COD_AGREED_STORAGE_KEY);
+      if (raw) {
+        return { ...memoryCodAgreedMap, ...JSON.parse(raw) };
+      }
+    }
+  } catch {
+    // ignore
   }
-  const cleanAwb = (order.awbNumber || '').trim().toUpperCase();
-  if (!cleanAwb) return false;
-  const cleanInv = (order.invoiceId || '').trim().toUpperCase();
-  if (cleanInv && cleanAwb === cleanInv) return false;
+  return { ...memoryCodAgreedMap };
+}
+
+export function saveCodAgreedRecord(
+  invoiceId: string,
+  agreedAt: string
+): void {
+  const cleanId = (invoiceId || '').trim().replace(/^#+/, '').toUpperCase();
+  if (!cleanId) return;
+  const record: CodAgreedRecord = {
+    agreed: true,
+    agreedAt,
+    ts: Date.now(),
+  };
+  memoryCodAgreedMap[cleanId] = record;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const current = loadCodAgreedMap();
+      current[cleanId] = record;
+      window.localStorage.setItem(
+        VORVAN_COD_AGREED_STORAGE_KEY,
+        JSON.stringify(current)
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function removeCodAgreedRecord(invoiceId: string): void {
+  const cleanId = (invoiceId || '').trim().replace(/^#+/, '').toUpperCase();
+  if (!cleanId) return;
+  delete memoryCodAgreedMap[cleanId];
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const current = loadCodAgreedMap();
+      delete current[cleanId];
+      window.localStorage.setItem(
+        VORVAN_COD_AGREED_STORAGE_KEY,
+        JSON.stringify(current)
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function isCodTermsConfirmed(order: {
+  invoiceId?: string;
+  isDelivered?: boolean;
+  status?: string;
+  codTermsAgreed?: boolean;
+  paymentProof?: string | null;
+  paymentProofUrl?: string | null;
+}): boolean {
   if (
-    cleanAwb.startsWith('INV-VRV-') ||
-    cleanAwb.startsWith('PENDING-') ||
-    cleanAwb.startsWith('BELUM')
+    order.isDelivered === true ||
+    order.status === 'PAID' ||
+    Boolean(order.paymentProof || order.paymentProofUrl)
   ) {
+    return true;
+  }
+  const cleanId = (order.invoiceId || '')
+    .trim()
+    .replace(/^#+/, '')
+    .toUpperCase();
+  const codMap = loadCodAgreedMap();
+  if (cleanId && codMap[cleanId]?.agreed) {
+    return true;
+  }
+  if (order.codTermsAgreed === true) {
+    return true;
+  }
+  if (order.codTermsAgreed === false) {
     return false;
   }
   return true;
+}
+
+export function formatWibDateTimeFromMs(
+  timestampMs: number = Date.now()
+): string {
+  try {
+    const safeMs =
+      typeof timestampMs === 'number' &&
+      Number.isFinite(timestampMs) &&
+      timestampMs > 0
+        ? timestampMs
+        : Date.now();
+    const d = new Date(safeMs);
+    const datePart = d.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Jakarta',
+    });
+    const timePart = d
+      .toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Jakarta',
+      })
+      .replace(':', '.');
+    return `${datePart} · ${timePart} WIB`;
+  } catch {
+    return '14 Nov 2026 · 01.46 WIB';
+  }
+}
+
+export function sanitizeInvoiceCreatedAt(
+  rawCreatedAt?: string,
+  timestampMs?: number
+): string {
+  const clean = (rawCreatedAt || '').trim();
+  if (
+    !clean ||
+    clean === 'Terverifikasi · WIB' ||
+    clean === 'Terverifikasi Sistem · WIB' ||
+    clean === 'Hari Ini · WIB' ||
+    /^terverifikasi/i.test(clean)
+  ) {
+    return formatWibDateTimeFromMs(timestampMs || Date.now());
+  }
+  return clean;
+}
+
+/**
+ * Synchronizes all dynamic AWB (`awbNumber`, `resi`, `trackingNumber`, `noResi`, `trackingId`)
+ * and courier (`shippingMethod`, `courier`) fields on a CustomAdminOrder.
+ */
+export function syncOrderDynamicResiFields(
+  order: CustomAdminOrder
+): CustomAdminOrder {
+  const resolvedMethod = (order.shippingMethod ||
+    order.courier ||
+    'JNE') as ShippingMethodType;
+  const isCod =
+    typeof order.isCOD === 'boolean'
+      ? order.isCOD
+      : isCodShippingMethod(resolvedMethod, order.awbNumber || order.resi);
+  const cleanAwb = isCod ? '' : extractOrderAwb(order);
+  const delivered = Boolean(order.isDelivered);
+  const cleanInv = (order.invoiceId || '')
+    .trim()
+    .replace(/^#+/, '')
+    .toUpperCase();
+  const storedCodAgreed = cleanInv ? loadCodAgreedMap()[cleanInv] : undefined;
+  const resolvedCodAgreed = isCod
+    ? delivered || order.status === 'PAID' || storedCodAgreed?.agreed
+      ? true
+      : order.codTermsAgreed
+    : undefined;
+  const codConfirmed = isCod
+    ? isCodTermsConfirmed({
+        ...order,
+        codTermsAgreed: resolvedCodAgreed,
+      })
+    : false;
+  const stage: 1 | 2 | 3 | 4 = delivered
+    ? 4
+    : isCod
+    ? codConfirmed
+      ? 3
+      : 1
+    : Boolean(cleanAwb)
+    ? 3
+    : 1;
+  const sanitizedCreatedAt = sanitizeInvoiceCreatedAt(
+    order.createdAt,
+    order.createdAtTimestampMs || order.resiInputAt
+  );
+  return {
+    ...order,
+    createdAt: sanitizedCreatedAt,
+    shippingMethod: resolvedMethod,
+    courier: resolvedMethod,
+    isCOD: isCod,
+    codTermsAgreed: resolvedCodAgreed,
+    codTermsAgreedAt: order.codTermsAgreedAt || storedCodAgreed?.agreedAt,
+    isDelivered: delivered,
+    awbNumber: cleanAwb,
+    resi: cleanAwb,
+    trackingNumber: cleanAwb,
+    noResi: cleanAwb,
+    trackingId: cleanAwb || order.invoiceId,
+    shippingStage: stage,
+    shippingStageOverride: delivered ? 4 : 'AUTO',
+  };
 }
 
 export function loadVorvanSettings(): VorvanSiteSettings {
@@ -357,41 +600,24 @@ export function loadCustomAdminOrders(): CustomAdminOrder[] {
             return Boolean(invKey) && !deletedIds.has(invKey);
           });
           return filtered.map((o) => {
-            const invKey = normalizeInvoiceIdKey(o.invoiceId);
+            const synced = syncOrderDynamicResiFields(o);
+            const invKey = normalizeInvoiceIdKey(synced.invoiceId);
             const storedProof = proofsMap[invKey];
             const proofImg =
-              o.paymentProof || o.paymentProofUrl || storedProof?.proofUrl;
-            const isCod =
-              typeof o.isCOD === 'boolean'
-                ? o.isCOD
-                : isCodShippingMethod(o.shippingMethod, o.awbNumber);
-            const hasRealAwb = hasValidCourierAwb(o);
-            const sanitizedAwb = hasRealAwb ? (o.awbNumber || '').trim() : '';
-            const delivered = Boolean(o.isDelivered);
-            const resolvedStage: 1 | 2 | 3 | 4 = delivered
-              ? 4
-              : isCod || hasRealAwb
-              ? 3
-              : 1;
+              synced.paymentProof ||
+              synced.paymentProofUrl ||
+              storedProof?.proofUrl;
             if (proofImg) {
               return {
-                ...o,
-                awbNumber: sanitizedAwb,
-                isDelivered: delivered,
+                ...synced,
                 status: 'PAID' as const,
                 paymentProof: proofImg,
                 paymentProofUrl: proofImg,
                 paymentProofUploadedAt:
-                  o.paymentProofUploadedAt || storedProof?.uploadedAt,
-                shippingStage: resolvedStage,
+                  synced.paymentProofUploadedAt || storedProof?.uploadedAt,
               };
             }
-            return {
-              ...o,
-              awbNumber: sanitizedAwb,
-              isDelivered: delivered,
-              shippingStage: resolvedStage,
-            };
+            return synced;
           });
         }
       }
@@ -407,10 +633,12 @@ export function saveCustomAdminOrders(orders: CustomAdminOrder[]): void {
     const storage = getLocalStorageHelper();
     if (storage) {
       const deletedIds = loadDeletedInvoiceIds();
-      const cleanOrders = (orders || []).filter((o) => {
-        const invKey = normalizeInvoiceIdKey(o?.invoiceId || '');
-        return Boolean(invKey) && !deletedIds.has(invKey);
-      });
+      const cleanOrders = (orders || [])
+        .filter((o) => {
+          const invKey = normalizeInvoiceIdKey(o?.invoiceId || '');
+          return Boolean(invKey) && !deletedIds.has(invKey);
+        })
+        .map((o) => syncOrderDynamicResiFields(o));
       storage.setItem(
         VORVAN_CUSTOM_ORDERS_STORAGE_KEY,
         JSON.stringify(cleanOrders)
@@ -1264,11 +1492,30 @@ export function encodeSmartOrderParam(order: CustomAdminOrder): string {
   const isStage4Delivered =
     order.isDelivered === true ||
     (order.isDelivered !== false && order.shippingStageOverride === 4);
+  const hasCreatedTs =
+    typeof order.createdAtTimestampMs === 'number' &&
+    order.createdAtTimestampMs > 0;
+  const codAgreedFlag = isCod
+    ? order.codTermsAgreed === false
+      ? '0'
+      : order.codTermsAgreed === true
+      ? '1'
+      : ''
+    : '';
 
-  if (hasResiTs || isStage4Delivered) {
+  if (hasResiTs || isStage4Delivered || hasCreatedTs || codAgreedFlag) {
     const resiB36 = hasResiTs ? Math.round(order.resiInputAt!).toString(36) : '';
     const overrideCode = isStage4Delivered ? '4' : '';
-    pipeFields.push(overrideCode ? `${resiB36}:${overrideCode}` : resiB36);
+    const createdB36 = hasCreatedTs
+      ? Math.round(order.createdAtTimestampMs!).toString(36)
+      : '';
+    if (createdB36 || codAgreedFlag) {
+      pipeFields.push(
+        `${resiB36}:${overrideCode}:${createdB36}:${codAgreedFlag}`
+      );
+    } else {
+      pipeFields.push(overrideCode ? `${resiB36}:${overrideCode}` : resiB36);
+    }
   }
 
   return toBase64Url(pipeFields.join('|'));
@@ -1681,8 +1928,11 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
 
           let decodedResiInputAt: number | undefined;
           let decodedStageOverride: 'AUTO' | 1 | 2 | 3 | 4 | undefined;
+          let decodedCreatedAtMs: number | undefined;
+          let decodedCodTermsAgreed: boolean | undefined;
           if (rawResiMeta && rawResiMeta.trim()) {
-            const [resiB36Part, overridePart] = rawResiMeta.trim().split(':');
+            const [resiB36Part, overridePart, createdB36Part, codAgreedPart] =
+              rawResiMeta.trim().split(':');
             if (resiB36Part) {
               const parsedMs = parseInt(resiB36Part, 36);
               if (Number.isFinite(parsedMs) && parsedMs > 0) {
@@ -1694,6 +1944,17 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             } else if (overridePart === 'AUTO') {
               decodedStageOverride = 'AUTO';
             }
+            if (createdB36Part) {
+              const parsedCreatedMs = parseInt(createdB36Part, 36);
+              if (Number.isFinite(parsedCreatedMs) && parsedCreatedMs > 0) {
+                decodedCreatedAtMs = parsedCreatedMs;
+              }
+            }
+            if (codAgreedPart === '1') {
+              decodedCodTermsAgreed = true;
+            } else if (codAgreedPart === '0') {
+              decodedCodTermsAgreed = false;
+            }
           }
 
           const isStage4Delivered = decodedStageOverride === 4;
@@ -1704,11 +1965,28 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             !awbNumber.toUpperCase().startsWith('INV-VRV-')
               ? awbNumber
               : '';
+          const effectiveCreatedMs =
+            decodedCreatedAtMs || decodedResiInputAt || Date.now();
+          const effectiveCreatedAt = formatWibDateTimeFromMs(effectiveCreatedMs);
+          const effectiveCodAgreed = isCod
+            ? isStage4Delivered || status === 'PAID'
+              ? true
+              : decodedCodTermsAgreed
+            : undefined;
+          const codConfirmed = isCod
+            ? isCodTermsConfirmed({
+                invoiceId,
+                isDelivered: isStage4Delivered,
+                status,
+                codTermsAgreed: effectiveCodAgreed,
+              })
+            : false;
 
           return {
             invoiceId,
             trackingId: cleanDecodedAwb || invoiceId,
-            createdAt: 'Terverifikasi · WIB',
+            createdAt: effectiveCreatedAt,
+            createdAtTimestampMs: decodedCreatedAtMs,
             buyerName: rawBuyer.trim(),
             buyerCity: cleanCity,
             buyerEmail: rawEmail.trim() || undefined,
@@ -1727,12 +2005,17 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             shippingLabel,
             shippingMethod,
             isCOD: isCod,
+            codTermsAgreed: effectiveCodAgreed,
             isDelivered: isStage4Delivered,
             awbNumber: cleanDecodedAwb,
             resiInputAt: decodedResiInputAt,
             shippingStage: isStage4Delivered
               ? 4
-              : isCod || cleanDecodedAwb
+              : isCod
+              ? codConfirmed
+                ? 3
+                : 1
+              : cleanDecodedAwb
               ? 3
               : 1,
             shippingStageOverride: isStage4Delivered ? 4 : 'AUTO',
@@ -2131,9 +2414,21 @@ export function buildInvoiceFromCustomOrder(
     ? `Metode Pengiriman: ${effectiveShippingMethod} (Resi: ${order.awbNumber}). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`
     : `Metode Pengiriman: ${effectiveShippingMethod} (Resi diisi menyusul setelah pembayaran lunas & barang dikirim). Dilengkapi garansi klaim video unboxing utuh tanpa jeda.`;
 
+  const sanitizedCreatedAt = sanitizeInvoiceCreatedAt(
+    order.createdAt,
+    order.createdAtTimestampMs || order.resiInputAt
+  );
+  const cleanInvKey = order.invoiceId.trim().toUpperCase();
+  const storedCod = loadCodAgreedMap()[cleanInvKey];
+  const resolvedCodAgreed = isCod
+    ? resolvedStatus === 'PAID' || order.isDelivered || storedCod?.agreed
+      ? true
+      : order.codTermsAgreed
+    : undefined;
+
   return {
-    invoiceId: order.invoiceId.toUpperCase(),
-    createdAt: order.createdAt || 'Hari Ini · WIB',
+    invoiceId: cleanInvKey,
+    createdAt: sanitizedCreatedAt,
     expiresAt: '24 Jam Sejak Diterbitkan',
     buyerName: order.buyerName,
     buyerPhoneMasked: 'Private VIP Client',
@@ -2142,7 +2437,7 @@ export function buildInvoiceFromCustomOrder(
     status: resolvedStatus,
     paidAt:
       resolvedStatus === 'PAID'
-        ? order.paymentProofUploadedAt || order.createdAt
+        ? order.paymentProofUploadedAt || sanitizedCreatedAt
         : undefined,
     paymentMethodUsed:
       resolvedStatus === 'PAID' ? 'Terverifikasi Concierge VORVAN' : undefined,
@@ -2154,6 +2449,8 @@ export function buildInvoiceFromCustomOrder(
     shippingLabel,
     shippingMethod: effectiveShippingMethod,
     isCOD: isCod,
+    codTermsAgreed: resolvedCodAgreed,
+    codTermsAgreedAt: order.codTermsAgreedAt || storedCod?.agreedAt,
     paymentProof: resolvedProof,
     paymentProofUrl: resolvedProof,
     paymentProofUploadedAt: order.paymentProofUploadedAt,
@@ -2278,24 +2575,6 @@ export function buildBinderbyteTrackUrl(
   )}&awb=${encodeURIComponent(awbNumber.trim())}`;
 }
 
-function formatWibDateTimeFromMs(timestampMs: number): string {
-  try {
-    const d = new Date(timestampMs);
-    const datePart = d.toLocaleDateString('id-ID', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-    const timePart = d.toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    return `${datePart} · ${timePart} WIB`;
-  } catch {
-    return 'Terverifikasi Sistem · WIB';
-  }
-}
-
 /**
  * Detects whether a buyer's destination city/address is on Java island (Pulau Jawa — 48h Stage 4 threshold)
  * vs Outside Java (Luar Jawa — 72h Stage 4 threshold).
@@ -2327,10 +2606,12 @@ export function isJavaDestinationCity(addressText: string): boolean {
  * - Stage 4 (`4/4 — PAKET TELAH DITERIMA OLEH PEMBELI`) is ONLY active when `order.isDelivered === true`
  *   (or explicit `shippingStageOverride === 4` when `isDelivered !== false`), i.e., when Admin clicks
  *   `[ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]`.
- * - Khusus Pesanan COD (`COD / VIP Hand-Delivery`): Selama `isDelivered` masih `false`, otomatis berada di Tahap 3 (`3/4 — KURIR VIP COD DALAM PERJALANAN`).
+ * - Khusus Pesanan COD (`COD / VIP Hand-Delivery`):
+ *   • Jika pembeli COD belum mencentang persetujuan S&K di halaman Invoice (`codTermsAgreed === false`): Hanya Tahap 1 yang menyala (`1`).
+ *   • Begitu pembeli COD sudah mencentang S&K (atau dikonfirmasi Admin) dan `isDelivered === false`: Otomatis nyalakan Tahap 1, 2, dan 3 (`3`).
  * - Khusus Pesanan Ekspedisi Reguler (JNE / J&T / Paxel / SiCepat / Pos / Anteraja):
- *   • Sebelum Nomor Resi Asli diinput Admin (meskipun sudah upload bukti bayar / Lunas): Tetap berada di Tahap 1 (`1/4 — MENUNGGU INPUT NOMOR RESI EKSPEDISI`).
- *   • Setelah Nomor Resi Asli diinput Admin (dan `isDelivered` masih `false`): Otomatis berada di Tahap 3 (`3/4 — DALAM PERJALANAN MENUJU KOTA TUJUAN`).
+ *   • Sebelum Nomor Resi Asli diinput Admin (meskipun sudah upload bukti bayar / Lunas): Tetap berada di Tahap 1 (`1`).
+ *   • Setelah Nomor Resi Asli diinput Admin (dan `isDelivered` masih `false`): Otomatis berada di Tahap 3 (`3`).
  */
 export function computeAutoShippingStage(
   order: CustomAdminOrder,
@@ -2350,7 +2631,7 @@ export function computeAutoShippingStage(
       : isCodShippingMethod(order.shippingMethod, order.awbNumber);
 
   if (isCod) {
-    return 3;
+    return isCodTermsConfirmed(order) ? 3 : 1;
   }
 
   if (!hasValidCourierAwb(order)) {
@@ -2360,40 +2641,186 @@ export function computeAutoShippingStage(
   return 3;
 }
 
+/**
+ * Merges a stored/cloud CustomAdminOrder with a URL `smartOrder` without allowing
+ * an older URL snapshot to overwrite updated AWB/Resi, courier, payment status,
+ * payment proof, COD S&K agreement, or Stage 4 delivery confirmation.
+ */
+export function mergeStoredWithSmartOrder(
+  stored: CustomAdminOrder,
+  smart?: CustomAdminOrder | null
+): CustomAdminOrder {
+  if (!smart) {
+    return syncOrderDynamicResiFields(stored);
+  }
+  const storedAwb = extractOrderAwb(stored);
+  const smartAwb = extractOrderAwb(smart);
+  const storedHasResi = Boolean(storedAwb);
+  const smartHasResi = Boolean(smartAwb);
+
+  const effectiveShippingMethod: ShippingMethodType = storedHasResi
+    ? ((stored.shippingMethod || stored.courier || 'JNE') as ShippingMethodType)
+    : smartHasResi
+    ? ((smart.shippingMethod || smart.courier || 'JNE') as ShippingMethodType)
+    : ((stored.shippingMethod ||
+        stored.courier ||
+        smart.shippingMethod ||
+        smart.courier ||
+        'JNE') as ShippingMethodType);
+
+  const effectiveAwb = storedAwb || smartAwb || '';
+  const isCod =
+    storedHasResi || smartHasResi
+      ? false
+      : typeof stored.isCOD === 'boolean'
+      ? stored.isCOD
+      : typeof smart.isCOD === 'boolean'
+      ? smart.isCOD
+      : isCodShippingMethod(effectiveShippingMethod, effectiveAwb);
+
+  const invKey = normalizeInvoiceIdKey(stored.invoiceId || smart.invoiceId);
+  const proofsMap = loadPaymentProofsMap();
+  const mapProof = invKey ? proofsMap[invKey] : undefined;
+  const codAgreedEntry = invKey ? loadCodAgreedMap()[invKey] : undefined;
+
+  const mergedProof =
+    stored.paymentProof ||
+    stored.paymentProofUrl ||
+    smart.paymentProof ||
+    smart.paymentProofUrl ||
+    mapProof?.proofUrl;
+  const mergedProofUploadedAt =
+    stored.paymentProofUploadedAt ||
+    smart.paymentProofUploadedAt ||
+    mapProof?.uploadedAt;
+
+  const isPaid =
+    Boolean(mergedProof) ||
+    stored.status === 'PAID' ||
+    smart.status === 'PAID';
+  const isDelivered = Boolean(stored.isDelivered || smart.isDelivered);
+
+  const mergedCodAgreed = isCod
+    ? isDelivered ||
+      isPaid ||
+      Boolean(codAgreedEntry?.agreed) ||
+      stored.codTermsAgreed === true ||
+      smart.codTermsAgreed === true
+      ? true
+      : stored.codTermsAgreed === false || smart.codTermsAgreed === false
+      ? false
+      : undefined
+    : undefined;
+
+  const storedCreatedClean =
+    stored.createdAt &&
+    !stored.createdAt.includes('Terverifikasi') &&
+    stored.createdAt !== 'Hari Ini · WIB'
+      ? stored.createdAt
+      : '';
+  const smartCreatedClean =
+    smart.createdAt &&
+    !smart.createdAt.includes('Terverifikasi') &&
+    smart.createdAt !== 'Hari Ini · WIB'
+      ? smart.createdAt
+      : '';
+  const mergedCreatedMs =
+    stored.createdAtTimestampMs || smart.createdAtTimestampMs;
+
+  return syncOrderDynamicResiFields({
+    ...smart,
+    ...stored,
+    createdAt: sanitizeInvoiceCreatedAt(
+      storedCreatedClean || smartCreatedClean || stored.createdAt || smart.createdAt,
+      mergedCreatedMs || stored.resiInputAt || smart.resiInputAt
+    ),
+    createdAtTimestampMs: mergedCreatedMs,
+    shippingMethod: effectiveShippingMethod,
+    courier: effectiveShippingMethod,
+    isCOD: isCod,
+    codTermsAgreed: mergedCodAgreed,
+    codTermsAgreedAt:
+      stored.codTermsAgreedAt ||
+      smart.codTermsAgreedAt ||
+      codAgreedEntry?.agreedAt,
+    isDelivered,
+    awbNumber: isCod ? '' : effectiveAwb,
+    resi: isCod ? '' : effectiveAwb,
+    trackingNumber: isCod ? '' : effectiveAwb,
+    noResi: isCod ? '' : effectiveAwb,
+    resiInputAt: stored.resiInputAt ?? smart.resiInputAt,
+    updatedAtMs:
+      Math.max(stored.updatedAtMs || 0, smart.updatedAtMs || 0) || undefined,
+    status: isDelivered || isPaid ? 'PAID' : 'PENDING_PAYMENT',
+    paymentProof: mergedProof,
+    paymentProofUrl: mergedProof,
+    paymentProofUploadedAt: mergedProofUploadedAt,
+  });
+}
+
 export function buildTrackingFromCustomOrder(
-  order: CustomAdminOrder,
+  rawOrder: CustomAdminOrder,
   nowMs: number = Date.now()
 ): TrackingRecord {
+  const order = mergeStoredWithSmartOrder(rawOrder, null);
   const isCod =
     typeof order.isCOD === 'boolean'
       ? order.isCOD
       : isCodShippingMethod(order.shippingMethod, order.awbNumber);
-  const hasAwb = hasValidCourierAwb(order);
+  const cleanAwb = extractOrderAwb(order);
+  const hasAwb = Boolean(cleanAwb);
+  const isDelivered =
+    order.isDelivered === true ||
+    (order.isDelivered !== false && order.shippingStageOverride === 4);
+  const isPaid =
+    isDelivered ||
+    order.status === 'PAID' ||
+    Boolean(order.paymentProof || order.paymentProofUrl);
+  const codConfirmed = isCod ? isCodTermsConfirmed(order) : false;
   const stage = computeAutoShippingStage(order, nowMs);
   const courierMeta = resolveCourierMetadata(
-    order.shippingMethod,
-    order.awbNumber
+    order.shippingMethod || order.courier || 'JNE',
+    cleanAwb
   );
   const baseMs = order.createdAtTimestampMs || order.resiInputAt || nowMs;
   const resiBaseMs = order.resiInputAt || order.createdAtTimestampMs || nowMs;
   const tStage1 = order.createdAtTimestampMs
     ? formatWibDateTimeFromMs(baseMs)
-    : order.createdAt;
+    : sanitizeInvoiceCreatedAt(order.createdAt, baseMs);
+
+  const perfumeNameFull = `${order.house} — ${order.fragranceName} (${order.volume})`;
+  const stage1InspectDetail = `Unit ${perfumeNameFull} telah melewati pemeriksaan integritas kemasan luar, verifikasi kode batch, dan inspeksi kualitas segel Vault berlapis.`;
+  const stage4PendingDetail = `Menunggu proses serah terima flacon parfum dan pengecekan fisik unit bersama ${order.buyerName} di ${order.buyerCity}.`;
+
+  // Determine the 4 dynamic conditions (A, B, C, D)
+  const orderCondition = isDelivered
+    ? 'D_DELIVERED'
+    : isCod
+    ? codConfirmed
+      ? 'C_IN_TRANSIT'
+      : 'A_UNPAID'
+    : hasAwb
+    ? 'C_IN_TRANSIT'
+    : isPaid
+    ? 'B_PAID_PACKING'
+    : 'A_UNPAID';
 
   // 1. Dedicated Face-to-Face COD / VIP Hand-Delivery Logic (No Expedition AWB)
-  // Stages 1, 2, and 3 light up automatically upon COD invoice creation; Stage 4 lights up when Admin confirms delivery.
   if (isCod) {
     const codMilestones: TrackingMilestone[] = [
       {
         timestamp: tStage1,
         location: 'VORVAN Climate-Controlled Vault',
         title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Fungsi Sprayer)',
-        detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) telah melewati pemeriksaan fisik botol kaca, inspeksi kualitas segel Vault berlapis, dan tekanan sprayer untuk penyerahan tatap muka.`,
+        detail: stage1InspectDetail,
         completed: stage >= 1,
         current: stage === 1,
       },
       {
-        timestamp: formatWibDateTimeFromMs(baseMs + 2 * 60000),
+        timestamp:
+          stage >= 2
+            ? order.codTermsAgreedAt || formatWibDateTimeFromMs(baseMs + 2 * 60000)
+            : 'Menunggu Konfirmasi S&K pada Invoice',
         location: `VORVAN VIP Dispatch · ${order.buyerCity}`,
         title: '2. Penjadwalan & Penyerahan Unit ke Kurir VIP COD VORVAN',
         detail: `Transaksi ini menggunakan layanan COD / VIP Hand-Delivery bersama klien (${order.buyerName}) di ${order.buyerCity} tanpa menggunakan kurir paket ekspedisi.`,
@@ -2401,7 +2828,10 @@ export function buildTrackingFromCustomOrder(
         current: stage === 2,
       },
       {
-        timestamp: formatWibDateTimeFromMs(baseMs + 5 * 60000),
+        timestamp:
+          stage >= 3
+            ? formatWibDateTimeFromMs(baseMs + 5 * 60000)
+            : 'Menunggu Konfirmasi Jadwal COD',
         location: `Jalur Pengantaran VIP → ${order.buyerCity}`,
         title: `3. Dalam Pengantaran Kurir VIP COD menuju ${order.buyerCity}`,
         detail: `Unit sedang dalam pengantaran oleh Kurir VIP COD VORVAN menuju lokasi penerima (${order.buyerName} — ${order.buyerCity}).`,
@@ -2415,7 +2845,10 @@ export function buildTrackingFromCustomOrder(
             : 'Menunggu Konfirmasi Serah Terima',
         location: order.buyerCity,
         title: '4. Paket Telah Diterima oleh Pembeli',
-        detail: `Penyerahan flacon parfum secara langsung (VIP Hand-Delivery) dan pengecekan fisik unit bersama ${order.buyerName} di ${order.buyerCity} telah selesai.`,
+        detail:
+          stage >= 4
+            ? `Proses serah terima flacon parfum secara langsung (VIP Hand-Delivery) dan pengecekan fisik unit di ${order.buyerCity} telah selesai diterima dengan baik oleh ${order.buyerName}.`
+            : stage4PendingDetail,
         completed: stage >= 4,
         current: stage === 4,
       },
@@ -2428,45 +2861,60 @@ export function buildTrackingFromCustomOrder(
       destination: order.buyerCity,
       courierService: 'COD / Tatap Muka Langsung',
       awbNumber: 'Tanpa Resi Ekspedisi (Tatap Muka)',
-      fragranceSummary: `${order.house} — ${order.fragranceName} (${order.volume})`,
-      statusLabel: COD_FACE_TO_FACE_STATUS_LABEL,
+      fragranceSummary: perfumeNameFull,
+      statusLabel:
+        stage >= 4
+          ? '✅ PAKET TELAH DITERIMA OLEH PEMBELI — SELESAI'
+          : !codConfirmed
+          ? '⏳ Menunggu Konfirmasi Persetujuan S&K & Jadwal COD pada Halaman Invoice'
+          : COD_FACE_TO_FACE_STATUS_LABEL,
       estimatedArrival:
         stage >= 4
           ? 'PAKET TELAH DITERIMA OLEH PEMBELI (SELESAI)'
-          : COD_FACE_TO_FACE_STATUS_LABEL,
+          : !codConfirmed
+          ? 'Menunggu Konfirmasi Persetujuan S&K & Jadwal COD'
+          : `Dalam Pengantaran Kurir VIP COD menuju ${order.buyerCity}`,
       vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
       boxInspectionNote:
-        'Transaksi COD / Serah Terima Tatap Muka Langsung: Pemeriksaan fisik flacon, inspeksi kualitas segel Vault berlapis, dan fungsi sprayer dilakukan secara langsung saat pertemuan.',
+        '🤝 PROTOKOL INSPEKSI SERAH TERIMA COD: Silakan periksa keutuhan segel kemasan dan fungsi semprotan (sprayer) secara langsung bersama Kurir VIP VORVAN saat serah terima di tempat.',
       milestones: codMilestones,
       createdAtTimestampMs: order.createdAtTimestampMs,
       courierOfficialUrl: courierMeta.officialTrackUrl,
       binderbyteCourierCode: '',
       isCodFaceToFace: true,
       isAwbPending: false,
+      orderCondition,
+      isPaid: stage >= 4 ? true : isPaid,
+      isDelivered,
+      codTermsAgreed: codConfirmed,
     };
   }
 
-  // 2. Expedition Order BEFORE Admin Inputs Follow-Up AWB (Resi Belum Tersedia & Stage < 4)
+  // 2. Expedition Order BEFORE Admin Inputs Follow-Up AWB (Kondisi A: Unpaid OR Kondisi B: Paid & Packing, Stage < 4)
   if (!hasAwb && stage < 4) {
     const pendingMilestones: TrackingMilestone[] = [
       {
         timestamp: tStage1,
         location: 'VORVAN Private Vault & Dispatch Desk',
-        title:
-          order.status === 'PAID' || order.paymentProof
-            ? '1. Pembayaran Terverifikasi — Sedang Dikemas di QC Vault VORVAN'
-            : '1. Invoice Diterbitkan — Menunggu Penyelesaian Pembayaran',
-        detail:
-          order.status === 'PAID' || order.paymentProof
-            ? `Pembayaran untuk ${order.house} — ${order.fragranceName} (${order.volume}) telah diterima. Unit sedang dikemas dengan Double-Wall Thermal Box dan menunggu penyerahan ke ekspedisi ${courierMeta.displayName}.`
-            : `Tagihan #${order.invoiceId} untuk ${order.house} — ${order.fragranceName} (${order.volume}) telah diterbitkan. Nomor resi ekspedisi ${courierMeta.displayName} akan diinput setelah pembayaran lunas dan paket dikirim.`,
+        title: isPaid
+          ? '1. Pembayaran Terverifikasi — Unit Sedang Dikemas'
+          : '1. Invoice Diterbitkan — Menunggu Penyelesaian Pembayaran',
+        detail: `${stage1InspectDetail} ${
+          isPaid
+            ? `Pembayaran telah terverifikasi dan unit sedang dikemas di Vault menunggu nomor resi ekspedisi ${courierMeta.displayName}.`
+            : `Tagihan #${order.invoiceId} telah diterbitkan. Silakan selesaikan pembayaran dan unggah bukti transfer pada halaman Invoice.`
+        }`,
         completed: true,
         current: true,
       },
       {
-        timestamp: 'Menunggu Input Resi Admin',
+        timestamp: isPaid
+          ? 'Menunggu Input Nomor Resi Ekspedisi'
+          : 'Menunggu Penyelesaian Pembayaran',
         location: `Manifest ${courierMeta.displayName}`,
-        title: '2. Penyerahan ke Ekspedisi & Penerbitan Nomor Resi Asli',
+        title: isPaid
+          ? '2. Menunggu Input Nomor Resi Ekspedisi'
+          : '2. Penyerahan ke Ekspedisi & Penerbitan Nomor Resi Asli',
         detail:
           'Nomor resi ekspedisi akan muncul otomatis di halaman ini segera setelah paket dikirim dan resi diinput oleh Admin Concierge VORVAN.',
         completed: false,
@@ -2481,10 +2929,10 @@ export function buildTrackingFromCustomOrder(
         current: false,
       },
       {
-        timestamp: 'Menunggu Pengiriman',
+        timestamp: 'Menunggu Konfirmasi Serah Terima',
         location: order.buyerCity,
         title: '4. Paket Telah Diterima oleh Pembeli',
-        detail: `Pengantaran oleh kurir ${courierMeta.displayName} menuju ${order.buyerName} (${order.buyerCity}).`,
+        detail: stage4PendingDetail,
         completed: false,
         current: false,
       },
@@ -2496,10 +2944,16 @@ export function buildTrackingFromCustomOrder(
       recipientName: order.buyerName,
       destination: order.buyerCity,
       courierService: courierMeta.displayName,
-      awbNumber: 'Belum Tersedia (Menunggu Pengiriman)',
-      fragranceSummary: `${order.house} — ${order.fragranceName} (${order.volume})`,
-      statusLabel: PENDING_AWB_STATUS_LABEL,
-      estimatedArrival: PENDING_AWB_STATUS_LABEL,
+      awbNumber: isPaid
+        ? 'Sedang Dikemas di Vault (Menunggu Input Resi Ekspedisi)'
+        : 'Belum Tersedia (Menunggu Penyelesaian Pembayaran)',
+      fragranceSummary: perfumeNameFull,
+      statusLabel: isPaid
+        ? 'STATUS: PEMBAYARAN DITERIMA · SEDANG DIKEMAS'
+        : PENDING_AWB_STATUS_LABEL,
+      estimatedArrival: isPaid
+        ? 'Pembayaran Terverifikasi — Menunggu Nomor Resi Ekspedisi'
+        : 'Menunggu Penyelesaian Pembayaran',
       vaultSealCode: `SEAL-${order.invoiceId.toUpperCase()}`,
       boxInspectionNote:
         'WAJIB VIDEO UNBOXING UTUH TANPA JEDA sejak paket masih tersegel untuk klaim garansi botol pecah atau semprotan/atomizer macet pabrik.',
@@ -2509,15 +2963,18 @@ export function buildTrackingFromCustomOrder(
       binderbyteCourierCode: '',
       isCodFaceToFace: false,
       isAwbPending: true,
+      orderCondition,
+      isPaid,
+      isDelivered: false,
     };
   }
 
-  // 3. Expedition Order WITH Valid AWB Entered by Admin (Stages 1, 2, 3 immediately active; Stage 4 active on Admin confirmation)
+  // 3. Expedition Order WITH Valid AWB Entered by Admin (Kondisi C: In Transit Stage 3 OR Kondisi D: Delivered Stage 4)
   const tStage2 = order.resiInputAt
     ? formatWibDateTimeFromMs(order.resiInputAt)
     : order.createdAtTimestampMs
     ? formatWibDateTimeFromMs(resiBaseMs + 4 * 60000)
-    : order.createdAt;
+    : tStage1;
   const tStage3 =
     stage >= 3
       ? formatWibDateTimeFromMs(resiBaseMs + 5 * 60000)
@@ -2530,8 +2987,8 @@ export function buildTrackingFromCustomOrder(
   const stageLabels: Record<1 | 2 | 3 | 4, string> = {
     1: 'AUTO-TRACKING AKTIF — LOLOS QC VAULT VORVAN',
     2: `AUTO-TRACKING AKTIF — DISERAHKAN KE MANIFEST ${courierMeta.displayName.toUpperCase()}`,
-    3: `AUTO-TRACKING AKTIF — DALAM PERJALANAN MENUJU ${order.buyerCity.toUpperCase()} (${courierMeta.displayName.toUpperCase()})`,
-    4: `PAKET TELAH DITERIMA OLEH PEMBELI — SELESAI (${courierMeta.displayName.toUpperCase()})`,
+    3: `🚚 Paket Sedang Dalam Perjalanan Menuju ${order.buyerCity} (Resi: ${cleanAwb || order.invoiceId})`,
+    4: '✅ PAKET TELAH DITERIMA OLEH PEMBELI — SELESAI',
   };
 
   const milestones: TrackingMilestone[] = [
@@ -2539,7 +2996,7 @@ export function buildTrackingFromCustomOrder(
       timestamp: tStage1,
       location: 'VORVAN Climate-Controlled Vault',
       title: '1. Lolos QC Vault VORVAN (Inspeksi Fisik Botol & Fungsi Sprayer)',
-      detail: `Unit ${order.house} — ${order.fragranceName} (${order.volume}) lolos pemeriksaan fisik botol kaca, inspeksi kualitas segel Vault berlapis, dan fungsi tekanan sprayer.`,
+      detail: stage1InspectDetail,
       completed: stage >= 1,
       current: stage === 1,
     },
@@ -2547,7 +3004,7 @@ export function buildTrackingFromCustomOrder(
       timestamp: tStage2,
       location: `Manifest ${courierMeta.displayName} · VORVAN Dispatch Hub`,
       title: '2. Penyerahan ke Ekspedisi & Penerbitan Nomor Resi Asli',
-      detail: `Dikemas berlapis pelindung aman, dipasang segel wajib video unboxing utuh, dan diserahkan ke ekspedisi ${courierMeta.displayName} dengan Nomor Resi Asli (AWB: ${order.awbNumber || order.invoiceId}).`,
+      detail: `Dikemas berlapis pelindung aman, dipasang segel wajib video unboxing utuh, dan diserahkan ke ekspedisi ${courierMeta.displayName} dengan Nomor Resi Asli (AWB: ${cleanAwb || order.invoiceId}).`,
       completed: stage >= 2,
       current: stage === 2,
     },
@@ -2563,20 +3020,23 @@ export function buildTrackingFromCustomOrder(
       timestamp: tStage4,
       location: order.buyerCity,
       title: '4. Paket Telah Diterima oleh Pembeli',
-      detail: `Paket telah diterima oleh pembeli (${order.buyerName} — ${order.buyerCity}) melalui kurir ${courierMeta.displayName}. Wajib merekam video unboxing utuh tanpa jeda sejak paket masih tersegel.`,
+      detail:
+        stage >= 4
+          ? `Pengiriman flacon parfum melalui kurir ${courierMeta.displayName} ke ${order.buyerCity} telah selesai diterima dengan baik oleh ${order.buyerName}.`
+          : stage4PendingDetail,
       completed: stage >= 4,
       current: stage === 4,
     },
   ];
 
   return {
-    trackingId: order.trackingId || order.awbNumber || order.invoiceId,
+    trackingId: cleanAwb || order.trackingId || order.invoiceId,
     invoiceId: order.invoiceId,
     recipientName: order.buyerName,
     destination: order.buyerCity,
     courierService: courierMeta.displayName,
-    awbNumber: order.awbNumber || order.invoiceId,
-    fragranceSummary: `${order.house} — ${order.fragranceName} (${order.volume})`,
+    awbNumber: cleanAwb || order.invoiceId,
+    fragranceSummary: perfumeNameFull,
     statusLabel: stageLabels[stage],
     estimatedArrival:
       stage >= 4
@@ -2591,7 +3051,59 @@ export function buildTrackingFromCustomOrder(
     binderbyteCourierCode: courierMeta.binderbyteCode,
     isCodFaceToFace: false,
     isAwbPending: false,
+    orderCondition,
+    isPaid: stage >= 4 ? true : isPaid,
+    isDelivered,
   };
+}
+
+/**
+ * Resolves a reactive merged list of custom orders from both the passed `customOrders` prop
+ * and `localStorage` (`loadCustomAdminOrders()`), so any follow-up Resi, Courier, Proof, or Stage 4
+ * saved to `localStorage` or React state is immediately reflected without stale snapshots.
+ */
+function resolveReactiveOrdersList(
+  customOrders?: CustomAdminOrder[]
+): CustomAdminOrder[] {
+  const storedOrders = loadCustomAdminOrders();
+  if (!customOrders) return storedOrders;
+  if (storedOrders.length === 0) {
+    return customOrders.map((o) => syncOrderDynamicResiFields(o));
+  }
+  const byInv = new Map<string, CustomAdminOrder>();
+  for (const ord of storedOrders) {
+    const key = normalizeInvoiceIdKey(ord.invoiceId);
+    if (key) byInv.set(key, syncOrderDynamicResiFields(ord));
+  }
+  for (const ord of customOrders) {
+    const key = normalizeInvoiceIdKey(ord.invoiceId);
+    if (!key) continue;
+    const existing = byInv.get(key);
+    if (existing) {
+      byInv.set(key, mergeStoredWithSmartOrder(ord, existing));
+    } else {
+      byInv.set(key, syncOrderDynamicResiFields(ord));
+    }
+  }
+  return Array.from(byInv.values());
+}
+
+function matchesOrderByQuery(order: CustomAdminOrder, cleanUpper: string): boolean {
+  if (!cleanUpper) return false;
+  const oInv = (order.invoiceId || '').trim().toUpperCase();
+  const oAwb = extractOrderAwb(order).toUpperCase();
+  const oTrk = (order.trackingId || '').trim().toUpperCase();
+  const oResi = (order.resi || '').trim().toUpperCase();
+  const oTrackNum = (order.trackingNumber || '').trim().toUpperCase();
+  const oNoResi = (order.noResi || '').trim().toUpperCase();
+  return (
+    oInv === cleanUpper ||
+    (oAwb.length > 0 && oAwb === cleanUpper) ||
+    (oTrk.length > 0 && oTrk === cleanUpper) ||
+    (oResi.length > 0 && oResi === cleanUpper) ||
+    (oTrackNum.length > 0 && oTrackNum === cleanUpper) ||
+    (oNoResi.length > 0 && oNoResi === cleanUpper)
+  );
 }
 
 /**
@@ -2632,23 +3144,33 @@ export function resolvePrivateInvoice(
     };
   };
 
-  const ordersList = customOrders ?? loadCustomAdminOrders();
+  const ordersList = resolveReactiveOrdersList(customOrders);
   const matchedCustom = normalized
-    ? ordersList.find((o) => {
-        const oInv = (o.invoiceId || '').trim().toUpperCase();
-        const oAwb = (o.awbNumber || '').trim().toUpperCase();
-        return oInv === normalized || (oAwb.length > 0 && oAwb === normalized);
-      })
+    ? ordersList.find((o) => matchesOrderByQuery(o, normalized))
     : undefined;
   if (matchedCustom) {
-    return attachProof(buildInvoiceFromCustomOrder(matchedCustom));
+    const merged =
+      smartOrder &&
+      normalizeInvoiceIdKey(smartOrder.invoiceId) ===
+        normalizeInvoiceIdKey(matchedCustom.invoiceId)
+        ? mergeStoredWithSmartOrder(matchedCustom, smartOrder)
+        : matchedCustom;
+    return attachProof(buildInvoiceFromCustomOrder(merged));
   }
 
   if (
     smartOrder &&
     (!normalized || smartOrder.invoiceId.toUpperCase() === normalized)
   ) {
-    return attachProof(buildInvoiceFromCustomOrder(smartOrder));
+    const updatedMatch = ordersList.find(
+      (o) =>
+        normalizeInvoiceIdKey(o.invoiceId) ===
+        normalizeInvoiceIdKey(smartOrder.invoiceId)
+    );
+    const merged = updatedMatch
+      ? mergeStoredWithSmartOrder(updatedMatch, smartOrder)
+      : syncOrderDynamicResiFields(smartOrder);
+    return attachProof(buildInvoiceFromCustomOrder(merged));
   }
 
   if (!normalized || PRIVATE_INVOICES_SEED[normalized]) {
@@ -2772,39 +3294,19 @@ export function lookupPrivateInvoice(
     };
   };
 
-  const ordersList = customOrders ?? loadCustomAdminOrders();
+  const ordersList = resolveReactiveOrdersList(customOrders);
 
   if (normalized) {
-    const matchedCustom = ordersList.find((o) => {
-      const oInv = (o.invoiceId || '').trim().toUpperCase();
-      const oAwb = (o.awbNumber || '').trim().toUpperCase();
-      const oTrk = (o.trackingId || '').trim().toUpperCase();
-      return (
-        oInv === normalized ||
-        (oAwb.length > 0 && oAwb === normalized) ||
-        (oTrk.length > 0 && oTrk === normalized)
-      );
-    });
+    const matchedCustom = ordersList.find((o) =>
+      matchesOrderByQuery(o, normalized)
+    );
     if (matchedCustom) {
       if (
         smartOrder &&
-        (smartOrder.invoiceId || '').trim().toUpperCase() ===
-          (matchedCustom.invoiceId || '').trim().toUpperCase()
+        normalizeInvoiceIdKey(smartOrder.invoiceId) ===
+          normalizeInvoiceIdKey(matchedCustom.invoiceId)
       ) {
-        const mergedOrder: CustomAdminOrder = {
-          ...matchedCustom,
-          ...smartOrder,
-          status:
-            matchedCustom.status === 'PAID' || smartOrder.status === 'PAID'
-              ? 'PAID'
-              : smartOrder.status,
-          paymentProof: matchedCustom.paymentProof || smartOrder.paymentProof,
-          paymentProofUrl:
-            matchedCustom.paymentProofUrl || smartOrder.paymentProofUrl,
-          paymentProofUploadedAt:
-            matchedCustom.paymentProofUploadedAt ||
-            smartOrder.paymentProofUploadedAt,
-        };
+        const mergedOrder = mergeStoredWithSmartOrder(matchedCustom, smartOrder);
         return attachProof(buildInvoiceFromCustomOrder(mergedOrder));
       }
       return attachProof(buildInvoiceFromCustomOrder(matchedCustom));
@@ -2813,34 +3315,16 @@ export function lookupPrivateInvoice(
 
   if (
     smartOrder &&
-    (!normalized ||
-      (smartOrder.invoiceId || '').trim().toUpperCase() === normalized ||
-      ((smartOrder.awbNumber || '').trim().toUpperCase() === normalized &&
-        normalized.length > 0) ||
-      ((smartOrder.trackingId || '').trim().toUpperCase() === normalized &&
-        normalized.length > 0))
+    (!normalized || matchesOrderByQuery(smartOrder, normalized))
   ) {
     const updatedMatch = ordersList.find(
       (o) =>
-        (o.invoiceId || '').trim().toUpperCase() ===
-        (smartOrder.invoiceId || '').trim().toUpperCase()
+        normalizeInvoiceIdKey(o.invoiceId) ===
+        normalizeInvoiceIdKey(smartOrder.invoiceId)
     );
-    const mergedOrder: CustomAdminOrder = updatedMatch
-      ? {
-          ...updatedMatch,
-          ...smartOrder,
-          status:
-            updatedMatch.status === 'PAID' || smartOrder.status === 'PAID'
-              ? 'PAID'
-              : smartOrder.status,
-          paymentProof: updatedMatch.paymentProof || smartOrder.paymentProof,
-          paymentProofUrl:
-            updatedMatch.paymentProofUrl || smartOrder.paymentProofUrl,
-          paymentProofUploadedAt:
-            updatedMatch.paymentProofUploadedAt ||
-            smartOrder.paymentProofUploadedAt,
-        }
-      : smartOrder;
+    const mergedOrder = updatedMatch
+      ? mergeStoredWithSmartOrder(updatedMatch, smartOrder)
+      : syncOrderDynamicResiFields(smartOrder);
     return attachProof(buildInvoiceFromCustomOrder(mergedOrder));
   }
 
@@ -2884,7 +3368,8 @@ export function lookupPrivateInvoice(
 
 /**
  * Looks up a shipment tracking record by Tracking ID, AWB Number, or Invoice ID.
- * Prioritizes customOrders (including follow-up AWB updates by Admin) before smartOrder fallback.
+ * Prioritizes customOrders & localStorage (including follow-up AWB updates by Admin)
+ * and never lets an older URL smartOrder overwrite updated Resi, Courier, Proof, or Stage 4.
  */
 export function lookupTrackingOrder(
   query: string,
@@ -2893,39 +3378,31 @@ export function lookupTrackingOrder(
 ): TrackingRecord | null {
   const clean = (query || '').trim().toUpperCase();
 
-  const ordersList = customOrders ?? loadCustomAdminOrders();
+  const ordersList = resolveReactiveOrdersList(customOrders);
   if (clean) {
-    const matchedCustom = ordersList.find((o) => {
-      const oAwb = (o.awbNumber || '').trim().toUpperCase();
-      const oInv = (o.invoiceId || '').trim().toUpperCase();
-      const oTrk = (o.trackingId || '').trim().toUpperCase();
-      return (
-        (oAwb.length > 0 && oAwb === clean) ||
-        oInv === clean ||
-        (oTrk.length > 0 && oTrk === clean)
-      );
-    });
+    const matchedCustom = ordersList.find((o) => matchesOrderByQuery(o, clean));
     if (matchedCustom) {
-      return buildTrackingFromCustomOrder(matchedCustom);
+      const merged =
+        smartOrder &&
+        normalizeInvoiceIdKey(smartOrder.invoiceId) ===
+          normalizeInvoiceIdKey(matchedCustom.invoiceId)
+          ? mergeStoredWithSmartOrder(matchedCustom, smartOrder)
+          : matchedCustom;
+      return buildTrackingFromCustomOrder(merged);
     }
   }
 
-  if (
-    smartOrder &&
-    (!clean ||
-      ((smartOrder.awbNumber || '').trim().toUpperCase() === clean &&
-        clean.length > 0) ||
-      (smartOrder.invoiceId || '').trim().toUpperCase() === clean ||
-      ((smartOrder.trackingId || '').trim().toUpperCase() === clean &&
-        clean.length > 0))
-  ) {
-    // Check if customOrders has an updated record for smartOrder.invoiceId (e.g., follow-up resi added)
+  if (smartOrder && (!clean || matchesOrderByQuery(smartOrder, clean))) {
+    // Check if customOrders / localStorage has an updated record for smartOrder.invoiceId (e.g., follow-up resi added)
     const updatedMatch = ordersList.find(
       (o) =>
-        o.invoiceId.trim().toUpperCase() ===
-        smartOrder.invoiceId.trim().toUpperCase()
+        normalizeInvoiceIdKey(o.invoiceId) ===
+        normalizeInvoiceIdKey(smartOrder.invoiceId)
     );
-    return buildTrackingFromCustomOrder(updatedMatch || smartOrder);
+    const merged = updatedMatch
+      ? mergeStoredWithSmartOrder(updatedMatch, smartOrder)
+      : syncOrderDynamicResiFields(smartOrder);
+    return buildTrackingFromCustomOrder(merged);
   }
 
   if (!clean) return null;

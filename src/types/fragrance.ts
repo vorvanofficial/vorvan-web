@@ -139,6 +139,8 @@ export interface PrivateInvoice {
   shippingLabel?: string;
   shippingMethod?: ShippingMethodType;
   isCOD?: boolean;
+  codTermsAgreed?: boolean;
+  codTermsAgreedAt?: string;
   items: PrivateInvoiceItem[];
   notes: string;
   paymentProof?: string | null;
@@ -154,6 +156,12 @@ export interface TrackingMilestone {
   completed: boolean;
   current?: boolean;
 }
+
+export type TrackingOrderCondition =
+  | 'A_UNPAID'
+  | 'B_PAID_PACKING'
+  | 'C_IN_TRANSIT'
+  | 'D_DELIVERED';
 
 export interface TrackingRecord {
   trackingId: string;
@@ -173,6 +181,10 @@ export interface TrackingRecord {
   binderbyteCourierCode?: string;
   isCodFaceToFace?: boolean;
   isAwbPending?: boolean;
+  orderCondition?: TrackingOrderCondition;
+  isPaid?: boolean;
+  isDelivered?: boolean;
+  codTermsAgreed?: boolean;
 }
 
 export interface PreOrderSubmission {
@@ -264,6 +276,7 @@ export interface CustomAdminOrder {
   trackingId: string;
   createdAt: string;
   createdAtTimestampMs?: number;
+  updatedAtMs?: number;
   buyerName: string;
   buyerCity: string;
   house: string;
@@ -279,9 +292,15 @@ export interface CustomAdminOrder {
   shippingCostIDR?: number;
   shippingLabel?: string;
   shippingMethod: ShippingMethodType;
+  courier?: string;
   isCOD?: boolean;
+  codTermsAgreed?: boolean;
+  codTermsAgreedAt?: string;
   isDelivered?: boolean;
   awbNumber: string;
+  resi?: string;
+  trackingNumber?: string;
+  noResi?: string;
   resiInputAt?: number;
   shippingStage?: 1 | 2 | 3 | 4;
   shippingStageOverride?: 'AUTO' | 1 | 2 | 3 | 4;

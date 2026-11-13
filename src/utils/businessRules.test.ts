@@ -371,6 +371,7 @@ test('Automated courier tracking helpers compute time-based stages, Binderbyte U
   // When Admin confirms package arrival (Stage 4) -> Stage 4 active
   const confirmedOrder = {
     ...baseOrder,
+    isDelivered: true,
     shippingStage: 4 as const,
     shippingStageOverride: 4 as const,
   };
@@ -3094,10 +3095,369 @@ test('Invoice bottom confirmation section is centered across devices, QRIS & is 
   assert.equal(decoded!.shippingStageOverride, 4);
 });
 
+test('Dynamic Resi Sync across all AWB fields (resi, trackingNumber, noResi, awbNumber), URL smartOrder protection, and 4 Dynamic Tracking Conditions (A, B, C, D)', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const {
+    extractOrderAwb,
+    syncOrderDynamicResiFields,
+    mergeStoredWithSmartOrder,
+    buildTrackingFromCustomOrder,
+    lookupTrackingOrder,
+    lookupPrivateInvoice,
+    applyPaymentProofToOrders,
+    removePaymentProofRecord,
+  } = await import('./businessRules.ts');
 
+  const t0 = 1710500000000;
+  removePaymentProofRecord('INV-VRV-4401');
 
+  // 1. KONDISI A — BELUM BAYAR & BELUM UPLOAD BUKTI BAYAR (Status UNPAID, no paymentProof, not COD)
+  const orderConditionA = syncOrderDynamicResiFields({
+    invoiceId: 'INV-VRV-4401',
+    trackingId: 'INV-VRV-4401',
+    createdAt: '14 Nov 2026 · 09:00 WIB',
+    createdAtTimestampMs: t0,
+    buyerName: 'Bapak Rendra Pratama',
+    buyerCity: 'Bandung, Jawa Barat',
+    house: 'Maison Francis Kurkdjian',
+    fragranceName: 'Baccarat Rouge 540 Extrait',
+    concentration: 'Extrait de Parfum',
+    volume: '70ml',
+    batchCode: 'VRV-001',
+    dealPriceIDR: 5250000,
+    shippingMethod: 'Paxel',
+    awbNumber: '',
+    status: 'PENDING_PAYMENT',
+  });
 
+  const trackA = buildTrackingFromCustomOrder(orderConditionA, t0);
+  assert.equal(trackA.orderCondition, 'A_UNPAID');
+  assert.equal(trackA.isPaid, false);
+  assert.equal(trackA.isDelivered, false);
+  assert.equal(trackA.milestones[0].completed, true);
+  assert.ok(
+    trackA.milestones[0].title.includes('Menunggu Penyelesaian Pembayaran')
+  );
+  assert.equal(trackA.milestones[1].completed, false);
+  assert.equal(trackA.milestones[2].completed, false);
+  assert.equal(trackA.milestones[3].completed, false);
 
+  // 2. KONDISI B — SUDAH UPLOAD BUKTI BAYAR ATAU STATUS SUDAH PAID, TAPI ADMIN BELUM INPUT NOMOR RESI ASLI
+  const proofApplied = applyPaymentProofToOrders(
+    [orderConditionA],
+    'INV-VRV-4401',
+    'data:image/jpeg;base64,PROOF_4401',
+    '14 Nov 2026 · 09:15 WIB'
+  );
+  const orderConditionB = proofApplied.updatedOrders[0];
+  const trackB = buildTrackingFromCustomOrder(orderConditionB, t0 + 900000);
+  assert.equal(trackB.orderCondition, 'B_PAID_PACKING');
+  assert.equal(trackB.isPaid, true);
+  assert.equal(trackB.isDelivered, false);
+  assert.equal(
+    trackB.statusLabel,
+    'STATUS: PEMBAYARAN DITERIMA · SEDANG DIKEMAS'
+  );
+  assert.equal(
+    trackB.milestones[0].title,
+    '1. Pembayaran Terverifikasi — Unit Sedang Dikemas'
+  );
+  assert.equal(
+    trackB.milestones[1].title,
+    '2. Menunggu Input Nomor Resi Ekspedisi'
+  );
+  assert.equal(trackB.milestones[0].completed, true);
+  assert.equal(trackB.milestones[1].completed, false);
+  assert.equal(trackB.milestones[2].completed, false);
+  assert.equal(trackB.milestones[3].completed, false);
 
+  // 3. KONDISI C — ADMIN INPUT NOMOR RESI ASLI DINAMIS (misal Paxel EM.PXL-9928172-A) & isDelivered === false
+  const orderConditionC = syncOrderDynamicResiFields({
+    ...orderConditionB,
+    shippingMethod: 'Paxel',
+    awbNumber: '',
+    resi: 'EM.PXL-9928172-A', // Provided via alias field `resi` to verify dynamic extraction
+    resiInputAt: t0 + 1800000,
+    isDelivered: false,
+  });
+  assert.equal(extractOrderAwb(orderConditionC), 'EM.PXL-9928172-A');
+  assert.equal(orderConditionC.awbNumber, 'EM.PXL-9928172-A');
+  assert.equal(orderConditionC.resi, 'EM.PXL-9928172-A');
+  assert.equal(orderConditionC.trackingNumber, 'EM.PXL-9928172-A');
+  assert.equal(orderConditionC.noResi, 'EM.PXL-9928172-A');
 
+  const trackC = buildTrackingFromCustomOrder(orderConditionC, t0 + 1800000);
+  assert.equal(trackC.orderCondition, 'C_IN_TRANSIT');
+  assert.equal(trackC.courierService, 'Paxel');
+  assert.equal(trackC.awbNumber, 'EM.PXL-9928172-A');
+  assert.ok(
+    trackC.statusLabel.includes(
+      '🚚 Paket Sedang Dalam Perjalanan Menuju Bandung, Jawa Barat (Resi: EM.PXL-9928172-A)'
+    )
+  );
+  assert.equal(trackC.milestones[0].completed, true);
+  assert.equal(trackC.milestones[1].completed, true);
+  assert.equal(trackC.milestones[2].completed, true);
+  assert.equal(trackC.milestones[3].completed, false);
 
+  // Verify old URL smartOrder (which had empty awbNumber, JNE, PENDING_PAYMENT) NEVER overwrites updated orderConditionC!
+  const staleSmartOrderFromOldUrl = {
+    ...orderConditionA,
+    shippingMethod: 'JNE' as const,
+    awbNumber: '',
+    status: 'PENDING_PAYMENT' as const,
+    paymentProof: null,
+    isDelivered: false,
+  };
+  const mergedAgainstStaleUrl = mergeStoredWithSmartOrder(
+    orderConditionC,
+    staleSmartOrderFromOldUrl
+  );
+  assert.equal(mergedAgainstStaleUrl.awbNumber, 'EM.PXL-9928172-A');
+  assert.equal(mergedAgainstStaleUrl.resi, 'EM.PXL-9928172-A');
+  assert.equal(mergedAgainstStaleUrl.shippingMethod, 'Paxel');
+  assert.equal(mergedAgainstStaleUrl.status, 'PAID');
+
+  const lookedUpTrack = lookupTrackingOrder(
+    'INV-VRV-4401',
+    [orderConditionC],
+    staleSmartOrderFromOldUrl
+  );
+  assert.ok(lookedUpTrack);
+  assert.equal(lookedUpTrack!.orderCondition, 'C_IN_TRANSIT');
+  assert.equal(lookedUpTrack!.awbNumber, 'EM.PXL-9928172-A');
+  assert.equal(lookedUpTrack!.courierService, 'Paxel');
+
+  const lookedUpInv = lookupPrivateInvoice(
+    'INV-VRV-4401',
+    [orderConditionC],
+    staleSmartOrderFromOldUrl
+  );
+  assert.ok(lookedUpInv);
+  assert.equal(lookedUpInv!.status, 'PAID');
+  assert.equal(lookedUpInv!.shippingMethod, 'Paxel');
+
+  // 4. KONDISI D — ADMIN KLIK '[ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]' (isDelivered === true)
+  const orderConditionD = syncOrderDynamicResiFields({
+    ...orderConditionC,
+    isDelivered: true,
+  });
+  const trackD = buildTrackingFromCustomOrder(orderConditionD, t0 + 7200000);
+  assert.equal(trackD.orderCondition, 'D_DELIVERED');
+  assert.equal(trackD.isDelivered, true);
+  assert.equal(
+    trackD.statusLabel,
+    '✅ PAKET TELAH DITERIMA OLEH PEMBELI — SELESAI'
+  );
+  assert.equal(trackD.milestones[0].completed, true);
+  assert.equal(trackD.milestones[1].completed, true);
+  assert.equal(trackD.milestones[2].completed, true);
+  assert.equal(trackD.milestones[3].completed, true);
+
+  // Verify OrderTrackingView.tsx contains all 4 condition UI texts & button
+  const trackingViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'OrderTrackingView.tsx'),
+    'utf8'
+  );
+  assert.ok(trackingViewCode.includes('STATUS: MENUNGGU PEMBAYARAN'));
+  assert.ok(
+    trackingViewCode.includes(
+      '⏳ Silakan Selesaikan Pembayaran & Unggah Bukti Transfer pada Halaman Invoice'
+    )
+  );
+  assert.ok(
+    trackingViewCode.includes('[ BUKA HALAMAN INVOICE UNTUK PEMBAYARAN -> ]')
+  );
+  assert.ok(
+    trackingViewCode.includes('STATUS: PEMBAYARAN DITERIMA · SEDANG DIKEMAS')
+  );
+  assert.ok(
+    trackingViewCode.includes(
+      '📦 Pembayaran Terverifikasi — Pesanan Sedang Dikemas di Vault &amp; Menunggu Nomor Resi Ekspedisi'
+    )
+  );
+  assert.ok(
+    trackingViewCode.includes('✅ PAKET TELAH DITERIMA OLEH PEMBELI — SELESAI')
+  );
+
+  removePaymentProofRecord('INV-VRV-4401');
+});
+
+test('48. Six Precision Improvements on INVOICE and CEK RESI (COD Tab Hiding, No QRIS, No COD Proof Upload, Real Issuance Timestamp, COD Inspection Protocol, Stage 1 & 4 Wording, and COD Stage 1 -> 3 -> 4 Progression)', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const {
+    buildInvoiceFromCustomOrder,
+    buildTrackingFromCustomOrder,
+    computeAutoShippingStage,
+    decodeSmartOrderParam,
+    encodeSmartOrderParam,
+    removeCodAgreedRecord,
+    sanitizeInvoiceCreatedAt,
+    saveCodAgreedRecord,
+    syncOrderDynamicResiFields,
+  } = await import('./businessRules.ts');
+
+  const invoiceViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'PrivateInvoiceView.tsx'),
+    'utf8'
+  );
+  const trackingViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'OrderTrackingView.tsx'),
+    'utf8'
+  );
+
+  // 1. INVOICE: Tab 1 title has no "& QRIS", COD hides Tab 1 & Tab 3, Expedition hides Tab 2 (COD)
+  assert.ok(
+    invoiceViewCode.includes('TRANSFER BANK RESMI (INDONESIA)') &&
+      !invoiceViewCode.includes('TRANSFER BANK RESMI & QRIS') &&
+      !invoiceViewCode.includes('TRANSFER BANK RESMI &amp; QRIS')
+  );
+  assert.ok(invoiceViewCode.includes('{!isCodOrder && ('));
+  assert.ok(
+    invoiceViewCode.includes(
+      "{isCodOrder && effectivePaymentTab === 'cod_hand_delivery' && ("
+    )
+  );
+
+  // 2. INVOICE: COD hides Upload Bukti Pembayaran & unlocks WA/Telegram COD confirmation immediately on S&K check; date never displays "Terverifikasi · WIB"
+  assert.ok(invoiceViewCode.includes('{isPaymentUnlocked && !isCodOrder && ('));
+  assert.ok(
+    invoiceViewCode.includes(
+      'const isConfirmationUnlocked = isCodOrder\n    ? isPaymentUnlocked\n    : isPaymentUnlocked && hasProof;'
+    )
+  );
+  assert.ok(invoiceViewCode.includes('KONFIRMASI JADWAL COD VIA WHATSAPP'));
+  assert.ok(invoiceViewCode.includes('KONFIRMASI VIA TELEGRAM'));
+
+  const fixedMs = Date.UTC(2026, 10, 13, 18, 46, 0); // 14 Nov 2026 · 01.46 WIB
+  const sanitized = sanitizeInvoiceCreatedAt('Terverifikasi · WIB', fixedMs);
+  assert.ok(!sanitized.includes('Terverifikasi'));
+  assert.ok(sanitized.includes('2026'));
+  assert.ok(sanitized.includes('WIB'));
+
+  // 3. CEK RESI: No duplicate "Status Integrasi:" line, and COD Inspection Protocol box replaces Video Unboxing box for COD
+  assert.ok(!trackingViewCode.includes('Status Integrasi:'));
+  assert.ok(
+    trackingViewCode.includes(
+      '🤝 PROTOKOL INSPEKSI SERAH TERIMA COD: Silakan periksa keutuhan segel kemasan dan fungsi semprotan (sprayer) secara langsung bersama Kurir VIP VORVAN saat serah terima di tempat.'
+    )
+  );
+  assert.ok(trackingViewCode.includes('data-testid="cod-inspection-protocol-box"'));
+  assert.ok(trackingViewCode.includes('data-testid="unboxing-warning-box"'));
+
+  // 4 & 5. COD Stage 1 -> Stage 3 -> Stage 4 & Exact Stage 1 / Stage 4 Wording
+  removeCodAgreedRecord('INV-VRV-9910');
+  const codOrderUnagreed = syncOrderDynamicResiFields({
+    invoiceId: 'INV-VRV-9910',
+    trackingId: 'INV-VRV-9910',
+    createdAt: 'Terverifikasi · WIB',
+    createdAtTimestampMs: fixedMs,
+    buyerName: 'Bapak Hendra Wijaya',
+    buyerCity: 'Denpasar, Bali',
+    house: 'Maison Francis Kurkdjian',
+    fragranceName: 'Baccarat Rouge 540 Extrait',
+    concentration: 'Extrait de Parfum',
+    volume: '70ml',
+    batchCode: 'VRV-26540B',
+    dealPriceIDR: 4850000,
+    shippingMethod: 'COD / Tatap Muka',
+    isCOD: true,
+    codTermsAgreed: false,
+    isDelivered: false,
+    awbNumber: '',
+    shippingStage: 1,
+    shippingStageOverride: 'AUTO',
+    status: 'PENDING_PAYMENT',
+  });
+
+  // Verify invoice createdAt is sanitized
+  const builtInv = buildInvoiceFromCustomOrder(codOrderUnagreed);
+  assert.ok(!builtInv.createdAt.includes('Terverifikasi'));
+  assert.ok(builtInv.createdAt.includes('WIB'));
+
+  // Before S&K is checked on Invoice: COD is at Stage 1 (A_UNPAID)
+  assert.equal(computeAutoShippingStage(codOrderUnagreed), 1);
+  const trackCod1 = buildTrackingFromCustomOrder(codOrderUnagreed, fixedMs);
+  assert.equal(trackCod1.orderCondition, 'A_UNPAID');
+  assert.equal(
+    trackCod1.statusLabel,
+    '⏳ Menunggu Konfirmasi Persetujuan S&K & Jadwal COD pada Halaman Invoice'
+  );
+  assert.equal(trackCod1.milestones[0].completed, true);
+  assert.equal(trackCod1.milestones[1].completed, false);
+  assert.equal(trackCod1.milestones[2].completed, false);
+  assert.equal(trackCod1.milestones[3].completed, false);
+
+  // Verify Stage 1 detail has NO "tekanan sprayer" and matches exact required wording
+  assert.ok(!trackCod1.milestones[0].detail.includes('tekanan sprayer'));
+  assert.equal(
+    trackCod1.milestones[0].detail,
+    'Unit Maison Francis Kurkdjian — Baccarat Rouge 540 Extrait (70ml) telah melewati pemeriksaan integritas kemasan luar, verifikasi kode batch, dan inspeksi kualitas segel Vault berlapis.'
+  );
+
+  // Verify Stage 4 detail while isDelivered === false does NOT say "...telah selesai"
+  assert.ok(!trackCod1.milestones[3].detail.includes('telah selesai'));
+  assert.equal(
+    trackCod1.milestones[3].detail,
+    'Menunggu proses serah terima flacon parfum dan pengecekan fisik unit bersama Bapak Hendra Wijaya di Denpasar, Bali.'
+  );
+
+  // Once buyer checks S&K on Invoice: COD automatically lights up Stage 1, 2, and 3
+  saveCodAgreedRecord('INV-VRV-9910', '14 Nov 2026 · 02.00 WIB');
+  const codOrderAgreed = syncOrderDynamicResiFields({
+    ...codOrderUnagreed,
+    codTermsAgreed: true,
+    codTermsAgreedAt: '14 Nov 2026 · 02.00 WIB',
+  });
+  assert.equal(computeAutoShippingStage(codOrderAgreed), 3);
+  const trackCod3 = buildTrackingFromCustomOrder(codOrderAgreed, fixedMs + 600000);
+  assert.equal(trackCod3.orderCondition, 'C_IN_TRANSIT');
+  assert.equal(
+    trackCod3.milestones[2].title,
+    '3. Dalam Pengantaran Kurir VIP COD menuju Denpasar, Bali'
+  );
+  assert.ok(
+    trackingViewCode.includes(
+      '🚚 Dalam Pengantaran Kurir VIP COD menuju ${activeRecord.destination}'
+    )
+  );
+  assert.equal(trackCod3.milestones[0].completed, true);
+  assert.equal(trackCod3.milestones[1].completed, true);
+  assert.equal(trackCod3.milestones[2].completed, true);
+  assert.equal(trackCod3.milestones[3].completed, false);
+  assert.equal(
+    trackCod3.milestones[3].detail,
+    'Menunggu proses serah terima flacon parfum dan pengecekan fisik unit bersama Bapak Hendra Wijaya di Denpasar, Bali.'
+  );
+
+  // Verify Smart URL preserves createdAtTimestampMs and codTermsAgreed
+  const encodedToken = encodeSmartOrderParam(codOrderUnagreed);
+  removeCodAgreedRecord('INV-VRV-9910');
+  const decodedUnagreed = decodeSmartOrderParam(encodedToken);
+  assert.ok(decodedUnagreed);
+  assert.equal(decodedUnagreed!.codTermsAgreed, false);
+  assert.ok(!decodedUnagreed!.createdAt.includes('Terverifikasi'));
+
+  // Once Admin clicks '[ ✅ KONFIRMASI PAKET TIBA / SELESAI (AKTIFKAN TAHAP 4) ]' (isDelivered === true):
+  const codOrderStage4 = syncOrderDynamicResiFields({
+    ...codOrderAgreed,
+    isDelivered: true,
+    status: 'PAID',
+  });
+  assert.equal(computeAutoShippingStage(codOrderStage4), 4);
+  const trackCod4 = buildTrackingFromCustomOrder(codOrderStage4, fixedMs + 3600000);
+  assert.equal(trackCod4.orderCondition, 'D_DELIVERED');
+  assert.equal(trackCod4.milestones[0].completed, true);
+  assert.equal(trackCod4.milestones[1].completed, true);
+  assert.equal(trackCod4.milestones[2].completed, true);
+  assert.equal(trackCod4.milestones[3].completed, true);
+  assert.ok(
+    trackCod4.milestones[3].detail.includes(
+      'telah selesai diterima dengan baik oleh Bapak Hendra Wijaya'
+    )
+  );
+
+  removeCodAgreedRecord('INV-VRV-9910');
+});

@@ -3287,7 +3287,7 @@ export const TRACKING_RECORDS_SEED: Record<string, TrackingRecord> = {
         location: 'VORVAN Climate-Controlled Vault',
         title: '1. Inspeksi Fisik Botol & Fungsi Sprayer (Lolos QC Vault VORVAN)',
         detail:
-          'Unit lolos pemeriksaan fisik botol kaca, kode arsip VRV-041 terverifikasi, dan tekanan sprayer normal.',
+          'Unit Le Labo — Santal 33 EDP (100 ml) telah melewati pemeriksaan integritas kemasan luar, verifikasi kode batch, dan inspeksi kualitas segel Vault berlapis.',
         completed: true,
       },
       {

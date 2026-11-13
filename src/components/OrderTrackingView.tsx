@@ -62,6 +62,7 @@ interface OrderTrackingViewProps {
   settings?: VorvanSiteSettings;
   onBackToCatalog: () => void;
   onOpenInvoice: (invoiceId: string) => void;
+  onRefreshFromCloud?: () => Promise<void> | void;
 }
 
 export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
@@ -71,6 +72,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   settings,
   onBackToCatalog,
   onOpenInvoice,
+  onRefreshFromCloud,
 }) => {
   const [searchInput, setSearchInput] = useState<string>(
     initialQuery || smartOrder?.awbNumber || smartOrder?.invoiceId || ''
@@ -91,7 +93,12 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   const effectiveSettings = settings || loadVorvanSettings();
   const activeBinderbyteKey = (effectiveSettings.binderbyteApiKey || '').trim();
 
-  // Periodic tick so automatic time-based tracking stages advance smoothly without page reload
+  // Pull latest Resi & Order Status from Cloud when opening CEK RESI
+  useEffect(() => {
+    void onRefreshFromCloud?.();
+  }, [onRefreshFromCloud]);
+
+  // Periodic tick so tracking view stays reactive to localStorage & cloud updates
   useEffect(() => {
     const timer = window.setInterval(() => {
       setAutoTick((t) => t + 1);
@@ -133,6 +140,52 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   const courierMeta = activeRecord
     ? resolveCourierMetadata(activeRecord.courierService, activeRecord.awbNumber)
     : null;
+
+  const resolvedCondition = activeRecord
+    ? activeRecord.orderCondition ||
+      (activeRecord.isDelivered ||
+      activeRecord.milestones[3]?.completed
+        ? 'D_DELIVERED'
+        : activeRecord.isCodFaceToFace || !activeRecord.isAwbPending
+        ? 'C_IN_TRANSIT'
+        : activeRecord.isPaid
+        ? 'B_PAID_PACKING'
+        : 'A_UNPAID')
+    : null;
+
+  const dynamicCourierName = activeRecord
+    ? courierMeta?.displayName || activeRecord.courierService
+    : 'JNE';
+
+  const topBadgeText = !activeRecord
+    ? ''
+    : resolvedCondition === 'A_UNPAID'
+    ? activeRecord.isCodFaceToFace
+      ? 'STATUS: MENUNGGU KONFIRMASI JADWAL COD'
+      : 'STATUS: MENUNGGU PEMBAYARAN'
+    : resolvedCondition === 'B_PAID_PACKING'
+    ? 'STATUS: PEMBAYARAN DITERIMA · SEDANG DIKEMAS'
+    : resolvedCondition === 'D_DELIVERED'
+    ? activeRecord.isCodFaceToFace
+      ? 'VIP HAND-DELIVERY (COD) · DELIVERED'
+      : `RESI ASLI (${dynamicCourierName}): ${activeRecord.awbNumber} · DELIVERED`
+    : activeRecord.isCodFaceToFace
+    ? 'METODE PENYERAHAN: VIP HAND-DELIVERY (COD)'
+    : `RESI ASLI (${dynamicCourierName}): ${activeRecord.awbNumber}`;
+
+  const mainStatusBoxTitle = !activeRecord
+    ? ''
+    : resolvedCondition === 'A_UNPAID'
+    ? activeRecord.isCodFaceToFace
+      ? '⏳ Menunggu Konfirmasi Persetujuan S&K & Jadwal COD pada Halaman Invoice'
+      : '⏳ Silakan Selesaikan Pembayaran & Unggah Bukti Transfer pada Halaman Invoice'
+    : resolvedCondition === 'B_PAID_PACKING'
+    ? '📦 Pembayaran Terverifikasi — Pesanan Sedang Dikemas di Vault & Menunggu Nomor Resi Ekspedisi'
+    : resolvedCondition === 'D_DELIVERED'
+    ? '✅ PAKET TELAH DITERIMA OLEH PEMBELI — SELESAI'
+    : activeRecord.isCodFaceToFace
+    ? `🚚 Dalam Pengantaran Kurir VIP COD menuju ${activeRecord.destination}`
+    : `🚚 Paket Sedang Dalam Perjalanan Menuju ${activeRecord.destination} (Resi: ${activeRecord.awbNumber})`;
 
   // Automatic Live API Fetch to Binderbyte ONLY when API Key + Expedition Courier + Valid AWB are available
   useEffect(() => {
@@ -196,6 +249,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    void onRefreshFromCloud?.();
     const cleaned = searchInput.trim().toUpperCase();
     if (!cleaned) {
       setNotFoundError(
@@ -320,12 +374,19 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
           <div className="p-6 sm:p-8 bg-gradient-to-b from-[#171621] to-[#111016] border-b border-[#D4AF37]/30 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2.5 text-xs">
-                <span className="font-mono-tabular font-bold text-[#F5E6B8] px-3 py-1 rounded-lg bg-[#0B0A0E] border border-[#D4AF37]/40">
-                  {activeRecord.isCodFaceToFace
-                    ? 'METODE PENYERAHAN: COD / TATAP MUKA LANGSUNG (TANPA RESI EKSPEDISI)'
-                    : activeRecord.isAwbPending
-                    ? `KURIR (${courierMeta?.displayName || activeRecord.courierService}): RESI BELUM TERSEDIA`
-                    : `RESI ASLI (${courierMeta?.displayName || activeRecord.courierService}): ${activeRecord.awbNumber}`}
+                <span
+                  className={`font-mono-tabular font-bold px-3 py-1 rounded-lg border ${
+                    resolvedCondition === 'A_UNPAID'
+                      ? 'bg-rose-950/70 border-amber-500/60 text-amber-200'
+                      : resolvedCondition === 'B_PAID_PACKING'
+                      ? 'bg-[#1D180C] border-[#D4AF37]/75 text-[#F5E6B8]'
+                      : resolvedCondition === 'D_DELIVERED'
+                      ? 'bg-emerald-950/80 border-emerald-500/70 text-emerald-300'
+                      : 'bg-[#0B0A0E] border-[#D4AF37]/45 text-[#F5E6B8]'
+                  }`}
+                  data-testid="tracking-top-badge"
+                >
+                  {topBadgeText}
                 </span>
                 <button
                   type="button"
@@ -356,11 +417,13 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
             <div className="flex flex-col items-start lg:items-end gap-1.5">
               <span
                 className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold tracking-[0.06em] ${
-                  activeRecord.isCodFaceToFace
-                    ? 'bg-amber-950/75 border border-[#D4AF37]/70 text-[#F5E6B8]'
-                    : activeRecord.isAwbPending
-                    ? 'bg-amber-950/65 border border-amber-500/60 text-amber-300'
-                    : 'bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 uppercase tracking-[0.14em]'
+                  resolvedCondition === 'A_UNPAID'
+                    ? 'bg-rose-950/75 border border-amber-500/65 text-amber-300'
+                    : resolvedCondition === 'B_PAID_PACKING'
+                    ? 'bg-[#211B0D] border border-[#D4AF37]/75 text-[#F5E6B8]'
+                    : resolvedCondition === 'D_DELIVERED'
+                    ? 'bg-emerald-950/80 border border-emerald-500/75 text-emerald-300 uppercase tracking-[0.12em]'
+                    : 'bg-emerald-950/60 border border-[#D4AF37]/70 text-[#F5E6B8]'
                 }`}
                 data-testid="tracking-status-badge"
               >
@@ -369,12 +432,9 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                   {!activeRecord.isCodFaceToFace &&
                   !activeRecord.isAwbPending &&
                   liveCourierData?.summary?.status
-                    ? `LIVE SERVER ${courierMeta?.displayName.toUpperCase()} — ${liveCourierData.summary.status}`
-                    : activeRecord.statusLabel}
+                    ? `LIVE SERVER ${dynamicCourierName.toUpperCase()} — ${liveCourierData.summary.status}`
+                    : mainStatusBoxTitle}
                 </span>
-              </span>
-              <span className="text-xs text-zinc-400">
-                Status Integrasi: {activeRecord.estimatedArrival}
               </span>
             </div>
           </div>
@@ -397,17 +457,21 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
               </span>
               <p className="text-[#F5E6B8] font-semibold text-sm">
                 {activeRecord.isCodFaceToFace
-                  ? 'COD / Serah Terima Tatap Muka Langsung'
-                  : courierMeta?.displayName || activeRecord.courierService}
+                  ? 'COD / Serah Terima Tatap Muka Langsung (Tanpa Resi Ekspedisi)'
+                  : dynamicCourierName}
               </p>
               <p className="font-mono-tabular text-zinc-200">
                 {activeRecord.isCodFaceToFace ? (
                   <strong className="text-[#E5C87E]">
-                    Tanpa Resi Ekspedisi (Tatap Muka)
+                    VIP Hand-Delivery · Area {activeRecord.destination}
                   </strong>
-                ) : activeRecord.isAwbPending ? (
+                ) : resolvedCondition === 'A_UNPAID' ? (
                   <strong className="text-amber-300">
-                    ⏳ Menunggu Pembayaran / Sedang Dikemas (Resi Belum Tersedia)
+                    ⏳ Menunggu Penyelesaian Pembayaran
+                  </strong>
+                ) : resolvedCondition === 'B_PAID_PACKING' ? (
+                  <strong className="text-[#F5E6B8]">
+                    📦 Sedang Dikemas di Vault (Menunggu Input Resi Ekspedisi)
                   </strong>
                 ) : (
                   <>
@@ -430,49 +494,127 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
             </div>
           </div>
 
-          {/* CASE 1: DEDICATED COD FACE-TO-FACE HAND-DELIVERY BANNER (NO EXPEDITION TRACKING) */}
-          {activeRecord.isCodFaceToFace && (
-            <div className="px-6 sm:px-8 pt-6 sm:pt-8">
+          {/* 4 DYNAMIC CONDITION STATUS BOXES (A, B, C, D) */}
+          <div className="px-6 sm:px-8 pt-6 sm:pt-8">
+            {resolvedCondition === 'A_UNPAID' && (
               <div
-                className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-[#1A140B] via-[#221A0E] to-[#1A140B] border border-[#D4AF37]/65 space-y-2 shadow-lg"
-                data-testid="cod-face-to-face-panel"
+                className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-rose-950/60 via-amber-950/50 to-rose-950/60 border border-amber-500/65 space-y-3 shadow-lg"
+                data-testid="tracking-main-status-box"
               >
-                <div className="text-xs sm:text-sm font-bold text-[#F5E6B8]">
-                  🤝 COD / Serah Terima Tatap Muka Langsung (Tanpa Resi Ekspedisi)
+                <div className="text-xs sm:text-sm font-bold text-amber-200">
+                  {activeRecord.isCodFaceToFace
+                    ? '⏳ Menunggu Konfirmasi Persetujuan S&K & Jadwal COD pada Halaman Invoice'
+                    : '⏳ Silakan Selesaikan Pembayaran & Unggah Bukti Transfer pada Halaman Invoice'}
                 </div>
                 <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed">
-                  Pesanan ini dijadwalkan untuk penyerahan tatap muka langsung (Face-to-Face Hand-Delivery) bersama{' '}
+                  {activeRecord.isCodFaceToFace ? (
+                    <>
+                      Pesanan VIP Hand-Delivery (COD) Anda untuk area{' '}
+                      <strong className="text-[#F5E6B8]">
+                        {activeRecord.destination}
+                      </strong>{' '}
+                      telah tercatat di Vault VORVAN. Silakan buka Halaman Invoice untuk mencentang persetujuan Klausul S&amp;K dan mengonfirmasi jadwal pertemuan tatap muka bersama Kurir VIP VORVAN.
+                    </>
+                  ) : (
+                    <>
+                      Pesanan Anda telah tercatat di Vault VORVAN dengan kurir{' '}
+                      <strong className="text-[#F5E6B8]">{dynamicCourierName}</strong>.
+                      Silakan selesaikan pembayaran dan unggah foto/screenshot bukti transfer pada halaman Invoice agar unit segera dikemas dan diserahkan ke pihak ekspedisi.
+                    </>
+                  )}
+                </p>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpenInvoice(activeRecord.invoiceId)}
+                    className="px-4 py-2.5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-[11px] font-bold uppercase tracking-[0.14em] inline-flex items-center gap-2 cursor-pointer shadow-md"
+                    data-testid="tracking-open-invoice-btn"
+                  >
+                    <span>
+                      {activeRecord.isCodFaceToFace
+                        ? '[ BUKA HALAMAN INVOICE UNTUK KONFIRMASI COD -> ]'
+                        : '[ BUKA HALAMAN INVOICE UNTUK PEMBAYARAN -> ]'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {resolvedCondition === 'B_PAID_PACKING' && (
+              <div
+                className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-[#1F190B] via-[#29200E] to-[#1F190B] border border-[#D4AF37]/75 space-y-2 shadow-lg"
+                data-testid="tracking-main-status-box"
+              >
+                <div className="text-xs sm:text-sm font-bold text-[#F5E6B8]">
+                  📦 Pembayaran Terverifikasi — Pesanan Sedang Dikemas di Vault &amp; Menunggu Nomor Resi Ekspedisi
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed">
+                  Bukti pembayaran Anda telah diterima oleh Concierge VORVAN. Saat ini unit sedang melalui inspeksi akhir, pengemasan Double-Wall Thermal Box, dan menunggu nomor resi asli{' '}
+                  <strong className="text-[#F5E6B8]">{dynamicCourierName}</strong>.
+                  Begitu Nomor Resi diinput oleh Admin, tahapan pengiriman akan otomatis berpindah ke Dalam Perjalanan menuju{' '}
+                  <strong className="text-white">{activeRecord.destination}</strong>.
+                </p>
+              </div>
+            )}
+
+            {resolvedCondition === 'C_IN_TRANSIT' && (
+              <div
+                className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-[#141D15] via-[#1B2214] to-[#1A160B] border border-[#D4AF37]/75 space-y-2 shadow-lg"
+                data-testid="tracking-main-status-box"
+              >
+                <div className="text-xs sm:text-sm font-bold text-[#F5E6B8]">
+                  {activeRecord.isCodFaceToFace
+                    ? `🚚 Dalam Pengantaran Kurir VIP COD menuju ${activeRecord.destination}`
+                    : `🚚 Paket Sedang Dalam Perjalanan Menuju ${activeRecord.destination} (Resi: ${activeRecord.awbNumber})`}
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed">
+                  {activeRecord.isCodFaceToFace ? (
+                    <>
+                      Pesanan ini dijadwalkan untuk penyerahan tatap muka langsung (Face-to-Face Hand-Delivery) bersama{' '}
+                      <strong className="text-[#F5E6B8]">
+                        {activeRecord.recipientName}
+                      </strong>{' '}
+                      di <strong className="text-white">{activeRecord.destination}</strong>. Unit sedang dalam pengantaran oleh Kurir VIP COD VORVAN menuju lokasi penerima.
+                    </>
+                  ) : (
+                    <>
+                      Paket Anda telah diserahkan ke ekspedisi{' '}
+                      <strong className="text-[#F5E6B8]">{dynamicCourierName}</strong>{' '}
+                      dengan Nomor Resi Asli{' '}
+                      <strong className="font-mono-tabular text-emerald-300">
+                        {activeRecord.awbNumber}
+                      </strong>{' '}
+                      dan sedang dalam perjalanan menuju{' '}
+                      <strong className="text-white">{activeRecord.destination}</strong>.
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {resolvedCondition === 'D_DELIVERED' && (
+              <div
+                className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-[#0F2419] to-emerald-950/80 border-2 border-emerald-500/80 space-y-2 shadow-[0_0_28px_rgba(16,185,129,0.22)]"
+                data-testid="tracking-main-status-box"
+              >
+                <div className="text-xs sm:text-sm font-bold text-emerald-300 uppercase tracking-wider">
+                  ✅ PAKET TELAH DITERIMA OLEH PEMBELI — SELESAI
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-100 leading-relaxed">
+                  Paket untuk{' '}
                   <strong className="text-[#F5E6B8]">
                     {activeRecord.recipientName}
                   </strong>{' '}
-                  di <strong className="text-white">{activeRecord.destination}</strong>, sehingga tidak menggunakan kurir paket ekspedisi (JNE/J&amp;T).
+                  di <strong className="text-white">{activeRecord.destination}</strong>{' '}
+                  {activeRecord.isCodFaceToFace
+                    ? 'telah diserahterimakan secara langsung melalui layanan VIP Hand-Delivery VORVAN.'
+                    : `melalui ekspedisi ${dynamicCourierName} (Resi: ${activeRecord.awbNumber}) telah tiba dan diterima dengan baik.`}
                 </p>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* CASE 2: EXPEDITION ORDER WITH PENDING AWB (BEFORE ADMIN INPUTS FOLLOW-UP RESI) */}
-          {!activeRecord.isCodFaceToFace && activeRecord.isAwbPending && (
-            <div className="px-6 sm:px-8 pt-6 sm:pt-8">
-              <div
-                className="p-5 sm:p-6 rounded-2xl bg-amber-950/35 border border-amber-500/50 space-y-2 shadow-lg"
-                data-testid="pending-awb-notice-panel"
-              >
-                <div className="text-xs sm:text-sm font-bold text-amber-300">
-                  ⏳ Menunggu Pembayaran / Sedang Dikemas (Resi Belum Tersedia)
-                </div>
-                <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed">
-                  Nomor Resi ekspedisi{' '}
-                  <strong className="text-[#F5E6B8]">
-                    {courierMeta?.displayName || activeRecord.courierService}
-                  </strong>{' '}
-                  akan diinput oleh Admin Concierge VORVAN segera setelah pembayaran lunas terverifikasi dan paket diserahkan ke pihak ekspedisi. Begitu Nomor Resi tersedia, radar pelacakan kurir real-time akan langsung aktif otomatis di halaman ini.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* CASE 3: LIVE COURIER SATELLITE LINK PANEL (ONLY ACTIVE AFTER AWB IS INPUT FOR EXPEDITION ORDERS) */}
+          {/* LIVE COURIER SATELLITE LINK PANEL (ONLY ACTIVE AFTER AWB IS INPUT FOR EXPEDITION ORDERS) */}
           {!activeRecord.isCodFaceToFace &&
             !activeRecord.isAwbPending &&
             courierMeta && (
@@ -606,24 +748,41 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
               </div>
             )}
 
-          {/* MANDATORY UNBOXING VIDEO WARNING BOX */}
+          {/* MANDATORY UNBOXING VIDEO WARNING BOX (EXPEDITION) OR COD INSPECTION PROTOCOL BOX */}
           <div className="px-6 sm:px-8 pt-6 sm:pt-8">
-            <div
-              className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/50 via-[#1D160B] to-amber-950/40 border-2 border-[#D4AF37] flex items-start gap-3.5 shadow-lg"
-              data-testid="unboxing-warning-box"
-            >
-              <Video className="w-6 h-6 text-[#F5E6B8] shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-brand text-xs uppercase tracking-[0.2em] text-[#F5E6B8] font-bold">
-                  PERINGATAN RESMI GARANSI VAULT VORVAN
-                </p>
-                <p className="text-xs sm:text-sm text-amber-100 font-medium leading-relaxed">
-                  WAJIB VIDEO UNBOXING UTUH TANPA JEDA sejak paket masih
-                  tersegel untuk klaim garansi botol pecah atau
-                  semprotan/atomizer macet pabrik.
-                </p>
+            {activeRecord.isCodFaceToFace ? (
+              <div
+                className="p-5 rounded-2xl bg-gradient-to-r from-[#161D15] via-[#1C180D] to-[#161D15] border-2 border-[#D4AF37] flex items-start gap-3.5 shadow-lg"
+                data-testid="cod-inspection-protocol-box"
+              >
+                <ShieldCheck className="w-6 h-6 text-[#F5E6B8] shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-brand text-xs uppercase tracking-[0.2em] text-[#F5E6B8] font-bold">
+                    PROTOKOL RESMI VIP HAND-DELIVERY VORVAN
+                  </p>
+                  <p className="text-xs sm:text-sm text-amber-100 font-medium leading-relaxed">
+                    🤝 PROTOKOL INSPEKSI SERAH TERIMA COD: Silakan periksa keutuhan segel kemasan dan fungsi semprotan (sprayer) secara langsung bersama Kurir VIP VORVAN saat serah terima di tempat.
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div
+                className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/50 via-[#1D160B] to-amber-950/40 border-2 border-[#D4AF37] flex items-start gap-3.5 shadow-lg"
+                data-testid="unboxing-warning-box"
+              >
+                <Video className="w-6 h-6 text-[#F5E6B8] shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-brand text-xs uppercase tracking-[0.2em] text-[#F5E6B8] font-bold">
+                    PERINGATAN RESMI GARANSI VAULT VORVAN
+                  </p>
+                  <p className="text-xs sm:text-sm text-amber-100 font-medium leading-relaxed">
+                    WAJIB VIDEO UNBOXING UTUH TANPA JEDA sejak paket masih
+                    tersegel untuk klaim garansi botol pecah atau
+                    semprotan/atomizer macet pabrik.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 4 SMART AUTO-TRACKING SHIPPING STAGES */}

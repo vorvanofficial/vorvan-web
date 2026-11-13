@@ -41,12 +41,16 @@ import {
   loadVorvanSettings,
   markInvoiceIdDeleted,
   markLeadEmailDeleted,
+  mergeStoredWithSmartOrder,
   normalizeInvoiceIdKey,
   parseAutoOpenInvoiceUrl,
   reindexVisitorLeads,
+  removeCodAgreedRecord,
   removePaymentProofRecord,
+  saveCodAgreedRecord,
   saveCustomAdminOrders,
   saveVorvanSettings,
+  syncOrderDynamicResiFields,
   unmarkLeadEmailDeleted,
 } from './utils/businessRules';
 import {
@@ -511,7 +515,7 @@ export default function App() {
     void syncFromCloudVault();
   }, [syncFromCloudVault, adminLogModalOpen, route.view]);
 
-  // Cache order locally when opened via `?v=...` Smart URL while keeping `?v=...` intact in the address bar for Incognito / cross-device copy-paste
+  // Cache order locally when opened via `?v=...` Smart URL while NEVER letting an old URL parameter overwrite updated Resi/Courier/Proof/Stage4 in localStorage or Cloud
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (route.view === 'invoice' || route.view === 'track') {
@@ -520,6 +524,7 @@ export default function App() {
         smartOrd &&
         !loadDeletedInvoiceIds().has(normalizeInvoiceIdKey(smartOrd.invoiceId))
       ) {
+        let latestMergedOrder = syncOrderDynamicResiFields(smartOrd);
         setCustomOrders((prev) => {
           const exists = prev.some(
             (o) =>
@@ -532,67 +537,20 @@ export default function App() {
                 ) {
                   return o;
                 }
-                const proofImg =
-                  o.paymentProof ||
-                  o.paymentProofUrl ||
-                  smartOrd.paymentProof ||
-                  smartOrd.paymentProofUrl;
-                const isPaid =
-                  Boolean(proofImg) ||
-                  o.status === 'PAID' ||
-                  smartOrd.status === 'PAID';
-                const isCod =
-                  typeof smartOrd.isCOD === 'boolean'
-                    ? smartOrd.isCOD
-                    : typeof o.isCOD === 'boolean'
-                    ? o.isCOD
-                    : isCodShippingMethod(
-                        smartOrd.shippingMethod || o.shippingMethod,
-                        smartOrd.awbNumber || o.awbNumber
-                      );
-                const candidateAwb = o.awbNumber || smartOrd.awbNumber || '';
-                const hasRealAwb =
-                  !isCod &&
-                  Boolean(candidateAwb.trim()) &&
-                  candidateAwb.trim().toUpperCase() !==
-                    o.invoiceId.trim().toUpperCase() &&
-                  !candidateAwb.trim().toUpperCase().startsWith('INV-VRV-');
-                const cleanAwb = hasRealAwb ? candidateAwb.trim() : '';
-                const delivered = Boolean(o.isDelivered || smartOrd.isDelivered);
-                return {
-                  ...o,
-                  ...smartOrd,
-                  isCOD: isCod,
-                  isDelivered: delivered,
-                  awbNumber: cleanAwb,
-                  status: isPaid ? ('PAID' as const) : smartOrd.status,
-                  paymentProof: proofImg,
-                  paymentProofUrl: proofImg,
-                  paymentProofUploadedAt:
-                    o.paymentProofUploadedAt || smartOrd.paymentProofUploadedAt,
-                  shippingStage: (delivered
-                    ? 4
-                    : isCod || hasRealAwb
-                    ? 3
-                    : 1) as 1 | 2 | 3 | 4,
-                  shippingStageOverride: (delivered ? 4 : 'AUTO') as
-                    | 'AUTO'
-                    | 1
-                    | 2
-                    | 3
-                    | 4,
-                };
+                const merged = mergeStoredWithSmartOrder(o, smartOrd);
+                latestMergedOrder = merged;
+                return merged;
               })
-            : [smartOrd, ...prev];
+            : [latestMergedOrder, ...prev];
           saveCustomAdminOrders(next);
           return next;
         });
 
-        const token = encodeSmartOrderParam(smartOrd);
+        const token = encodeSmartOrderParam(latestMergedOrder);
         if (route.view === 'invoice') {
           const cleanInvId = (
             route.invoiceId ||
-            smartOrd.invoiceId ||
+            latestMergedOrder.invoiceId ||
             ''
           ).toUpperCase();
           if (cleanInvId && token) {
@@ -609,8 +567,9 @@ export default function App() {
         } else if (route.view === 'track') {
           const cleanTrackId = (
             route.query ||
-            smartOrd.trackingId ||
-            smartOrd.awbNumber ||
+            latestMergedOrder.awbNumber ||
+            latestMergedOrder.trackingId ||
+            latestMergedOrder.invoiceId ||
             ''
           ).trim();
           if (cleanTrackId && token) {
@@ -688,9 +647,8 @@ export default function App() {
         ? activeBuyerSession.smartOrder
         : null;
 
-    const matchedOrder = effectiveId
-      ? effectiveSmart ||
-        customOrders.find((o) => {
+    const storedMatch = effectiveId
+      ? customOrders.find((o) => {
           const oInv = (o.invoiceId || '').trim().toUpperCase();
           const oAwb = (o.awbNumber || '').trim().toUpperCase();
           const oTrk = (o.trackingId || '').trim().toUpperCase();
@@ -699,8 +657,13 @@ export default function App() {
             (oAwb.length > 0 && oAwb === effectiveId) ||
             (oTrk.length > 0 && oTrk === effectiveId)
           );
-        }) ||
-        null
+        }) || null
+      : null;
+
+    const matchedOrder = storedMatch
+      ? mergeStoredWithSmartOrder(storedMatch, effectiveSmart)
+      : effectiveSmart
+      ? syncOrderDynamicResiFields(effectiveSmart)
       : null;
 
     if (effectiveId && matchedOrder) {
@@ -759,9 +722,8 @@ export default function App() {
         ? activeBuyerSession.smartOrder
         : null;
 
-    const matchedOrder = effectiveQuery
-      ? effectiveSmart ||
-        customOrders.find((o) => {
+    const storedMatch = effectiveQuery
+      ? customOrders.find((o) => {
           const oAwb = (o.awbNumber || '').trim().toUpperCase();
           const oInv = (o.invoiceId || '').trim().toUpperCase();
           const oTrk = (o.trackingId || '').trim().toUpperCase();
@@ -770,8 +732,13 @@ export default function App() {
             oInv === effectiveQuery ||
             (oTrk.length > 0 && oTrk === effectiveQuery)
           );
-        }) ||
-        null
+        }) || null
+      : null;
+
+    const matchedOrder = storedMatch
+      ? mergeStoredWithSmartOrder(storedMatch, effectiveSmart)
+      : effectiveSmart
+      ? syncOrderDynamicResiFields(effectiveSmart)
       : null;
 
     const token = matchedOrder ? encodeSmartOrderParam(matchedOrder) : '';
@@ -894,6 +861,7 @@ export default function App() {
 
   const handleCreateCustomOrder = (newOrder: CustomAdminOrder) => {
     removePaymentProofRecord(newOrder.invoiceId);
+    removeCodAgreedRecord(newOrder.invoiceId);
     const isCod = Boolean(
       newOrder.isCOD ||
         isCodShippingMethod(newOrder.shippingMethod, newOrder.awbNumber)
@@ -901,20 +869,27 @@ export default function App() {
     const cleanAwb = isCod
       ? ''
       : (newOrder.awbNumber || '').trim().toUpperCase();
-    const cleanNewOrder: CustomAdminOrder = {
+    const nowTs = Date.now();
+    const cleanNewOrder: CustomAdminOrder = syncOrderDynamicResiFields({
       ...newOrder,
+      courier: newOrder.shippingMethod,
       isCOD: isCod,
+      codTermsAgreed: isCod ? false : undefined,
       isDelivered: false,
       awbNumber: cleanAwb,
+      resi: cleanAwb,
+      trackingNumber: cleanAwb,
+      noResi: cleanAwb,
       resiInputAt:
-        !isCod && cleanAwb ? newOrder.resiInputAt || Date.now() : undefined,
-      shippingStage: isCod ? 3 : cleanAwb ? 3 : 1,
+        !isCod && cleanAwb ? newOrder.resiInputAt || nowTs : undefined,
+      updatedAtMs: nowTs,
+      shippingStage: isCod ? 1 : cleanAwb ? 3 : 1,
       shippingStageOverride: 'AUTO',
       status: 'PENDING_PAYMENT',
       paymentProof: null,
       paymentProofUrl: null,
       paymentProofUploadedAt: null,
-    };
+    });
     const updated = [
       cleanNewOrder,
       ...customOrders.filter(
@@ -931,7 +906,7 @@ export default function App() {
     void pushCloudVaultPacket({
       kind: 'VORVAN_ORDER_UPSERT',
       order: cleanNewOrder,
-      ts: Date.now(),
+      ts: nowTs,
     });
 
     // Send real backup notification to vorvanlifestyle@gmail.com (clean domain https://vorvanofficial.com, no encrypted query strings)
@@ -943,13 +918,15 @@ export default function App() {
     stageOrOverride: 'AUTO' | 1 | 2 | 3 | 4
   ) => {
     const cleanTargetId = invoiceId.trim().toUpperCase();
+    const nowTs = Date.now();
     let updatedOrderRef: CustomAdminOrder | null = null;
     const updated = customOrders.map((o) => {
       if (o.invoiceId.trim().toUpperCase() !== cleanTargetId) return o;
       const isStage4Confirm = stageOrOverride === 4;
-      const nextOrder: CustomAdminOrder = {
+      const nextOrder: CustomAdminOrder = syncOrderDynamicResiFields({
         ...o,
         isDelivered: isStage4Confirm,
+        updatedAtMs: nowTs,
         shippingStageOverride: isStage4Confirm ? 4 : 'AUTO',
         shippingStage: isStage4Confirm
           ? 4
@@ -957,7 +934,7 @@ export default function App() {
           ? 3
           : 1,
         status: isStage4Confirm ? 'PAID' : o.status,
-      };
+      });
       updatedOrderRef = nextOrder;
       return nextOrder;
     });
@@ -965,10 +942,30 @@ export default function App() {
     saveCustomAdminOrders(updated);
     void saveSharedCloudLeadsAndOrders(emailLeads, updated);
     if (updatedOrderRef) {
+      const finalRef = updatedOrderRef as CustomAdminOrder;
+      if (
+        activeBuyerSession &&
+        activeBuyerSession.invoiceId.trim().toUpperCase() === cleanTargetId
+      ) {
+        setActiveBuyerSession({
+          ...activeBuyerSession,
+          smartOrder: finalRef,
+        });
+      }
+      if (
+        (route.view === 'invoice' || route.view === 'track') &&
+        route.smartOrder &&
+        route.smartOrder.invoiceId.trim().toUpperCase() === cleanTargetId
+      ) {
+        setRoute({
+          ...route,
+          smartOrder: finalRef,
+        });
+      }
       void pushCloudVaultPacket({
         kind: 'VORVAN_ORDER_UPSERT',
-        order: updatedOrderRef,
-        ts: Date.now(),
+        order: finalRef,
+        ts: nowTs,
       });
     }
   };
@@ -977,8 +974,9 @@ export default function App() {
     invoiceId: string,
     status: 'PENDING_PAYMENT' | 'PAID'
   ) => {
+    const nowTs = Date.now();
     const updated = customOrders.map((o) =>
-      o.invoiceId === invoiceId ? { ...o, status } : o
+      o.invoiceId === invoiceId ? { ...o, status, updatedAtMs: nowTs } : o
     );
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
@@ -988,7 +986,7 @@ export default function App() {
       kind: 'VORVAN_ORDER_STATUS',
       invoiceId,
       status,
-      ts: Date.now(),
+      ts: nowTs,
     });
   };
 
@@ -1001,6 +999,7 @@ export default function App() {
     const cleanTargetId = invoiceId.trim().toUpperCase();
     const isCod = isCodShippingMethod(shippingMethod);
     const cleanAwb = isCod ? '' : awbNumber.trim().toUpperCase();
+    const nowTs = Date.now();
     let updatedOrderRef: CustomAdminOrder | null = null;
 
     const updated = customOrders.map((o) => {
@@ -1010,7 +1009,7 @@ export default function App() {
         !isCod && cleanAwb
           ? prevAwb === cleanAwb && o.resiInputAt
             ? o.resiInputAt
-            : Date.now()
+            : nowTs
           : undefined;
       const delivered = Boolean(o.isDelivered || stageOverride === 4);
       const nextStage: 1 | 2 | 3 | 4 = delivered
@@ -1018,17 +1017,22 @@ export default function App() {
         : isCod || cleanAwb
         ? 3
         : 1;
-      const nextOrder: CustomAdminOrder = {
+      const nextOrder: CustomAdminOrder = syncOrderDynamicResiFields({
         ...o,
         shippingMethod,
+        courier: shippingMethod,
         isCOD: isCod,
         isDelivered: delivered,
         awbNumber: cleanAwb,
+        resi: cleanAwb,
+        trackingNumber: cleanAwb,
+        noResi: cleanAwb,
         resiInputAt: nextResiInputAt,
+        updatedAtMs: nowTs,
         trackingId: cleanAwb || o.invoiceId,
         shippingStage: nextStage,
         shippingStageOverride: delivered ? 4 : 'AUTO',
-      };
+      });
       updatedOrderRef = nextOrder;
       return nextOrder;
     });
@@ -1038,10 +1042,35 @@ export default function App() {
     void saveSharedCloudLeadsAndOrders(emailLeads, updated);
 
     if (updatedOrderRef) {
+      const finalRef = updatedOrderRef as CustomAdminOrder;
+      if (
+        activeBuyerSession &&
+        activeBuyerSession.invoiceId.trim().toUpperCase() === cleanTargetId
+      ) {
+        setActiveBuyerSession({
+          invoiceId: cleanTargetId,
+          trackingQuery: (
+            finalRef.awbNumber ||
+            finalRef.trackingId ||
+            finalRef.invoiceId
+          ).trim(),
+          smartOrder: finalRef,
+        });
+      }
+      if (
+        (route.view === 'invoice' || route.view === 'track') &&
+        route.smartOrder &&
+        route.smartOrder.invoiceId.trim().toUpperCase() === cleanTargetId
+      ) {
+        setRoute({
+          ...route,
+          smartOrder: finalRef,
+        });
+      }
       void pushCloudVaultPacket({
         kind: 'VORVAN_ORDER_UPSERT',
-        order: updatedOrderRef,
-        ts: Date.now(),
+        order: finalRef,
+        ts: nowTs,
       });
     }
   };
@@ -1130,11 +1159,93 @@ export default function App() {
     }
   };
 
+  const handleAgreeCodTerms = (
+    invoiceId: string,
+    agreed: boolean,
+    agreedAt: string
+  ) => {
+    const cleanTargetId = invoiceId.trim().toUpperCase();
+    if (!cleanTargetId) return;
+    if (agreed) {
+      saveCodAgreedRecord(cleanTargetId, agreedAt);
+    } else {
+      removeCodAgreedRecord(cleanTargetId);
+    }
+    const nowTs = Date.now();
+    let updatedOrderRef: CustomAdminOrder | null = null;
+
+    setCustomOrders((prev) => {
+      const stored = loadCustomAdminOrders();
+      const baseList = mergeCustomAdminOrders(prev, stored);
+      const next = baseList.map((o) => {
+        if (o.invoiceId.trim().toUpperCase() !== cleanTargetId) return o;
+        const delivered = Boolean(o.isDelivered);
+        const nextStage: 1 | 2 | 3 | 4 = delivered ? 4 : agreed ? 3 : 1;
+        const nextOrder: CustomAdminOrder = syncOrderDynamicResiFields({
+          ...o,
+          isCOD: true,
+          codTermsAgreed: agreed,
+          codTermsAgreedAt: agreed ? agreedAt : undefined,
+          updatedAtMs: nowTs,
+          shippingStage: nextStage,
+          shippingStageOverride: delivered ? 4 : 'AUTO',
+        });
+        updatedOrderRef = nextOrder;
+        return nextOrder;
+      });
+      saveCustomAdminOrders(next);
+      void saveSharedCloudLeadsAndOrders(emailLeads, next);
+      return next;
+    });
+
+    if (
+      route.view === 'invoice' &&
+      route.smartOrder &&
+      route.smartOrder.invoiceId.trim().toUpperCase() === cleanTargetId
+    ) {
+      const delivered = Boolean(route.smartOrder.isDelivered);
+      const nextStage: 1 | 2 | 3 | 4 = delivered ? 4 : agreed ? 3 : 1;
+      const updatedSmart: CustomAdminOrder = syncOrderDynamicResiFields({
+        ...route.smartOrder,
+        isCOD: true,
+        codTermsAgreed: agreed,
+        codTermsAgreedAt: agreed ? agreedAt : undefined,
+        updatedAtMs: nowTs,
+        shippingStage: nextStage,
+        shippingStageOverride: delivered ? 4 : 'AUTO',
+      });
+      updatedOrderRef = updatedSmart;
+      setRoute({
+        ...route,
+        smartOrder: updatedSmart,
+      });
+    }
+
+    if (updatedOrderRef) {
+      const finalRef = updatedOrderRef as CustomAdminOrder;
+      if (
+        activeBuyerSession &&
+        activeBuyerSession.invoiceId.trim().toUpperCase() === cleanTargetId
+      ) {
+        setActiveBuyerSession({
+          ...activeBuyerSession,
+          smartOrder: finalRef,
+        });
+      }
+      void pushCloudVaultPacket({
+        kind: 'VORVAN_ORDER_UPSERT',
+        order: finalRef,
+        ts: nowTs,
+      });
+    }
+  };
+
   const handleDeleteCustomOrder = (invoiceId: string) => {
     const cleanId = normalizeInvoiceIdKey(invoiceId);
     if (!cleanId) return;
     markInvoiceIdDeleted(cleanId);
     removePaymentProofRecord(cleanId);
+    removeCodAgreedRecord(cleanId);
     const updated = customOrders.filter(
       (o) => normalizeInvoiceIdKey(o.invoiceId) !== cleanId
     );
@@ -1459,6 +1570,7 @@ export default function App() {
               navigateToTrack(resi, route.smartOrder)
             }
             onUploadPaymentProof={handleUploadPaymentProof}
+            onAgreeCodTerms={handleAgreeCodTerms}
           />
         )}
 
@@ -1470,6 +1582,7 @@ export default function App() {
             settings={siteSettings}
             onBackToCatalog={() => navigateToShowroom()}
             onOpenInvoice={(invId) => navigateToInvoice(invId, route.smartOrder)}
+            onRefreshFromCloud={syncFromCloudVault}
           />
         )}
 

@@ -36,12 +36,15 @@ import {
   formatIDRCurrency,
   formatLegalTimestampWIB,
   isCodShippingMethod,
+  loadCodAgreedMap,
   loadCustomAdminOrders,
   loadPaymentProofsMap,
   loadVorvanSettings,
   lookupPrivateInvoice,
+  removeCodAgreedRecord,
   resolveArchiveRefCode,
   resolvePrivateInvoice,
+  saveCodAgreedRecord,
   saveCustomAdminOrders,
   savePaymentProofRecord,
 } from '../utils/businessRules';
@@ -459,6 +462,11 @@ interface PrivateInvoiceViewProps {
     proofBase64: string,
     uploadedAt: string
   ) => void;
+  onAgreeCodTerms?: (
+    invoiceId: string,
+    agreed: boolean,
+    agreedAt: string
+  ) => void;
 }
 
 export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
@@ -471,6 +479,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   onSelectInvoiceId,
   onOpenOrderTracking,
   onUploadPaymentProof,
+  onAgreeCodTerms,
 }) => {
   const activeSettings = settings || loadVorvanSettings();
 
@@ -626,12 +635,28 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
   // Force full reset of legal checkbox, proof preview, and modal ONLY when switching to a different invoice ID
   useEffect(() => {
-    setIsAgreed(false);
-    setLegalAgreedTimestamp('');
+    const storedCod = activeInvoiceKey
+      ? loadCodAgreedMap()[activeInvoiceKey]
+      : undefined;
+    const initialCodAgreed = Boolean(
+      isCodOrder &&
+        (storedCod?.agreed || matchedInvoice?.codTermsAgreed === true)
+    );
+    setIsAgreed(initialCodAgreed);
+    setLegalAgreedTimestamp(
+      initialCodAgreed
+        ? storedCod?.agreedAt || matchedInvoice?.codTermsAgreedAt || ''
+        : ''
+    );
     setProofError(null);
     setIsProofModalOpen(false);
     setActivePaymentTab(isCodOrder ? 'cod_hand_delivery' : 'bank_transfer');
-  }, [activeInvoiceKey, isCodOrder]);
+  }, [
+    activeInvoiceKey,
+    isCodOrder,
+    matchedInvoice?.codTermsAgreed,
+    matchedInvoice?.codTermsAgreedAt,
+  ]);
 
   // Synchronize payment proof strictly by the exact unique activeInvoiceKey (without resetting local isAgreed state)
   useEffect(() => {
@@ -700,11 +725,50 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   };
 
   const handleToggleLegalAgree = (checked: boolean) => {
+    const nowWIB = formatLegalTimestampWIB(new Date());
     setIsAgreed(checked);
     if (checked) {
-      setLegalAgreedTimestamp(formatLegalTimestampWIB(new Date()));
+      setLegalAgreedTimestamp(nowWIB);
+      if (isCodOrder && activeInvoiceKey) {
+        saveCodAgreedRecord(activeInvoiceKey, nowWIB);
+        const localOrders =
+          customOrders && customOrders.length > 0
+            ? customOrders
+            : loadCustomAdminOrders();
+        const updated = localOrders.map((o) => {
+          if (o.invoiceId.trim().toUpperCase() !== activeInvoiceKey) return o;
+          return {
+            ...o,
+            codTermsAgreed: true,
+            codTermsAgreedAt: nowWIB,
+            shippingStage: (o.isDelivered ? 4 : 3) as 1 | 2 | 3 | 4,
+            updatedAtMs: Date.now(),
+          };
+        });
+        saveCustomAdminOrders(updated);
+        onAgreeCodTerms?.(activeInvoiceKey, true, nowWIB);
+      }
     } else {
       setLegalAgreedTimestamp('');
+      if (isCodOrder && activeInvoiceKey) {
+        removeCodAgreedRecord(activeInvoiceKey);
+        const localOrders =
+          customOrders && customOrders.length > 0
+            ? customOrders
+            : loadCustomAdminOrders();
+        const updated = localOrders.map((o) => {
+          if (o.invoiceId.trim().toUpperCase() !== activeInvoiceKey) return o;
+          return {
+            ...o,
+            codTermsAgreed: false,
+            codTermsAgreedAt: undefined,
+            shippingStage: (o.isDelivered ? 4 : 1) as 1 | 2 | 3 | 4,
+            updatedAtMs: Date.now(),
+          };
+        });
+        saveCustomAdminOrders(updated);
+        onAgreeCodTerms?.(activeInvoiceKey, false, '');
+      }
     }
   };
 
@@ -717,7 +781,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
 
   const paymentMethodLabel =
     effectivePaymentTab === 'bank_transfer'
-      ? 'Transfer Bank Resmi & QRIS (Mandiri / BNI / BRI)'
+      ? 'Transfer Bank Resmi (Mandiri / BNI / BRI)'
       : effectivePaymentTab === 'cod_hand_delivery'
       ? 'COD / Private Hand-Delivery'
       : 'International Payment (PayPal / SWIFT)';
@@ -832,7 +896,10 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   // Tahap 3: isConfirmationUnlocked = true (Bukti terupload / status PAID -> Tombol konfirmasi AKTIF)
   const isPaymentUnlocked = baseInvoice.status === 'PAID' || isAgreed;
   const hasProof = Boolean(paymentProofUrl) || baseInvoice.status === 'PAID';
-  const isConfirmationUnlocked = isPaymentUnlocked && hasProof;
+  const isConfirmationUnlocked = isCodOrder
+    ? isPaymentUnlocked
+    : isPaymentUnlocked && hasProof;
+  void isConfirmationUnlocked;
 
   return (
     <section
@@ -1358,106 +1425,100 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </div>
             )}
 
-            {/* 3 Tabs Selector */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={effectivePaymentTab === 'bank_transfer'}
-                onClick={() => setActivePaymentTab('bank_transfer')}
-                className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                  effectivePaymentTab === 'bank_transfer'
-                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
-                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
-                }`}
-                data-testid="payment-tab-bank"
-              >
-                <Building2 className="w-5 h-5 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 1 · TRANSFER BANK RESMI &amp; QRIS
-                  </p>
-                  <p className="text-xs sm:text-sm font-semibold mt-0.5">
-                    TRANSFER BANK RESMI &amp; QRIS (INDONESIA)
-                  </p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                role="tab"
-                disabled={!isCodOrder}
-                aria-disabled={!isCodOrder}
-                aria-selected={
-                  isCodOrder && effectivePaymentTab === 'cod_hand_delivery'
+            {/* Tabs Selector:
+                - For COD orders (`isCodOrder === true`): Hide Tab 1 (Transfer Bank) & Tab 3 (International Payment). Show only Tab 2 (COD) after S&K is checked.
+                - For Regular Expedition orders (`!isCodOrder`): Hide Tab 2 (COD). Show only Tab 1 (TRANSFER BANK RESMI (INDONESIA)) & Tab 3 (International Payment).
+            */}
+            {(!isCodOrder || isPaymentUnlocked) && (
+              <div
+                className={
+                  isCodOrder
+                    ? 'grid grid-cols-1 gap-3'
+                    : 'grid grid-cols-1 md:grid-cols-2 gap-3'
                 }
-                onClick={() => {
-                  if (isCodOrder) {
-                    setActivePaymentTab('cod_hand_delivery');
-                  }
-                }}
-                className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                  !isCodOrder
-                    ? 'bg-zinc-900/85 text-zinc-400 border-zinc-700/90 cursor-not-allowed opacity-80'
-                    : effectivePaymentTab === 'cod_hand_delivery'
-                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
-                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
-                }`}
-                data-testid="payment-tab-cod"
+                role="tablist"
               >
-                {!isCodOrder ? (
-                  <Lock className="w-5 h-5 shrink-0 mt-0.5 text-amber-400/80" />
-                ) : (
-                  <Truck className="w-5 h-5 shrink-0 mt-0.5" />
+                {!isCodOrder && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={effectivePaymentTab === 'bank_transfer'}
+                    onClick={() => setActivePaymentTab('bank_transfer')}
+                    className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                      effectivePaymentTab === 'bank_transfer'
+                        ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
+                        : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
+                    }`}
+                    data-testid="payment-tab-bank"
+                  >
+                    <Building2 className="w-5 h-5 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-brand text-[10px] uppercase tracking-wider">
+                        TAB 1 · TRANSFER BANK RESMI
+                      </p>
+                      <p className="text-xs sm:text-sm font-semibold mt-0.5">
+                        TRANSFER BANK RESMI (INDONESIA)
+                      </p>
+                    </div>
+                  </button>
                 )}
-                <div>
-                  <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 2 · PRIVATE COURIER — COD / PRIVATE HAND-DELIVERY
-                  </p>
-                  {!isCodOrder ? (
-                    <p
-                      className="text-xs font-semibold mt-1 text-amber-300/90"
-                      data-testid="cod-tab-locked-badge"
-                    >
-                      🔒 Terkunci — Khusus Area COD yang Disetujui Concierge
-                    </p>
-                  ) : (
-                    <p
-                      className="text-xs sm:text-sm font-semibold mt-0.5"
-                      data-testid="cod-tab-unlocked-badge"
-                    >
-                      COD / PRIVATE HAND-DELIVERY (AREA TERDEKAT)
-                    </p>
-                  )}
-                </div>
-              </button>
 
-              <button
-                type="button"
-                role="tab"
-                aria-selected={effectivePaymentTab === 'international_paypal'}
-                onClick={() => setActivePaymentTab('international_paypal')}
-                className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                  effectivePaymentTab === 'international_paypal'
-                    ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
-                    : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
-                }`}
-                data-testid="payment-tab-international"
-              >
-                <Globe className="w-5 h-5 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-brand text-[10px] uppercase tracking-wider">
-                    TAB 3 · GLOBAL SETTLEMENT
-                  </p>
-                  <p className="text-xs sm:text-sm font-semibold mt-0.5">
-                    INTERNATIONAL PAYMENT (PAYPAL QR &amp; SWIFT WIRE)
-                  </p>
-                </div>
-              </button>
-            </div>
+                {isCodOrder && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={effectivePaymentTab === 'cod_hand_delivery'}
+                    onClick={() => setActivePaymentTab('cod_hand_delivery')}
+                    className="p-4 rounded-xl border text-left transition-all flex items-start gap-3 btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer"
+                    data-testid="payment-tab-cod"
+                  >
+                    <Truck className="w-5 h-5 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-brand text-[10px] uppercase tracking-wider">
+                        TAB 2 · PRIVATE COURIER — COD / PRIVATE HAND-DELIVERY
+                      </p>
+                      <p
+                        className="text-xs sm:text-sm font-semibold mt-0.5"
+                        data-testid="cod-tab-unlocked-badge"
+                      >
+                        COD / PRIVATE HAND-DELIVERY (AREA TERDEKAT)
+                      </p>
+                    </div>
+                  </button>
+                )}
 
-            {!isPaymentUnlocked &&
-            !(isCodOrder && effectivePaymentTab === 'cod_hand_delivery') ? (
+                {!isCodOrder && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={
+                      effectivePaymentTab === 'international_paypal'
+                    }
+                    onClick={() =>
+                      setActivePaymentTab('international_paypal')
+                    }
+                    className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                      effectivePaymentTab === 'international_paypal'
+                        ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
+                        : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
+                    }`}
+                    data-testid="payment-tab-international"
+                  >
+                    <Globe className="w-5 h-5 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-brand text-[10px] uppercase tracking-wider">
+                        TAB 3 · GLOBAL SETTLEMENT
+                      </p>
+                      <p className="text-xs sm:text-sm font-semibold mt-0.5">
+                        INTERNATIONAL PAYMENT (PAYPAL QR &amp; SWIFT WIRE)
+                      </p>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!isPaymentUnlocked ? (
               <div
                 id="vorvan-bank-locked-overlay"
                 className="px-6 py-7 sm:px-10 sm:py-9 rounded-2xl bg-[#14131B] border border-dashed border-[#D4AF37]/45 text-center space-y-3"
@@ -1853,8 +1914,8 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </>
             )}
 
-            {/* TAHAP 2 & 3: KOTAK UPLOAD BUKTI PEMBAYARAN (WAJIB FOTO/SCREENSHOT TRANSFER) */}
-            {isPaymentUnlocked && (
+            {/* TAHAP 2 & 3: KOTAK UPLOAD BUKTI PEMBAYARAN (WAJIB FOTO/SCREENSHOT TRANSFER — HANYA UNTUK TRANSFER EKSPEDISI, DISEMBUNYIKAN UNTUK COD) */}
+            {isPaymentUnlocked && !isCodOrder && (
               <div
                 className="p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-[#181622] via-[#121118] to-[#0D0C13] border border-[#D4AF37]/50 shadow-xl space-y-4 animate-fade-up"
                 data-testid="payment-proof-upload-box"
@@ -2014,8 +2075,24 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                     data-testid="confirm-payment-wa-btn"
                   >
                     <Lock className="w-4 h-4 shrink-0" />
-                    <span>Konfirmasi Pembayaran via WhatsApp (Terkunci)</span>
+                    <span>
+                      {isCodOrder
+                        ? 'KONFIRMASI JADWAL COD VIA WHATSAPP (TERKUNCI)'
+                        : 'Konfirmasi Pembayaran via WhatsApp (Terkunci)'}
+                    </span>
                   </button>
+                ) : isCodOrder ? (
+                  <a
+                    href={whatsappConfirmUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer transition-transform hover:scale-[1.01]"
+                    data-testid="confirm-payment-wa-btn"
+                  >
+                    <MessageCircle className="w-4 h-4 shrink-0" />
+                    <span>KONFIRMASI JADWAL COD VIA WHATSAPP</span>
+                    <ArrowUpRight className="w-4 h-4 shrink-0" />
+                  </a>
                 ) : !hasProof ? (
                   <button
                     type="button"
@@ -2049,10 +2126,23 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   >
                     <Lock className="w-4 h-4 shrink-0" />
                     <span>
-                      Konfirmasi Pembayaran via Telegram (@{cleanTelegram})
-                      (Terkunci)
+                      {isCodOrder
+                        ? `KONFIRMASI VIA TELEGRAM (@${cleanTelegram}) (TERKUNCI)`
+                        : `Konfirmasi Pembayaran via Telegram (@${cleanTelegram}) (Terkunci)`}
                     </span>
                   </button>
+                ) : isCodOrder ? (
+                  <a
+                    href={telegramConfirmUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-4 px-5 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.16em] flex items-center justify-center gap-2.5 shadow-lg cursor-pointer transition-transform hover:scale-[1.01]"
+                    data-testid="confirm-payment-tg-btn"
+                  >
+                    <Send className="w-4 h-4 shrink-0" />
+                    <span>KONFIRMASI VIA TELEGRAM (@{cleanTelegram})</span>
+                    <ArrowUpRight className="w-4 h-4 shrink-0" />
+                  </a>
                 ) : !hasProof ? (
                   <button
                     type="button"
