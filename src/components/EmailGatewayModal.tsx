@@ -244,7 +244,7 @@ interface AdminEmailRegistryModalProps {
   onUpdateCustomOrderStage: (
     invoiceId: string,
     stage: 'AUTO' | 1 | 2 | 3 | 4
-  ) => void;
+  ) => void | Promise<void>;
   onUpdateCustomOrderStatus: (
     invoiceId: string,
     status: 'PENDING_PAYMENT' | 'PAID'
@@ -254,13 +254,13 @@ interface AdminEmailRegistryModalProps {
     shippingMethod: ShippingMethodType,
     awbNumber: string,
     stageOverride?: 'AUTO' | 1 | 2 | 3 | 4
-  ) => void;
+  ) => void | Promise<void>;
   onUpdateCustomOrderPricing?: (updatedOrder: CustomAdminOrder) => void;
   onDeleteCustomOrder: (invoiceId: string) => void;
   onDeleteLead?: (email: string) => void;
   onOpenInvoicePreview: (invoiceId: string, smartOrder?: CustomAdminOrder) => void;
   onOpenTrackingPreview: (query: string, smartOrder?: CustomAdminOrder) => void;
-  onSyncCloud?: () => Promise<void> | void;
+  onSyncCloud?: () => Promise<CustomAdminOrder[] | void> | CustomAdminOrder[] | void;
 }
 
 export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = ({
@@ -2949,17 +2949,21 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              onUpdateCustomOrderStage(ord.invoiceId, 4);
+                                              void onUpdateCustomOrderStage(ord.invoiceId, 4);
                                               if (
                                                 createdOrderResult &&
                                                 createdOrderResult.invoiceId.toUpperCase() ===
                                                   ord.invoiceId.toUpperCase()
                                               ) {
+                                                const nowTs = Date.now();
                                                 setCreatedOrderResult({
                                                   ...createdOrderResult,
                                                   isDelivered: true,
+                                                  trackingStage: 4,
                                                   shippingStage: 4,
                                                   shippingStageOverride: 4,
+                                                  updatedAt: nowTs,
+                                                  updatedAtMs: nowTs,
                                                   status: 'PAID',
                                                 });
                                               }
@@ -3668,8 +3672,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 onClick={() => {
                   const cleanAwb = isCodShippingMethod(editCourierMethod)
                     ? ''
-                    : editAwbInput.trim();
-                  onUpdateCustomOrderResi?.(
+                    : editAwbInput.trim().toUpperCase();
+                  void onUpdateCustomOrderResi?.(
                     editingResiOrder.invoiceId,
                     editCourierMethod,
                     cleanAwb
@@ -3679,20 +3683,34 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                     createdOrderResult.invoiceId.toUpperCase() ===
                       editingResiOrder.invoiceId.toUpperCase()
                   ) {
+                    const nowTs = Date.now();
+                    const isDelivered = Boolean(
+                      editingResiOrder.isDelivered ||
+                        editingResiOrder.shippingStage === 4
+                    );
+                    const nextStage: 1 | 2 | 3 | 4 = isDelivered
+                      ? 4
+                      : isCodShippingMethod(editCourierMethod) || cleanAwb
+                      ? 3
+                      : 1;
                     setCreatedOrderResult({
                       ...createdOrderResult,
                       shippingMethod: editCourierMethod,
+                      courier: editCourierMethod,
+                      isCOD: isCodShippingMethod(editCourierMethod),
                       awbNumber: cleanAwb,
+                      resi: cleanAwb,
+                      trackingNumber: cleanAwb,
+                      noResi: cleanAwb,
                       resiInputAt:
                         !isCodShippingMethod(editCourierMethod) && cleanAwb
-                          ? editingResiOrder.resiInputAt || Date.now()
+                          ? editingResiOrder.resiInputAt || nowTs
                           : undefined,
-                      shippingStage:
-                        editingResiOrder.shippingStage === 4
-                          ? 4
-                          : isCodShippingMethod(editCourierMethod) || cleanAwb
-                          ? 3
-                          : 1,
+                      resiUpdatedAt: nowTs,
+                      updatedAt: nowTs,
+                      updatedAtMs: nowTs,
+                      trackingStage: nextStage,
+                      shippingStage: nextStage,
                       trackingId: cleanAwb || editingResiOrder.invoiceId,
                     });
                   }

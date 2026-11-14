@@ -2,15 +2,12 @@ import { ConciergeEmailLead, CustomAdminOrder } from '../types/fragrance';
 import {
   applyPaymentProofToOrders,
   buildSmartShareUrl,
-  extractOrderAwb,
-  hasValidCourierAwb,
-  isCodShippingMethod,
   loadDeletedInvoiceIds,
   loadDeletedLeadEmails,
   loadPaymentProofsMap,
   markInvoiceIdDeleted,
   markLeadEmailDeleted,
-  mergeStoredWithSmartOrder,
+  mergeCloudAndLocalOrder,
   normalizeInvoiceIdKey,
   reindexVisitorLeads,
   removePaymentProofRecord,
@@ -49,6 +46,26 @@ export type CloudVaultPacket =
   | {
       kind: 'VORVAN_ORDER_UPSERT';
       order: CustomAdminOrder;
+      ts: number;
+    }
+  | {
+      kind: 'VORVAN_ORDER_RESI_UPDATE';
+      invoiceId: string;
+      resi: string;
+      trackingNumber: string;
+      noResi: string;
+      awbNumber: string;
+      courier: string;
+      shippingMethod: string;
+      isCOD?: boolean;
+      isDelivered?: boolean;
+      trackingStage?: 1 | 2 | 3 | 4;
+      shippingStage?: 1 | 2 | 3 | 4;
+      status?: 'PENDING_PAYMENT' | 'PAID';
+      resiInputAt?: number;
+      resiUpdatedAt?: number;
+      updatedAt?: number;
+      updatedAtMs?: number;
       ts: number;
     }
   | {
@@ -369,6 +386,7 @@ export async function saveSharedCloudLeadsAndOrders(
     try {
       const getRes = await fetch(VORVAN_RESTFUL_KV_URL, {
         method: 'GET',
+        cache: 'no-store',
         headers: { Accept: 'application/json' },
       });
       if (getRes.ok) {
@@ -447,7 +465,34 @@ export async function saveSharedCloudLeadsAndOrders(
 }
 
 /**
- * Publishes a cross-device sync packet (Lead, Order, or Payment Proof) to the shared VORVAN Cloud Vault channel
+ * Ensures `VORVAN_ORDER_UPSERT` packets stay well under ntfy.sh's 4KB inline message limit
+ * by stripping large Base64 paymentProof strings (already synced via chunked proof packets
+ * and RESTful KV) while preserving `status: 'PAID'`, `paymentProofUploadedAt`, Resi, and Stage 4.
+ */
+export function prepareCloudVaultPacketForTransport(
+  packet: CloudVaultPacket
+): CloudVaultPacket {
+  if (packet.kind === 'VORVAN_ORDER_UPSERT' && packet.order) {
+    const hasLargeProof =
+      (packet.order.paymentProof && packet.order.paymentProof.length > 1200) ||
+      (packet.order.paymentProofUrl &&
+        packet.order.paymentProofUrl.length > 1200);
+    if (hasLargeProof) {
+      return {
+        ...packet,
+        order: {
+          ...packet.order,
+          paymentProof: undefined,
+          paymentProofUrl: undefined,
+        },
+      };
+    }
+  }
+  return packet;
+}
+
+/**
+ * Publishes a cross-device sync packet (Lead, Order, Resi Update, or Payment Proof) to the shared VORVAN Cloud Vault channel
  * so Incognito tabs and other devices can read it without sharing browser localStorage.
  * Automatically splits Base64 payment proofs > 2400 chars into small chunks (< 3 KB) so ntfy.sh
  * keeps every packet inline as JSON messages.
@@ -491,12 +536,13 @@ export async function pushCloudVaultPacket(
       return allOk;
     }
 
+    const outboundPacket = prepareCloudVaultPacketForTransport(packet);
     const res = await fetch(VORVAN_CLOUD_SYNC_TOPIC, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain;charset=UTF-8',
       },
-      body: JSON.stringify(packet),
+      body: JSON.stringify(outboundPacket),
     });
     return res.ok;
   } catch {
@@ -537,6 +583,7 @@ export async function pullCloudVaultState(): Promise<{
   try {
     const kvRes = await fetch(VORVAN_KVDB_SHARED_URL, {
       method: 'GET',
+      cache: 'no-store',
       headers: { Accept: 'application/json' },
     });
     if (kvRes.ok) {
@@ -558,6 +605,7 @@ export async function pullCloudVaultState(): Promise<{
   try {
     const restRes = await fetch(VORVAN_RESTFUL_KV_URL, {
       method: 'GET',
+      cache: 'no-store',
       headers: { Accept: 'application/json' },
     });
     if (restRes.ok) {
@@ -613,7 +661,7 @@ export async function pullCloudVaultState(): Promise<{
                   ord.paymentProofUploadedAt || 'Terverifikasi · WIB'
                 );
               }
-              ordersById.set(invKey, ord);
+              ordersById.set(invKey, syncOrderDynamicResiFields(ord));
             }
           }
         }
@@ -629,6 +677,7 @@ export async function pullCloudVaultState(): Promise<{
       `${VORVAN_CLOUD_SYNC_TOPIC}/json?poll=1&since=12h`,
       {
         method: 'GET',
+        cache: 'no-store',
         headers: {
           Accept: 'application/x-ndjson, application/json, text/plain',
         },
@@ -644,6 +693,10 @@ export async function pullCloudVaultState(): Promise<{
 
       const streamLeads: ConciergeEmailLead[] = [];
       const streamUpsertOrders: CustomAdminOrder[] = [];
+      const streamResiUpdates: Extract<
+        CloudVaultPacket,
+        { kind: 'VORVAN_ORDER_RESI_UPDATE' }
+      >[] = [];
       const streamStatusUpdates: {
         invoiceId: string;
         status: 'PENDING_PAYMENT' | 'PAID';
@@ -721,6 +774,13 @@ export async function pullCloudVaultState(): Promise<{
             if (!invKey || deletedInvoiceIds.has(invKey)) continue;
             streamUpsertOrders.push(packet.order);
           } else if (
+            packet.kind === 'VORVAN_ORDER_RESI_UPDATE' &&
+            packet.invoiceId
+          ) {
+            const invKey = normalizeInvoiceIdKey(packet.invoiceId);
+            if (!invKey || deletedInvoiceIds.has(invKey)) continue;
+            streamResiUpdates.push(packet);
+          } else if (
             packet.kind === 'VORVAN_ORDER_STATUS' &&
             packet.invoiceId
           ) {
@@ -796,13 +856,68 @@ export async function pullCloudVaultState(): Promise<{
         if (!invKey || deletedInvoiceIds.has(invKey)) continue;
         const existing = ordersById.get(invKey);
         if (existing) {
-          const ordHasResi = Boolean(extractOrderAwb(ord));
-          const merged = ordHasResi
-            ? mergeStoredWithSmartOrder(ord, existing)
-            : mergeStoredWithSmartOrder(existing, ord);
-          ordersById.set(invKey, merged);
+          ordersById.set(invKey, mergeCloudAndLocalOrder(existing, ord));
         } else {
           ordersById.set(invKey, syncOrderDynamicResiFields(ord));
+        }
+      }
+
+      streamResiUpdates.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+      for (const resiPkt of streamResiUpdates) {
+        const invKey = normalizeInvoiceIdKey(resiPkt.invoiceId);
+        if (!invKey || deletedInvoiceIds.has(invKey)) continue;
+        const existing = ordersById.get(invKey);
+        const cleanAwb = (resiPkt.resi || resiPkt.awbNumber || '').trim();
+        const packetPartial: Partial<CustomAdminOrder> = {
+          invoiceId: invKey,
+          shippingMethod: (resiPkt.shippingMethod ||
+            resiPkt.courier ||
+            existing?.shippingMethod ||
+            'J&T Express') as CustomAdminOrder['shippingMethod'],
+          courier: (resiPkt.courier ||
+            resiPkt.shippingMethod ||
+            existing?.courier ||
+            'J&T Express') as CustomAdminOrder['courier'],
+          awbNumber: cleanAwb,
+          resi: cleanAwb,
+          trackingNumber: (resiPkt.trackingNumber || cleanAwb).trim(),
+          noResi: (resiPkt.noResi || cleanAwb).trim(),
+          trackingId: cleanAwb || existing?.trackingId || invKey,
+          resiUpdatedAt: resiPkt.resiUpdatedAt ?? resiPkt.ts,
+          updatedAt: resiPkt.updatedAt ?? resiPkt.ts,
+          updatedAtMs: resiPkt.updatedAtMs ?? resiPkt.updatedAt ?? resiPkt.ts,
+          status: resiPkt.status || existing?.status || 'PENDING_PAYMENT',
+        };
+        if (typeof resiPkt.isCOD === 'boolean') {
+          packetPartial.isCOD = resiPkt.isCOD;
+        }
+        if (typeof resiPkt.isDelivered === 'boolean') {
+          packetPartial.isDelivered = resiPkt.isDelivered;
+          packetPartial.shippingStageOverride = resiPkt.isDelivered
+            ? 4
+            : existing?.shippingStageOverride || 'AUTO';
+        }
+        if (typeof resiPkt.resiInputAt === 'number') {
+          packetPartial.resiInputAt = resiPkt.resiInputAt;
+        }
+        if (resiPkt.trackingStage ?? resiPkt.shippingStage) {
+          const stg = resiPkt.trackingStage ?? resiPkt.shippingStage;
+          packetPartial.trackingStage = stg;
+          packetPartial.shippingStage = stg;
+        }
+        if (existing) {
+          ordersById.set(
+            invKey,
+            mergeCloudAndLocalOrder(existing, {
+              ...existing,
+              ...packetPartial,
+            })
+          );
+        } else {
+          ordersById.set(
+            invKey,
+            syncOrderDynamicResiFields(packetPartial as CustomAdminOrder)
+          );
         }
       }
 
@@ -908,16 +1023,7 @@ export function mergeCustomAdminOrders(
     if (key && !effectiveDeletedIds.has(key)) {
       const local = byInvoiceId.get(key);
       if (local) {
-        const cloudUpdated = ord.updatedAtMs || ord.resiInputAt || 0;
-        const localUpdated = local.updatedAtMs || local.resiInputAt || 0;
-        const cloudAwb = extractOrderAwb(ord);
-        const localAwb = extractOrderAwb(local);
-        const primary =
-          cloudUpdated > localUpdated || (Boolean(cloudAwb) && !localAwb)
-            ? ord
-            : local;
-        const secondary = primary === ord ? local : ord;
-        byInvoiceId.set(key, mergeStoredWithSmartOrder(primary, secondary));
+        byInvoiceId.set(key, mergeCloudAndLocalOrder(local, ord));
       } else {
         const synced = syncOrderDynamicResiFields(ord);
         const proofImg = synced.paymentProof || synced.paymentProofUrl;

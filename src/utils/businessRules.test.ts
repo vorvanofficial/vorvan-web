@@ -3461,3 +3461,148 @@ test('48. Six Precision Improvements on INVOICE and CEK RESI (COD Tab Hiding, No
 
   removeCodAgreedRecord('INV-VRV-9910');
 });
+
+test('49. Admin Resi Save & Stage 4 Confirm populate all dynamic Resi/timestamp fields, keep ntfy payloads under 4KB, apply Field-Level Smart Merge, and enable 4-second polling & click-refresh in CEK RESI', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { mergeCloudAndLocalOrder, syncOrderDynamicResiFields } = await import(
+    './businessRules.ts'
+  );
+  const { mergeCustomAdminOrders, prepareCloudVaultPacketForTransport } =
+    await import('./cloudSync.ts');
+
+  const nowMs = Date.UTC(2026, 10, 14, 7, 30, 0);
+  const largeProof = 'data:image/jpeg;base64,' + 'A'.repeat(18000);
+
+  // 1. Local browser (Buyer) has old stale data: PAID with proof, empty resi: ""
+  const buyerLocalOrder = syncOrderDynamicResiFields({
+    invoiceId: 'INV-VRV-7788',
+    trackingId: 'INV-VRV-7788',
+    createdAt: '14 Nov 2026 · 14.00 WIB',
+    createdAtTimestampMs: nowMs - 3600000,
+    buyerName: 'Ibu Clarissa',
+    buyerCity: 'Jakarta Selatan',
+    house: 'Creed',
+    fragranceName: 'Aventus',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    batchCode: 'VRV-26778C',
+    dealPriceIDR: 4200000,
+    shippingMethod: 'J&T Express',
+    isCOD: false,
+    isDelivered: false,
+    awbNumber: '',
+    resi: '',
+    trackingNumber: '',
+    noResi: '',
+    shippingStage: 1,
+    shippingStageOverride: 'AUTO',
+    status: 'PAID',
+    paymentProof: largeProof,
+    paymentProofUrl: largeProof,
+    paymentProofUploadedAt: '14 Nov 2026 · 14.10 WIB',
+    updatedAt: nowMs - 100000,
+    updatedAtMs: nowMs - 100000,
+  });
+
+  // 2. Cloud snapshot pushed from Admin browser with Resi "JP 12312456" & Stage 4
+  const adminCloudOrder = syncOrderDynamicResiFields({
+    ...buyerLocalOrder,
+    courier: 'J&T Express',
+    shippingMethod: 'J&T Express',
+    awbNumber: 'JP 12312456',
+    resi: 'JP 12312456',
+    trackingNumber: 'JP 12312456',
+    noResi: 'JP 12312456',
+    resiInputAt: nowMs,
+    resiUpdatedAt: nowMs,
+    updatedAt: nowMs,
+    updatedAtMs: nowMs,
+    isDelivered: true,
+    trackingStage: 4,
+    shippingStage: 4,
+    shippingStageOverride: 4,
+    status: 'PAID',
+  });
+
+  // Field-Level Smart Merge: local empty resi MUST NEVER overwrite Cloud resi,
+  // and paymentProof + isDelivered + trackingStage + PAID status are all preserved
+  const mergedDirect = mergeCloudAndLocalOrder(
+    buyerLocalOrder,
+    adminCloudOrder
+  );
+  assert.equal(mergedDirect.resi, 'JP 12312456');
+  assert.equal(mergedDirect.trackingNumber, 'JP 12312456');
+  assert.equal(mergedDirect.noResi, 'JP 12312456');
+  assert.equal(mergedDirect.awbNumber, 'JP 12312456');
+  assert.equal(mergedDirect.courier, 'J&T Express');
+  assert.equal(mergedDirect.isDelivered, true);
+  assert.equal(mergedDirect.trackingStage, 4);
+  assert.equal(mergedDirect.status, 'PAID');
+  assert.equal(mergedDirect.paymentProof, largeProof);
+
+  // Reverse check: even if buyer uploaded proof with newer updatedAt while Cloud already has Resi,
+  // mergeCloudAndLocalOrder keeps Cloud's non-empty Resi AND Buyer's paymentProof
+  const buyerWithNewerEmptyResi = {
+    ...buyerLocalOrder,
+    updatedAt: nowMs + 50000,
+    updatedAtMs: nowMs + 50000,
+  };
+  const mergedList = mergeCustomAdminOrders(
+    [buyerWithNewerEmptyResi],
+    [adminCloudOrder]
+  );
+  assert.equal(mergedList.length, 1);
+  assert.equal(mergedList[0].resi, 'JP 12312456');
+  assert.equal(mergedList[0].trackingNumber, 'JP 12312456');
+  assert.equal(mergedList[0].noResi, 'JP 12312456');
+  assert.equal(mergedList[0].isDelivered, true);
+  assert.equal(mergedList[0].paymentProof, largeProof);
+
+  // 3. Transport compaction keeps ntfy.sh JSON payload < 4KB even when order has 18KB payment proof
+  const compactedPacket = prepareCloudVaultPacketForTransport({
+    kind: 'VORVAN_ORDER_UPSERT',
+    order: adminCloudOrder,
+    ts: nowMs,
+  });
+  const compactedJsonSize = JSON.stringify(compactedPacket).length;
+  assert.ok(
+    compactedJsonSize < 4096,
+    `Expected compacted ntfy packet < 4096 bytes, got ${compactedJsonSize}`
+  );
+  assert.equal(compactedPacket.kind, 'VORVAN_ORDER_UPSERT');
+  if (compactedPacket.kind === 'VORVAN_ORDER_UPSERT') {
+    assert.equal(compactedPacket.order.resi, 'JP 12312456');
+    assert.equal(compactedPacket.order.isDelivered, true);
+    assert.equal(compactedPacket.order.status, 'PAID');
+    assert.equal(compactedPacket.order.paymentProof, undefined);
+  }
+
+  // 4. Verify App.tsx, cloudSync.ts, and OrderTrackingView.tsx implement required async push, no-store GETs, 4s polling, and non-wiping search state
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+  const cloudCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'utils', 'cloudSync.ts'),
+    'utf8'
+  );
+  const trackingCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'OrderTrackingView.tsx'),
+    'utf8'
+  );
+
+  assert.ok(appCode.includes("kind: 'VORVAN_ORDER_RESI_UPDATE'"));
+  assert.ok(appCode.includes('resiUpdatedAt: nowTs'));
+  assert.ok(appCode.includes('updatedAt: nowTs'));
+  assert.ok(appCode.includes('await Promise.all(['));
+
+  assert.ok(cloudCode.includes("cache: 'no-store'"));
+  assert.ok(cloudCode.includes("packet.kind === 'VORVAN_ORDER_RESI_UPDATE'"));
+  assert.ok(cloudCode.includes('mergeCloudAndLocalOrder(local, ord)'));
+
+  assert.ok(trackingCode.includes('}, 4000);'));
+  assert.ok(trackingCode.includes('const refreshed = await onRefreshFromCloud?.();'));
+  assert.ok(trackingCode.includes('}, [initialQuery, smartOrder]);'));
+});
+

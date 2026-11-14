@@ -276,7 +276,9 @@ export interface CustomAdminOrder {
   trackingId: string;
   createdAt: string;
   createdAtTimestampMs?: number;
+  updatedAt?: number;
   updatedAtMs?: number;
+  resiUpdatedAt?: number;
   buyerName: string;
   buyerCity: string;
   house: string;
@@ -303,6 +305,7 @@ export interface CustomAdminOrder {
   noResi?: string;
   resiInputAt?: number;
   shippingStage?: 1 | 2 | 3 | 4;
+  trackingStage?: 1 | 2 | 3 | 4;
   shippingStageOverride?: 'AUTO' | 1 | 2 | 3 | 4;
   status: 'PENDING_PAYMENT' | 'PAID';
   buyerEmail?: string;

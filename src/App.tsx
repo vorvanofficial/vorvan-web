@@ -457,9 +457,18 @@ export default function App() {
   }, []);
 
   // Cross-device & Incognito Cloud Sync function (pulls leads & orders from shared Cloud Vault)
-  const syncFromCloudVault = React.useCallback(async () => {
+  const syncFromCloudVault = React.useCallback(async (): Promise<
+    CustomAdminOrder[]
+  > => {
     const cloudData = await pullCloudVaultState();
-    if (!cloudData) return;
+    const deletedIds = new Set<string>([
+      ...loadDeletedInvoiceIds(),
+      ...(cloudData?.deletedInvoiceIds || []),
+    ]);
+
+    if (!cloudData) {
+      return mergeCustomAdminOrders(loadCustomAdminOrders(), [], deletedIds);
+    }
 
     if (cloudData.leads.length > 0 || cloudData.deletedLeadEmails.size > 0) {
       setEmailLeads((prev) => {
@@ -475,10 +484,11 @@ export default function App() {
       });
     }
 
-    const deletedIds = new Set<string>([
-      ...loadDeletedInvoiceIds(),
-      ...cloudData.deletedInvoiceIds,
-    ]);
+    const syncMerged = mergeCustomAdminOrders(
+      loadCustomAdminOrders(),
+      cloudData.orders,
+      deletedIds
+    );
 
     if (cloudData.orders.length > 0 || deletedIds.size > 0) {
       setCustomOrders((prev) => {
@@ -495,7 +505,50 @@ export default function App() {
         saveCustomAdminOrders(merged);
         return merged;
       });
+      saveCustomAdminOrders(syncMerged);
+
+      setActiveBuyerSession((prevSession) => {
+        if (!prevSession) return prevSession;
+        const targetKey = normalizeInvoiceIdKey(prevSession.invoiceId);
+        const match = syncMerged.find(
+          (o) => normalizeInvoiceIdKey(o.invoiceId) === targetKey
+        );
+        if (!match) return prevSession;
+        return {
+          invoiceId: match.invoiceId.trim().toUpperCase(),
+          trackingQuery: (
+            match.resi ||
+            match.awbNumber ||
+            match.trackingId ||
+            match.invoiceId
+          ).trim(),
+          smartOrder: match,
+        };
+      });
+
+      setRoute((prevRoute) => {
+        if (
+          (prevRoute.view === 'invoice' || prevRoute.view === 'track') &&
+          prevRoute.smartOrder
+        ) {
+          const targetKey = normalizeInvoiceIdKey(
+            prevRoute.smartOrder.invoiceId
+          );
+          const match = syncMerged.find(
+            (o) => normalizeInvoiceIdKey(o.invoiceId) === targetKey
+          );
+          if (match) {
+            return {
+              ...prevRoute,
+              smartOrder: match,
+            };
+          }
+        }
+        return prevRoute;
+      });
     }
+
+    return syncMerged;
   }, []);
 
   // Sync on boot, when opening Admin Console, or when visiting Invoice/Tracking views
@@ -882,7 +935,10 @@ export default function App() {
       noResi: cleanAwb,
       resiInputAt:
         !isCod && cleanAwb ? newOrder.resiInputAt || nowTs : undefined,
+      resiUpdatedAt: !isCod && cleanAwb ? nowTs : undefined,
+      updatedAt: nowTs,
       updatedAtMs: nowTs,
+      trackingStage: isCod ? 1 : cleanAwb ? 3 : 1,
       shippingStage: isCod ? 1 : cleanAwb ? 3 : 1,
       shippingStageOverride: 'AUTO',
       status: 'PENDING_PAYMENT',
@@ -913,26 +969,37 @@ export default function App() {
     void sendAdminOrderBackupToGmail(cleanNewOrder);
   };
 
-  const handleUpdateCustomOrderStage = (
+  const handleUpdateCustomOrderStage = async (
     invoiceId: string,
     stageOrOverride: 'AUTO' | 1 | 2 | 3 | 4
   ) => {
     const cleanTargetId = invoiceId.trim().toUpperCase();
     const nowTs = Date.now();
     let updatedOrderRef: CustomAdminOrder | null = null;
-    const updated = customOrders.map((o) => {
+    const baseOrders = mergeCustomAdminOrders(
+      customOrders,
+      loadCustomAdminOrders(),
+      loadDeletedInvoiceIds()
+    );
+    const updated = baseOrders.map((o) => {
       if (o.invoiceId.trim().toUpperCase() !== cleanTargetId) return o;
       const isStage4Confirm = stageOrOverride === 4;
+      const nextStage: 1 | 2 | 3 | 4 = isStage4Confirm
+        ? 4
+        : o.awbNumber || o.resi || o.isCOD
+        ? 3
+        : 1;
       const nextOrder: CustomAdminOrder = syncOrderDynamicResiFields({
         ...o,
         isDelivered: isStage4Confirm,
+        resiUpdatedAt: isStage4Confirm
+          ? o.resiUpdatedAt || nowTs
+          : o.resiUpdatedAt,
+        updatedAt: nowTs,
         updatedAtMs: nowTs,
+        trackingStage: nextStage,
         shippingStageOverride: isStage4Confirm ? 4 : 'AUTO',
-        shippingStage: isStage4Confirm
-          ? 4
-          : o.awbNumber || o.isCOD
-          ? 3
-          : 1,
+        shippingStage: nextStage,
         status: isStage4Confirm ? 'PAID' : o.status,
       });
       updatedOrderRef = nextOrder;
@@ -940,7 +1007,7 @@ export default function App() {
     });
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
-    void saveSharedCloudLeadsAndOrders(emailLeads, updated);
+
     if (updatedOrderRef) {
       const finalRef = updatedOrderRef as CustomAdminOrder;
       if (
@@ -962,11 +1029,40 @@ export default function App() {
           smartOrder: finalRef,
         });
       }
-      void pushCloudVaultPacket({
-        kind: 'VORVAN_ORDER_UPSERT',
-        order: finalRef,
-        ts: nowTs,
-      });
+      await Promise.all([
+        saveSharedCloudLeadsAndOrders(emailLeads, updated),
+        pushCloudVaultPacket({
+          kind: 'VORVAN_ORDER_RESI_UPDATE',
+          invoiceId: finalRef.invoiceId,
+          resi: (finalRef.resi || finalRef.awbNumber || '').trim(),
+          trackingNumber: (
+            finalRef.trackingNumber ||
+            finalRef.awbNumber ||
+            ''
+          ).trim(),
+          noResi: (finalRef.noResi || finalRef.awbNumber || '').trim(),
+          awbNumber: (finalRef.awbNumber || '').trim(),
+          courier: String(finalRef.courier || finalRef.shippingMethod),
+          shippingMethod: String(finalRef.shippingMethod),
+          isCOD: finalRef.isCOD,
+          isDelivered: finalRef.isDelivered,
+          trackingStage: finalRef.trackingStage,
+          shippingStage: finalRef.shippingStage,
+          status: finalRef.status,
+          resiInputAt: finalRef.resiInputAt,
+          resiUpdatedAt: finalRef.resiUpdatedAt || nowTs,
+          updatedAt: nowTs,
+          updatedAtMs: nowTs,
+          ts: nowTs,
+        }),
+        pushCloudVaultPacket({
+          kind: 'VORVAN_ORDER_UPSERT',
+          order: finalRef,
+          ts: nowTs,
+        }),
+      ]);
+    } else {
+      await saveSharedCloudLeadsAndOrders(emailLeads, updated);
     }
   };
 
@@ -976,7 +1072,9 @@ export default function App() {
   ) => {
     const nowTs = Date.now();
     const updated = customOrders.map((o) =>
-      o.invoiceId === invoiceId ? { ...o, status, updatedAtMs: nowTs } : o
+      o.invoiceId === invoiceId
+        ? { ...o, status, updatedAt: nowTs, updatedAtMs: nowTs }
+        : o
     );
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
@@ -990,7 +1088,7 @@ export default function App() {
     });
   };
 
-  const handleUpdateCustomOrderResi = (
+  const handleUpdateCustomOrderResi = async (
     invoiceId: string,
     shippingMethod: ShippingMethodType,
     awbNumber: string,
@@ -1002,9 +1100,14 @@ export default function App() {
     const nowTs = Date.now();
     let updatedOrderRef: CustomAdminOrder | null = null;
 
-    const updated = customOrders.map((o) => {
+    const baseOrders = mergeCustomAdminOrders(
+      customOrders,
+      loadCustomAdminOrders(),
+      loadDeletedInvoiceIds()
+    );
+    const updated = baseOrders.map((o) => {
       if (o.invoiceId.trim().toUpperCase() !== cleanTargetId) return o;
-      const prevAwb = (o.awbNumber || '').trim().toUpperCase();
+      const prevAwb = (o.awbNumber || o.resi || '').trim().toUpperCase();
       const nextResiInputAt =
         !isCod && cleanAwb
           ? prevAwb === cleanAwb && o.resiInputAt
@@ -1028,8 +1131,11 @@ export default function App() {
         trackingNumber: cleanAwb,
         noResi: cleanAwb,
         resiInputAt: nextResiInputAt,
+        resiUpdatedAt: nowTs,
+        updatedAt: nowTs,
         updatedAtMs: nowTs,
         trackingId: cleanAwb || o.invoiceId,
+        trackingStage: nextStage,
         shippingStage: nextStage,
         shippingStageOverride: delivered ? 4 : 'AUTO',
       });
@@ -1039,7 +1145,6 @@ export default function App() {
 
     setCustomOrders(updated);
     saveCustomAdminOrders(updated);
-    void saveSharedCloudLeadsAndOrders(emailLeads, updated);
 
     if (updatedOrderRef) {
       const finalRef = updatedOrderRef as CustomAdminOrder;
@@ -1050,6 +1155,7 @@ export default function App() {
         setActiveBuyerSession({
           invoiceId: cleanTargetId,
           trackingQuery: (
+            finalRef.resi ||
             finalRef.awbNumber ||
             finalRef.trackingId ||
             finalRef.invoiceId
@@ -1067,11 +1173,36 @@ export default function App() {
           smartOrder: finalRef,
         });
       }
-      void pushCloudVaultPacket({
-        kind: 'VORVAN_ORDER_UPSERT',
-        order: finalRef,
-        ts: nowTs,
-      });
+      await Promise.all([
+        saveSharedCloudLeadsAndOrders(emailLeads, updated),
+        pushCloudVaultPacket({
+          kind: 'VORVAN_ORDER_RESI_UPDATE',
+          invoiceId: finalRef.invoiceId,
+          resi: cleanAwb,
+          trackingNumber: cleanAwb,
+          noResi: cleanAwb,
+          awbNumber: cleanAwb,
+          courier: shippingMethod,
+          shippingMethod,
+          isCOD: isCod,
+          isDelivered: finalRef.isDelivered,
+          trackingStage: finalRef.trackingStage,
+          shippingStage: finalRef.shippingStage,
+          status: finalRef.status,
+          resiInputAt: finalRef.resiInputAt,
+          resiUpdatedAt: nowTs,
+          updatedAt: nowTs,
+          updatedAtMs: nowTs,
+          ts: nowTs,
+        }),
+        pushCloudVaultPacket({
+          kind: 'VORVAN_ORDER_UPSERT',
+          order: finalRef,
+          ts: nowTs,
+        }),
+      ]);
+    } else {
+      await saveSharedCloudLeadsAndOrders(emailLeads, updated);
     }
   };
 
@@ -1106,6 +1237,7 @@ export default function App() {
     uploadedAt: string
   ) => {
     const cleanTargetId = invoiceId.trim().toUpperCase();
+    const nowTs = Date.now();
     setCustomOrders((prev) => {
       const stored = loadCustomAdminOrders();
       const baseList = mergeCustomAdminOrders(prev, stored);
@@ -1115,9 +1247,14 @@ export default function App() {
         proofBase64,
         uploadedAt
       );
-      saveCustomAdminOrders(updatedOrders);
-      void saveSharedCloudLeadsAndOrders(emailLeads, updatedOrders);
-      return updatedOrders;
+      const stampedOrders = updatedOrders.map((o) =>
+        o.invoiceId.trim().toUpperCase() === cleanTargetId
+          ? { ...o, updatedAt: nowTs, updatedAtMs: nowTs }
+          : o
+      );
+      saveCustomAdminOrders(stampedOrders);
+      void saveSharedCloudLeadsAndOrders(emailLeads, stampedOrders);
+      return stampedOrders;
     });
 
     if (
@@ -1134,24 +1271,35 @@ export default function App() {
       );
       const cleanAwb = isCod
         ? ''
-        : (route.smartOrder.awbNumber || '').trim();
+        : (route.smartOrder.awbNumber || route.smartOrder.resi || '').trim();
       const hasRealAwb =
         !isCod &&
         Boolean(cleanAwb) &&
         cleanAwb.toUpperCase() !== cleanTargetId &&
         !cleanAwb.toUpperCase().startsWith('INV-VRV-');
       const delivered = Boolean(route.smartOrder.isDelivered);
-      const updatedSmart: CustomAdminOrder = {
+      const nextStage: 1 | 2 | 3 | 4 = delivered
+        ? 4
+        : isCod || hasRealAwb
+        ? 3
+        : 1;
+      const updatedSmart: CustomAdminOrder = syncOrderDynamicResiFields({
         ...route.smartOrder,
         awbNumber: hasRealAwb ? cleanAwb : '',
+        resi: hasRealAwb ? cleanAwb : '',
+        trackingNumber: hasRealAwb ? cleanAwb : '',
+        noResi: hasRealAwb ? cleanAwb : '',
         isDelivered: delivered,
         status: 'PAID',
         paymentProof: proofBase64,
         paymentProofUrl: proofBase64,
         paymentProofUploadedAt: uploadedAt,
-        shippingStage: delivered ? 4 : isCod || hasRealAwb ? 3 : 1,
+        updatedAt: nowTs,
+        updatedAtMs: nowTs,
+        trackingStage: nextStage,
+        shippingStage: nextStage,
         shippingStageOverride: delivered ? 4 : 'AUTO',
-      };
+      });
       setRoute({
         ...route,
         smartOrder: updatedSmart,

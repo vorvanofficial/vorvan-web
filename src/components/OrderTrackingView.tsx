@@ -62,7 +62,10 @@ interface OrderTrackingViewProps {
   settings?: VorvanSiteSettings;
   onBackToCatalog: () => void;
   onOpenInvoice: (invoiceId: string) => void;
-  onRefreshFromCloud?: () => Promise<void> | void;
+  onRefreshFromCloud?: () =>
+    | Promise<CustomAdminOrder[] | void>
+    | CustomAdminOrder[]
+    | void;
 }
 
 export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
@@ -93,9 +96,13 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   const effectiveSettings = settings || loadVorvanSettings();
   const activeBinderbyteKey = (effectiveSettings.binderbyteApiKey || '').trim();
 
-  // Pull latest Resi & Order Status from Cloud when opening CEK RESI
+  // Pull latest Resi & Order Status from Cloud when opening CEK RESI and every 4 seconds
   useEffect(() => {
     void onRefreshFromCloud?.();
+    const cloudTimer = window.setInterval(() => {
+      void onRefreshFromCloud?.();
+    }, 4000);
+    return () => window.clearInterval(cloudTimer);
   }, [onRefreshFromCloud]);
 
   // Periodic tick so tracking view stays reactive to localStorage & cloud updates
@@ -106,6 +113,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
     return () => window.clearInterval(timer);
   }, []);
 
+  // Sync only when URL route query or smartOrder changes (never wipe active searchInput/submittedQuery on background customOrders polling)
   useEffect(() => {
     if (initialQuery?.trim()) {
       const clean = initialQuery.trim();
@@ -121,7 +129,12 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
         );
       }
     } else if (smartOrder) {
-      const code = (smartOrder.awbNumber || smartOrder.invoiceId || '').trim();
+      const code = (
+        smartOrder.resi ||
+        smartOrder.awbNumber ||
+        smartOrder.invoiceId ||
+        ''
+      ).trim();
       setSearchInput(code);
       setSubmittedQuery(code);
       setNotFoundError(null);
@@ -130,7 +143,20 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
       setSubmittedQuery('');
       setNotFoundError(null);
     }
-  }, [initialQuery, smartOrder, customOrders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery, smartOrder]);
+
+  // If a searched/initial order arrives from background Cloud fetch while showing notFoundError, automatically resolve it
+  useEffect(() => {
+    if (!notFoundError) return;
+    const candidate = (searchInput || initialQuery || '').trim().toUpperCase();
+    if (!candidate) return;
+    const found = lookupTrackingOrder(candidate, customOrders, smartOrder);
+    if (found) {
+      setSubmittedQuery(candidate);
+      setNotFoundError(null);
+    }
+  }, [customOrders, smartOrder, initialQuery, searchInput, notFoundError]);
 
   const activeRecord: TrackingRecord | null =
     (submittedQuery || smartOrder) && !notFoundError
@@ -247,9 +273,8 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
     window.setTimeout(() => setCopiedAwb(false), 2600);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    void onRefreshFromCloud?.();
     const cleaned = searchInput.trim().toUpperCase();
     if (!cleaned) {
       setNotFoundError(
@@ -257,7 +282,16 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
       );
       return;
     }
-    const found = lookupTrackingOrder(cleaned, customOrders, smartOrder);
+    let latestOrders = customOrders;
+    try {
+      const refreshed = await onRefreshFromCloud?.();
+      if (Array.isArray(refreshed) && refreshed.length > 0) {
+        latestOrders = refreshed;
+      }
+    } catch {
+      // Fallback to existing orders
+    }
+    const found = lookupTrackingOrder(cleaned, latestOrders, smartOrder);
     if (!found) {
       setSubmittedQuery('');
       setNotFoundError(

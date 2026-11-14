@@ -414,6 +414,7 @@ export function syncOrderDynamicResiFields(
     trackingNumber: cleanAwb,
     noResi: cleanAwb,
     trackingId: cleanAwb || order.invoiceId,
+    trackingStage: stage,
     shippingStage: stage,
     shippingStageOverride: delivered ? 4 : 'AUTO',
   };
@@ -2642,6 +2643,229 @@ export function computeAutoShippingStage(
 }
 
 /**
+ * Field-Level Smart Merge between a local invoice (`localInv`) and a cloud/updated invoice (`cloudInv`).
+ * Strictly prevents an empty local `resi: ""` from overwriting a populated cloud `resi`
+ * (e.g. `JP 12312456`), while preserving delivery confirmation (Stage 4), PAID status,
+ * courier, and paymentProof across browsers.
+ */
+export function mergeCloudAndLocalOrder(
+  localInv: CustomAdminOrder,
+  cloudInv?: CustomAdminOrder | null
+): CustomAdminOrder {
+  if (!cloudInv) {
+    return syncOrderDynamicResiFields(localInv);
+  }
+
+  const cloudAwb = extractOrderAwb(cloudInv);
+  const localAwb = extractOrderAwb(localInv);
+  const cloudResiRaw = (
+    cloudAwb ||
+    cloudInv.resi ||
+    cloudInv.trackingNumber ||
+    cloudInv.noResi ||
+    cloudInv.awbNumber ||
+    ''
+  ).trim();
+  const localResiRaw = (
+    localAwb ||
+    localInv.resi ||
+    localInv.trackingNumber ||
+    localInv.noResi ||
+    localInv.awbNumber ||
+    ''
+  ).trim();
+
+  const cloudTs = Math.max(
+    cloudInv.resiUpdatedAt || 0,
+    cloudInv.updatedAt || 0,
+    cloudInv.updatedAtMs || 0,
+    cloudInv.resiInputAt || 0
+  );
+  const localTs = Math.max(
+    localInv.resiUpdatedAt || 0,
+    localInv.updatedAt || 0,
+    localInv.updatedAtMs || 0,
+    localInv.resiInputAt || 0
+  );
+
+  // If localInv explicitly has a non-empty valid AWB AND a strictly newer update timestamp than cloudInv,
+  // respect the newer local resi/courier; otherwise ALWAYS prioritize cloudInv first!
+  const localHasNewerAwb = Boolean(localAwb) && localTs > cloudTs;
+
+  const isCodExplicit =
+    (localHasNewerAwb ? localInv.isCOD : cloudInv.isCOD) ??
+    (localHasNewerAwb ? cloudInv.isCOD : localInv.isCOD);
+
+  const mergedResi = (
+    localHasNewerAwb
+      ? localAwb || cloudAwb || localResiRaw || cloudResiRaw
+      : cloudAwb || localAwb || cloudResiRaw || localResiRaw
+  ).trim();
+
+  const mergedCourier = (
+    (localHasNewerAwb
+      ? localInv.courier ||
+        localInv.shippingMethod ||
+        cloudInv.courier ||
+        cloudInv.shippingMethod
+      : cloudInv.courier ||
+        cloudInv.shippingMethod ||
+        localInv.courier ||
+        localInv.shippingMethod) || 'J&T Express'
+  ) as ShippingMethodType;
+
+  const hasAnyCourierResi = Boolean(
+    mergedResi &&
+      !mergedResi.toUpperCase().startsWith('INV-VRV-') &&
+      !isCodShippingMethod(mergedCourier, mergedResi)
+  );
+
+  const isCod = hasAnyCourierResi
+    ? false
+    : typeof isCodExplicit === 'boolean'
+    ? isCodExplicit
+    : isCodShippingMethod(mergedCourier, mergedResi);
+
+  const invKey = normalizeInvoiceIdKey(cloudInv.invoiceId || localInv.invoiceId);
+  const proofsMap = loadPaymentProofsMap();
+  const mapProof = invKey ? proofsMap[invKey] : undefined;
+  const codAgreedEntry = invKey ? loadCodAgreedMap()[invKey] : undefined;
+
+  const mergedProof =
+    cloudInv.paymentProof ||
+    cloudInv.paymentProofUrl ||
+    localInv.paymentProof ||
+    localInv.paymentProofUrl ||
+    mapProof?.proofUrl ||
+    null;
+  const mergedProofUploadedAt =
+    cloudInv.paymentProofUploadedAt ||
+    localInv.paymentProofUploadedAt ||
+    mapProof?.uploadedAt ||
+    null;
+
+  const mergedIsDelivered = Boolean(
+    cloudInv.isDelivered ||
+      localInv.isDelivered ||
+      cloudInv.trackingStage === 4 ||
+      localInv.trackingStage === 4 ||
+      cloudInv.shippingStage === 4 ||
+      localInv.shippingStage === 4 ||
+      cloudInv.shippingStageOverride === 4 ||
+      localInv.shippingStageOverride === 4
+  );
+
+  const cloudStatusUpper = String(cloudInv.status || '').toUpperCase();
+  const localStatusUpper = String(localInv.status || '').toUpperCase();
+  const mergedStatus: 'PENDING_PAYMENT' | 'PAID' =
+    cloudStatusUpper === 'PAID' ||
+    localStatusUpper === 'PAID' ||
+    cloudStatusUpper === 'LUNAS' ||
+    localStatusUpper === 'LUNAS' ||
+    Boolean(mergedProof) ||
+    mergedIsDelivered
+      ? 'PAID'
+      : 'PENDING_PAYMENT';
+
+  const mergedCodAgreed = isCod
+    ? mergedIsDelivered ||
+      mergedStatus === 'PAID' ||
+      Boolean(codAgreedEntry?.agreed) ||
+      cloudInv.codTermsAgreed === true ||
+      localInv.codTermsAgreed === true
+      ? true
+      : cloudInv.codTermsAgreed === false || localInv.codTermsAgreed === false
+      ? false
+      : undefined
+    : undefined;
+
+  const cloudCreatedClean =
+    cloudInv.createdAt &&
+    !cloudInv.createdAt.includes('Terverifikasi') &&
+    cloudInv.createdAt !== 'Hari Ini · WIB'
+      ? cloudInv.createdAt
+      : '';
+  const localCreatedClean =
+    localInv.createdAt &&
+    !localInv.createdAt.includes('Terverifikasi') &&
+    localInv.createdAt !== 'Hari Ini · WIB'
+      ? localInv.createdAt
+      : '';
+  const mergedCreatedMs =
+    cloudInv.createdAtTimestampMs || localInv.createdAtTimestampMs;
+
+  const mergedUpdatedAt =
+    Math.max(
+      cloudTs,
+      localTs,
+      cloudInv.updatedAt || 0,
+      localInv.updatedAt || 0,
+      cloudInv.updatedAtMs || 0,
+      localInv.updatedAtMs || 0
+    ) || undefined;
+  const mergedResiUpdatedAt =
+    Math.max(
+      cloudInv.resiUpdatedAt || 0,
+      localInv.resiUpdatedAt || 0,
+      cloudInv.resiInputAt || 0,
+      localInv.resiInputAt || 0
+    ) || undefined;
+
+  const finalResi = isCod ? '' : hasAnyCourierResi ? mergedResi : '';
+  const stripUndefined = (obj: CustomAdminOrder): Partial<CustomAdminOrder> => {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v !== undefined) {
+        out[k] = v;
+      }
+    }
+    return out as Partial<CustomAdminOrder>;
+  };
+  const baseObj =
+    cloudTs >= localTs
+      ? { ...stripUndefined(localInv), ...stripUndefined(cloudInv) }
+      : { ...stripUndefined(cloudInv), ...stripUndefined(localInv) };
+
+  return syncOrderDynamicResiFields({
+    ...(baseObj as CustomAdminOrder),
+    invoiceId: (cloudInv.invoiceId || localInv.invoiceId).trim().toUpperCase(),
+    createdAt: sanitizeInvoiceCreatedAt(
+      cloudCreatedClean ||
+        localCreatedClean ||
+        cloudInv.createdAt ||
+        localInv.createdAt,
+      mergedCreatedMs || cloudInv.resiInputAt || localInv.resiInputAt
+    ),
+    createdAtTimestampMs: mergedCreatedMs,
+    shippingMethod: mergedCourier,
+    courier: mergedCourier,
+    isCOD: isCod,
+    codTermsAgreed: mergedCodAgreed,
+    codTermsAgreedAt:
+      cloudInv.codTermsAgreedAt ||
+      localInv.codTermsAgreedAt ||
+      codAgreedEntry?.agreedAt,
+    isDelivered: mergedIsDelivered,
+    awbNumber: finalResi,
+    resi: finalResi,
+    trackingNumber: finalResi,
+    noResi: finalResi,
+    trackingId: finalResi || (cloudInv.invoiceId || localInv.invoiceId),
+    resiInputAt:
+      (localHasNewerAwb ? localInv.resiInputAt : cloudInv.resiInputAt) ??
+      cloudInv.resiInputAt ??
+      localInv.resiInputAt,
+    resiUpdatedAt: mergedResiUpdatedAt,
+    updatedAt: mergedUpdatedAt,
+    updatedAtMs: mergedUpdatedAt,
+    status: mergedStatus,
+    paymentProof: mergedProof,
+    paymentProofUrl: mergedProof,
+    paymentProofUploadedAt: mergedProofUploadedAt,
+  });
+}
+
+/**
  * Merges a stored/cloud CustomAdminOrder with a URL `smartOrder` without allowing
  * an older URL snapshot to overwrite updated AWB/Resi, courier, payment status,
  * payment proof, COD S&K agreement, or Stage 4 delivery confirmation.
@@ -2653,109 +2877,7 @@ export function mergeStoredWithSmartOrder(
   if (!smart) {
     return syncOrderDynamicResiFields(stored);
   }
-  const storedAwb = extractOrderAwb(stored);
-  const smartAwb = extractOrderAwb(smart);
-  const storedHasResi = Boolean(storedAwb);
-  const smartHasResi = Boolean(smartAwb);
-
-  const effectiveShippingMethod: ShippingMethodType = storedHasResi
-    ? ((stored.shippingMethod || stored.courier || 'JNE') as ShippingMethodType)
-    : smartHasResi
-    ? ((smart.shippingMethod || smart.courier || 'JNE') as ShippingMethodType)
-    : ((stored.shippingMethod ||
-        stored.courier ||
-        smart.shippingMethod ||
-        smart.courier ||
-        'JNE') as ShippingMethodType);
-
-  const effectiveAwb = storedAwb || smartAwb || '';
-  const isCod =
-    storedHasResi || smartHasResi
-      ? false
-      : typeof stored.isCOD === 'boolean'
-      ? stored.isCOD
-      : typeof smart.isCOD === 'boolean'
-      ? smart.isCOD
-      : isCodShippingMethod(effectiveShippingMethod, effectiveAwb);
-
-  const invKey = normalizeInvoiceIdKey(stored.invoiceId || smart.invoiceId);
-  const proofsMap = loadPaymentProofsMap();
-  const mapProof = invKey ? proofsMap[invKey] : undefined;
-  const codAgreedEntry = invKey ? loadCodAgreedMap()[invKey] : undefined;
-
-  const mergedProof =
-    stored.paymentProof ||
-    stored.paymentProofUrl ||
-    smart.paymentProof ||
-    smart.paymentProofUrl ||
-    mapProof?.proofUrl;
-  const mergedProofUploadedAt =
-    stored.paymentProofUploadedAt ||
-    smart.paymentProofUploadedAt ||
-    mapProof?.uploadedAt;
-
-  const isPaid =
-    Boolean(mergedProof) ||
-    stored.status === 'PAID' ||
-    smart.status === 'PAID';
-  const isDelivered = Boolean(stored.isDelivered || smart.isDelivered);
-
-  const mergedCodAgreed = isCod
-    ? isDelivered ||
-      isPaid ||
-      Boolean(codAgreedEntry?.agreed) ||
-      stored.codTermsAgreed === true ||
-      smart.codTermsAgreed === true
-      ? true
-      : stored.codTermsAgreed === false || smart.codTermsAgreed === false
-      ? false
-      : undefined
-    : undefined;
-
-  const storedCreatedClean =
-    stored.createdAt &&
-    !stored.createdAt.includes('Terverifikasi') &&
-    stored.createdAt !== 'Hari Ini · WIB'
-      ? stored.createdAt
-      : '';
-  const smartCreatedClean =
-    smart.createdAt &&
-    !smart.createdAt.includes('Terverifikasi') &&
-    smart.createdAt !== 'Hari Ini · WIB'
-      ? smart.createdAt
-      : '';
-  const mergedCreatedMs =
-    stored.createdAtTimestampMs || smart.createdAtTimestampMs;
-
-  return syncOrderDynamicResiFields({
-    ...smart,
-    ...stored,
-    createdAt: sanitizeInvoiceCreatedAt(
-      storedCreatedClean || smartCreatedClean || stored.createdAt || smart.createdAt,
-      mergedCreatedMs || stored.resiInputAt || smart.resiInputAt
-    ),
-    createdAtTimestampMs: mergedCreatedMs,
-    shippingMethod: effectiveShippingMethod,
-    courier: effectiveShippingMethod,
-    isCOD: isCod,
-    codTermsAgreed: mergedCodAgreed,
-    codTermsAgreedAt:
-      stored.codTermsAgreedAt ||
-      smart.codTermsAgreedAt ||
-      codAgreedEntry?.agreedAt,
-    isDelivered,
-    awbNumber: isCod ? '' : effectiveAwb,
-    resi: isCod ? '' : effectiveAwb,
-    trackingNumber: isCod ? '' : effectiveAwb,
-    noResi: isCod ? '' : effectiveAwb,
-    resiInputAt: stored.resiInputAt ?? smart.resiInputAt,
-    updatedAtMs:
-      Math.max(stored.updatedAtMs || 0, smart.updatedAtMs || 0) || undefined,
-    status: isDelivered || isPaid ? 'PAID' : 'PENDING_PAYMENT',
-    paymentProof: mergedProof,
-    paymentProofUrl: mergedProof,
-    paymentProofUploadedAt: mergedProofUploadedAt,
-  });
+  return mergeCloudAndLocalOrder(smart, stored);
 }
 
 export function buildTrackingFromCustomOrder(
@@ -3080,7 +3202,7 @@ function resolveReactiveOrdersList(
     if (!key) continue;
     const existing = byInv.get(key);
     if (existing) {
-      byInv.set(key, mergeStoredWithSmartOrder(ord, existing));
+      byInv.set(key, mergeCloudAndLocalOrder(existing, ord));
     } else {
       byInv.set(key, syncOrderDynamicResiFields(ord));
     }
