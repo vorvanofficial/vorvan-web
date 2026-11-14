@@ -3913,15 +3913,57 @@ test('52. Downloadable Official A4 PDF Invoice builds accurate luxury European b
     'utf8'
   );
 
+  const { PDF_RENDER_CONFIG } = await import('./officialInvoicePdf.ts');
+
   assert.ok(invoiceViewCode.includes('data-testid="download-official-pdf-top-btn"'));
   assert.ok(invoiceViewCode.includes('data-testid="download-official-pdf-bottom-btn"'));
+  assert.ok(invoiceViewCode.includes('disabled={!isPdfDownloadUnlocked}'));
+  assert.ok(
+    invoiceViewCode.includes(
+      '🔒 UNDUH DOKUMEN INVOICE RESMI PDF (TERBUKA SETELAH PEMBAYARAN)'
+    )
+  );
   assert.ok(invoiceViewCode.includes('📥 UNDUH DOKUMEN INVOICE RESMI (PDF)'));
   assert.ok(modalCode.includes('admin-download-pdf-btn-'));
   assert.ok(modalCode.includes('📥 UNDUH DOKUMEN INVOICE RESMI (PDF)'));
-  assert.ok(pdfModalCode.includes('VORVAN — LA MAISON DE HAUTE PARFUMERIE'));
-  assert.ok(pdfModalCode.includes('VORVAN OFFICIAL VAULT'));
-  assert.ok(pdfModalCode.includes('VERIFIED CURATION DOCUMENT'));
-  assert.ok(pdfUtilCode.includes('VORVAN — LA MAISON DE HAUTE PARFUMERIE'));
+
+  // Official circular logo asset & matched black rim
+  assert.ok(pdfModalCode.includes('VORVAN_OFFICIAL_CIRCLE_LOGO_ASSET'));
+  assert.ok(pdfModalCode.includes('bg-[#000000]'));
+  assert.ok(pdfUtilCode.includes('VORVAN_OFFICIAL_CIRCLE_LOGO_ASSET'));
+
+  // Symmetric 130x130 Concentric Vault Seal
+  assert.ok(pdfModalCode.includes('w-[130px] h-[130px]'));
+  assert.ok(pdfModalCode.includes("padding: '18px'"));
+  assert.ok(pdfModalCode.includes('★ VORVAN OFFICIAL VAULT ★'));
+  assert.ok(pdfModalCode.includes('VERIFIED'));
+  assert.ok(pdfModalCode.includes('CURATION DOCUMENT'));
+  assert.ok(pdfModalCode.includes('VORVANOFFICIAL.COM'));
+  assert.ok(pdfUtilCode.includes('★ VORVAN OFFICIAL VAULT ★'));
+  assert.ok(pdfUtilCode.includes('CURATION DOCUMENT'));
+  assert.ok(pdfUtilCode.includes('VORVANOFFICIAL.COM'));
+
+  // Ultra-HD scale: 4 lossless PNG config
+  assert.equal(PDF_RENDER_CONFIG.scale, 4);
+  assert.equal(PDF_RENDER_CONFIG.useCORS, true);
+  assert.equal(PDF_RENDER_CONFIG.imageSmoothingQuality, 'high');
+  assert.equal(PDF_RENDER_CONFIG.format, 'PNG');
+  assert.equal(PDF_RENDER_CONFIG.quality, 1.0);
+
+  // Refined legal heading (no OTENTISITAS)
+  assert.ok(
+    pdfModalCode.includes(
+      'CATATAN LEGAL, STANDAR KURASI &amp; GARANSI LAYANAN VORVAN'
+    )
+  );
+  assert.ok(!pdfModalCode.includes('OTENTISITAS KURASI'));
+  assert.ok(
+    pdfUtilCode.includes(
+      'CATATAN LEGAL, STANDAR KURASI & GARANSI LAYANAN VORVAN'
+    )
+  );
+  assert.ok(!pdfUtilCode.includes('OTENTISITAS KURASI'));
+
   assert.ok(pdfUtilCode.includes('Direct International Curation'));
   assert.ok(pdfUtilCode.includes('Garansi Unboxing 360° Tanpa Jeda'));
   assert.ok(pdfUtilCode.includes('Final Sale'));

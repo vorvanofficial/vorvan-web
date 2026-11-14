@@ -3,6 +3,9 @@ import React, { useState } from 'react';
 export const VORVAN_TRANSPARENT_LOGO_ASSET =
   '/assets/aistudio/1001113998-removebg-preview_27bf4b0a.png';
 
+export const VORVAN_OFFICIAL_CIRCLE_LOGO_ASSET =
+  '/assets/aistudio/file_00000000200881faa7fc44aabd9603ab_cb892385.png';
+
 /**
  * Fallback vector SVG if the image ever fails to load.
  */

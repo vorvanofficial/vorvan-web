@@ -4,7 +4,6 @@ import {
   Download,
   FileCheck2,
   RefreshCw,
-  ShieldCheck,
   X,
 } from 'lucide-react';
 import { formatIDRCurrency } from '../utils/businessRules';
@@ -12,6 +11,7 @@ import {
   OfficialPdfInvoiceData,
   downloadOfficialPdfInvoice,
 } from '../utils/officialInvoicePdf';
+import { VORVAN_OFFICIAL_CIRCLE_LOGO_ASSET } from './VorvanLogo';
 
 interface OfficialPdfInvoiceModalProps {
   data: OfficialPdfInvoiceData | null;
@@ -131,12 +131,16 @@ export const OfficialPdfInvoiceModal: React.FC<
             {/* 1. KOP SURAT RESMI */}
             <header className="pb-5 border-b-2 border-[#C5A059] flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <div
-                className="w-16 h-16 rounded-full bg-[#15131B] border-2 border-[#C5A059] flex items-center justify-center shrink-0 shadow-md"
-                style={{ boxShadow: 'inset 0 0 0 3px #15131B, inset 0 0 0 4px #E6CA82' }}
+                className="w-[74px] h-[74px] rounded-full bg-[#000000] border-2 border-[#C5A059] overflow-hidden flex items-center justify-center shrink-0 shadow-md"
+                style={{ boxShadow: 'inset 0 0 0 1px #E6CA82' }}
+                data-testid="official-pdf-header-logo"
               >
-                <span className="font-serif-luxury text-3xl font-bold text-[#F2DBA0]">
-                  V
-                </span>
+                <img
+                  src={VORVAN_OFFICIAL_CIRCLE_LOGO_ASSET}
+                  alt="VORVAN — Lifestyle For Everyone Official Logo"
+                  crossOrigin="anonymous"
+                  className="w-full h-full object-cover scale-[1.12] rounded-full"
+                />
               </div>
               <div className="space-y-1 min-w-0">
                 <h1 className="font-serif-luxury text-lg sm:text-2xl font-bold tracking-wide text-[#141218]">
@@ -337,7 +341,7 @@ export const OfficialPdfInvoiceModal: React.FC<
             <footer className="pt-5 border-t-2 border-[#C5A059] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
               <div className="space-y-2 text-[11px] text-[#332F3B] leading-relaxed flex-1">
                 <p className="font-brand text-[10px] font-bold uppercase tracking-[0.16em] text-[#8F6A23]">
-                  CATATAN LEGAL, OTENTISITAS KURASI &amp; GARANSI LAYANAN VORVAN
+                  CATATAN LEGAL, STANDAR KURASI &amp; GARANSI LAYANAN VORVAN
                 </p>
                 <p
                   className={`font-semibold ${
@@ -367,25 +371,30 @@ export const OfficialPdfInvoiceModal: React.FC<
                 </p>
               </div>
 
-              {/* Stempel Kurasi Digital Bulat Emas */}
+              {/* Luxury Concentric Vault Seal (130px x 130px, 18px inner padding) */}
               <div className="shrink-0 mx-auto sm:mx-0">
                 <div
-                  className="w-32 h-32 rounded-full border-2 border-[#B88E3D] bg-[#C5A059]/10 flex flex-col items-center justify-center text-center p-2 -rotate-6 shadow-inner"
+                  className="w-[130px] h-[130px] rounded-full border-2 border-[#B88E3D] bg-[#FCF7EB] flex flex-col items-center justify-center text-center -rotate-6 shadow-inner"
                   style={{
-                    outline: '1.5px dashed #C5A059',
-                    outlineOffset: '-6px',
+                    padding: '18px',
+                    outline: '1px dashed #C5A059',
+                    outlineOffset: '-7px',
                   }}
                   data-testid="official-pdf-digital-seal"
                 >
-                  <span className="font-brand text-[7px] font-bold uppercase tracking-[0.14em] text-[#7D5C1B] leading-tight">
-                    VORVAN OFFICIAL VAULT
+                  <span className="font-brand text-[5.2px] font-bold uppercase tracking-[0.06em] text-[#9A7222] leading-none whitespace-nowrap">
+                    ★ VORVAN OFFICIAL VAULT ★
                   </span>
-                  <span className="font-serif-luxury text-2xl font-bold text-[#9D7728] my-0.5">
-                    V
+                  <div className="w-full border-y border-[#C5A059]/80 py-0.5 my-1 flex items-center justify-center">
+                    <span className="font-serif-luxury text-[11px] font-bold uppercase tracking-[0.14em] text-[#8A6216] leading-none">
+                      VERIFIED
+                    </span>
+                  </div>
+                  <span className="font-brand text-[5.8px] font-bold uppercase tracking-[0.05em] text-[#7D5C1B] leading-tight whitespace-nowrap">
+                    CURATION DOCUMENT
                   </span>
-                  <span className="font-brand text-[6.5px] font-bold uppercase tracking-[0.12em] text-[#7D5C1B] leading-tight inline-flex items-center gap-0.5">
-                    <ShieldCheck className="w-2.5 h-2.5 shrink-0" />
-                    VERIFIED CURATION DOCUMENT
+                  <span className="font-brand text-[5px] font-bold uppercase tracking-[0.06em] text-[#9A7222] leading-none mt-1 whitespace-nowrap">
+                    VORVANOFFICIAL.COM
                   </span>
                 </div>
               </div>

@@ -923,15 +923,19 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const isConfirmationUnlocked = isCodOrder
     ? isPaymentUnlocked
     : isPaymentUnlocked && hasProof;
-  void isConfirmationUnlocked;
+  const isPdfDownloadUnlocked = isConfirmationUnlocked;
 
   const handleOpenAndDownloadOfficialPdf = async () => {
+    if (!isPdfDownloadUnlocked) return;
+    const verifiedAgreedAt =
+      legalAgreedTimestamp ||
+      baseInvoice.codTermsAgreedAt ||
+      formatLegalTimestampWIB(new Date());
     const data = buildOfficialPdfInvoiceData(baseInvoice, {
       conciergeEmail:
         activeSettings.conciergeEmail || 'vorvanlifestyle@gmail.com',
-      hasProofUploaded: hasProof,
-      agreedTimestamp:
-        legalAgreedTimestamp || baseInvoice.codTermsAgreedAt || '',
+      hasProofUploaded: hasProof || (isCodOrder && isPdfDownloadUnlocked),
+      agreedTimestamp: verifiedAgreedAt,
     });
     setPdfPreviewData(data);
     setIsGeneratingPdf(true);
@@ -1157,11 +1161,20 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               </div>
               <button
                 type="button"
+                disabled={!isPdfDownloadUnlocked}
                 onClick={handleOpenAndDownloadOfficialPdf}
                 data-testid="download-official-pdf-top-btn"
-                className="mt-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#1A160B] via-[#28200F] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] border border-[#D4AF37]/80 text-[#F5E6B8] hover:text-zinc-950 font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.12em] inline-flex items-center justify-center gap-2 shadow-[0_0_18px_rgba(212,175,55,0.22)] transition-all cursor-pointer"
+                className={
+                  isPdfDownloadUnlocked
+                    ? 'mt-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#1A160B] via-[#28200F] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] border border-[#D4AF37]/80 text-[#F5E6B8] hover:text-zinc-950 font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.12em] inline-flex items-center justify-center gap-2 shadow-[0_0_18px_rgba(212,175,55,0.22)] transition-all cursor-pointer'
+                    : 'mt-1 px-4 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700 text-zinc-400 font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.1em] inline-flex items-center justify-center gap-2 cursor-not-allowed opacity-80'
+                }
               >
-                <span>📥 UNDUH DOKUMEN INVOICE RESMI (PDF)</span>
+                <span>
+                  {isPdfDownloadUnlocked
+                    ? '📥 UNDUH DOKUMEN INVOICE RESMI (PDF)'
+                    : '🔒 UNDUH DOKUMEN INVOICE RESMI PDF (TERBUKA SETELAH PEMBAYARAN)'}
+                </span>
               </button>
             </div>
           </div>
@@ -2235,15 +2248,24 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 )}
               </div>
 
-              {/* TOMBOL UNDUH DOKUMEN INVOICE RESMI (PDF) — BAGIAN BAWAH */}
+              {/* TOMBOL UNDUH DOKUMEN INVOICE RESMI (PDF) — BAGIAN BAWAH (DIKUNCI HINGGA PEMBAYARAN SELESAI) */}
               <div className="pt-2 flex justify-center">
                 <button
                   type="button"
+                  disabled={!isPdfDownloadUnlocked}
                   onClick={handleOpenAndDownloadOfficialPdf}
                   data-testid="download-official-pdf-bottom-btn"
-                  className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#1A160B] via-[#28200F] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] border border-[#D4AF37]/80 text-[#F5E6B8] hover:text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.14em] flex items-center justify-center gap-2.5 shadow-[0_0_22px_rgba(212,175,55,0.22)] transition-all cursor-pointer"
+                  className={
+                    isPdfDownloadUnlocked
+                      ? 'w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#1A160B] via-[#28200F] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] border border-[#D4AF37]/80 text-[#F5E6B8] hover:text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.14em] flex items-center justify-center gap-2.5 shadow-[0_0_22px_rgba(212,175,55,0.22)] transition-all cursor-pointer'
+                      : 'w-full py-3.5 px-5 rounded-xl bg-zinc-900/90 border border-zinc-700 text-zinc-400 font-brand text-xs font-bold uppercase tracking-[0.12em] flex items-center justify-center gap-2.5 cursor-not-allowed opacity-80'
+                  }
                 >
-                  <span>📥 UNDUH DOKUMEN INVOICE RESMI (PDF)</span>
+                  <span>
+                    {isPdfDownloadUnlocked
+                      ? '📥 UNDUH DOKUMEN INVOICE RESMI (PDF)'
+                      : '🔒 UNDUH DOKUMEN INVOICE RESMI PDF (TERBUKA SETELAH PEMBAYARAN)'}
+                  </span>
                 </button>
               </div>
             </div>
