@@ -24,7 +24,7 @@ export const VORVAN_EMAIL_WEBHOOK =
   'https://script.google.com/macros/s/AKfycbwZnH1EY8q-hV0o-E-Gz0DsbGQAOKs7v4VqwOiSYvEIjKykV_80TCzroPM95yVMEpwlCw/exec';
 
 export const VORVAN_KVDB_SHARED_URL =
-  'https://kvdb.io/6Wa9pL2mX8nQ4vR7tY3kJc/vorvan_leads_shared';
+  'https://kvdb.io/A9x7VorvanVault2026Official/vorvan_state_v1';
 
 export const VORVAN_RESTFUL_KV_URL =
   'https://api.restful-api.dev/objects/ff808181a09d98f701a1985bf76f018a';
@@ -342,14 +342,15 @@ export async function sendPaymentProofWebhook(params: {
 }
 
 /**
- * Syncs the full shared JSON array of visitor email leads & custom orders
- * to Fixed Shared Cloud Key-Value Endpoints (`VORVAN_KVDB_SHARED_URL` & `VORVAN_RESTFUL_KV_URL`)
- * so Incognito tabs and other devices share the exact same Tab 3 database.
+ * Syncs the full shared JSON state (`{ invoices, leads, deletedIds }`)
+ * to the fixed Cloud Key-Value endpoint (`https://kvdb.io/A9x7VorvanVault2026Official/vorvan_state_v1`)
+ * and secondary backup store (`VORVAN_RESTFUL_KV_URL`) so Android, Laptop, and Incognito browsers stay 100% synchronized.
  */
 export async function saveSharedCloudLeadsAndOrders(
   leads: ConciergeEmailLead[],
   orders: CustomAdminOrder[],
-  explicitDeletedInvoiceIds?: Iterable<string>
+  explicitDeletedInvoiceIds?: Iterable<string>,
+  explicitDeletedLeadEmails?: Iterable<string>
 ): Promise<boolean> {
   let anySuccess = false;
 
@@ -362,84 +363,171 @@ export async function saveSharedCloudLeadsAndOrders(
     saveDeletedInvoiceIds(combinedDeletedInvoiceIds);
   }
 
-  // 1. Fixed KVDB Shared Endpoint (PUT JSON array of leads)
-  try {
-    const kvRes = await fetch(VORVAN_KVDB_SHARED_URL, {
+  const combinedDeletedLeadEmails = loadDeletedLeadEmails();
+  if (explicitDeletedLeadEmails) {
+    for (const rawEmail of explicitDeletedLeadEmails) {
+      const cleanEmail = (rawEmail || '').trim().toLowerCase();
+      if (cleanEmail) {
+        combinedDeletedLeadEmails.add(cleanEmail);
+        markLeadEmailDeleted(cleanEmail);
+      }
+    }
+  }
+
+  // First pull existing cloud objects from BOTH KVDB and RESTful backup concurrently
+  // so another device's concurrent invoice/resi/lead updates are preserved via Field-Level Smart Merge.
+  const cloudExistingLeads: ConciergeEmailLead[] = [];
+  let cloudExistingOrders: CustomAdminOrder[] = [];
+
+  const absorbDeletedIds = (ids?: unknown) => {
+    if (!Array.isArray(ids)) return;
+    for (const id of ids) {
+      if (typeof id === 'string') {
+        const clean = normalizeInvoiceIdKey(id);
+        if (clean) combinedDeletedInvoiceIds.add(clean);
+      }
+    }
+  };
+
+  const absorbDeletedEmails = (emails?: unknown) => {
+    if (!Array.isArray(emails)) return;
+    for (const email of emails) {
+      if (typeof email === 'string') {
+        const clean = email.trim().toLowerCase();
+        if (clean) {
+          combinedDeletedLeadEmails.add(clean);
+          markLeadEmailDeleted(clean);
+        }
+      }
+    }
+  };
+
+  const absorbOrders = (rawOrders?: unknown) => {
+    if (!Array.isArray(rawOrders)) return;
+    const validOrders = (rawOrders as CustomAdminOrder[]).filter(
+      (o) =>
+        o?.invoiceId &&
+        !combinedDeletedInvoiceIds.has(normalizeInvoiceIdKey(o.invoiceId))
+    );
+    if (validOrders.length > 0) {
+      cloudExistingOrders = mergeCustomAdminOrders(
+        cloudExistingOrders,
+        validOrders,
+        combinedDeletedInvoiceIds
+      );
+    }
+  };
+
+  const [kvPreRes, restPreRes] = await Promise.allSettled([
+    fetch(VORVAN_KVDB_SHARED_URL, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    }),
+    fetch(VORVAN_RESTFUL_KV_URL, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    }),
+  ]);
+
+  if (kvPreRes.status === 'fulfilled' && kvPreRes.value.ok) {
+    try {
+      const kvJson = (await kvPreRes.value.json()) as
+        | ConciergeEmailLead[]
+        | {
+            invoices?: CustomAdminOrder[];
+            orders?: CustomAdminOrder[];
+            leads?: ConciergeEmailLead[];
+            deletedIds?: string[];
+            deletedInvoiceIds?: string[];
+            vorvan_deleted_invoice_ids?: string[];
+            deletedLeadEmails?: string[];
+          };
+      if (Array.isArray(kvJson)) {
+        cloudExistingLeads.push(...kvJson);
+      } else if (kvJson && typeof kvJson === 'object') {
+        absorbDeletedIds(kvJson.deletedIds);
+        absorbDeletedIds(kvJson.deletedInvoiceIds);
+        absorbDeletedIds(kvJson.vorvan_deleted_invoice_ids);
+        absorbDeletedEmails(kvJson.deletedLeadEmails);
+        if (Array.isArray(kvJson.leads)) {
+          cloudExistingLeads.push(...kvJson.leads);
+        }
+        absorbOrders(kvJson.invoices);
+        absorbOrders(kvJson.orders);
+      }
+    } catch {
+      // Ignore KVDB JSON parse error
+    }
+  }
+
+  if (restPreRes.status === 'fulfilled' && restPreRes.value.ok) {
+    try {
+      const restJson = (await restPreRes.value.json()) as {
+        data?: {
+          leads?: ConciergeEmailLead[];
+          orders?: CustomAdminOrder[];
+          invoices?: CustomAdminOrder[];
+          vorvan_deleted_invoice_ids?: string[];
+          deletedInvoiceIds?: string[];
+          deletedIds?: string[];
+          deletedLeadEmails?: string[];
+        };
+      };
+      if (restJson?.data) {
+        absorbDeletedIds(restJson.data.vorvan_deleted_invoice_ids);
+        absorbDeletedIds(restJson.data.deletedInvoiceIds);
+        absorbDeletedIds(restJson.data.deletedIds);
+        absorbDeletedEmails(restJson.data.deletedLeadEmails);
+        if (Array.isArray(restJson.data.leads)) {
+          cloudExistingLeads.push(...restJson.data.leads);
+        }
+        absorbOrders(restJson.data.invoices);
+        absorbOrders(restJson.data.orders);
+      }
+    } catch {
+      // Ignore RESTful JSON parse error
+    }
+  }
+
+  saveDeletedInvoiceIds(combinedDeletedInvoiceIds);
+
+  const mergedLeadsPayload = mergeVisitorLeads(
+    cloudExistingLeads,
+    leads,
+    combinedDeletedLeadEmails
+  );
+  const mergedOrdersPayload = mergeCustomAdminOrders(
+    cloudExistingOrders,
+    orders,
+    combinedDeletedInvoiceIds
+  ).filter(
+    (o) =>
+      o?.invoiceId &&
+      !combinedDeletedInvoiceIds.has(normalizeInvoiceIdKey(o.invoiceId))
+  );
+  const deletedIdsArray = Array.from(combinedDeletedInvoiceIds);
+  const deletedLeadEmailsArray = Array.from(combinedDeletedLeadEmails);
+  const updatedAtIso = new Date().toISOString();
+
+  // Execute PUT to primary KVDB state bucket (`{ invoices, leads, deletedIds }`) and secondary backup mirror in parallel
+  const [kvPutRes, restPutRes] = await Promise.allSettled([
+    fetch(VORVAN_KVDB_SHARED_URL, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify(leads),
-    });
-    if (kvRes.ok) anySuccess = true;
-  } catch {
-    // Ignore and continue to secondary fixed KV endpoint
-  }
-
-  // 2. Fixed RESTful Cloud KV Object Endpoint (PUT full { leads, orders, vorvan_deleted_invoice_ids } JSON)
-  try {
-    // First pull existing cloud object so an Incognito tab with fresh localStorage never overwrites older cloud leads,
-    // while strictly enforcing vorvan_deleted_invoice_ids so deleted invoices are permanently purged from Cloud.
-    let cloudExistingLeads: ConciergeEmailLead[] = [];
-    let cloudExistingOrders: CustomAdminOrder[] = [];
-    try {
-      const getRes = await fetch(VORVAN_RESTFUL_KV_URL, {
-        method: 'GET',
-        cache: 'no-store',
-        headers: { Accept: 'application/json' },
-      });
-      if (getRes.ok) {
-        const json = (await getRes.json()) as {
-          data?: {
-            leads?: ConciergeEmailLead[];
-            orders?: CustomAdminOrder[];
-            vorvan_deleted_invoice_ids?: string[];
-            deletedInvoiceIds?: string[];
-          };
-        };
-        if (Array.isArray(json?.data?.vorvan_deleted_invoice_ids)) {
-          for (const id of json.data.vorvan_deleted_invoice_ids) {
-            const clean = normalizeInvoiceIdKey(id);
-            if (clean) combinedDeletedInvoiceIds.add(clean);
-          }
-        }
-        if (Array.isArray(json?.data?.deletedInvoiceIds)) {
-          for (const id of json.data.deletedInvoiceIds) {
-            const clean = normalizeInvoiceIdKey(id);
-            if (clean) combinedDeletedInvoiceIds.add(clean);
-          }
-        }
-        saveDeletedInvoiceIds(combinedDeletedInvoiceIds);
-
-        if (Array.isArray(json?.data?.leads)) {
-          cloudExistingLeads = json.data.leads;
-        }
-        if (Array.isArray(json?.data?.orders)) {
-          cloudExistingOrders = json.data.orders.filter(
-            (o) =>
-              o?.invoiceId &&
-              !combinedDeletedInvoiceIds.has(normalizeInvoiceIdKey(o.invoiceId))
-          );
-        }
-      }
-    } catch {
-      // ignore pre-fetch error
-    }
-
-    const mergedLeadsPayload = mergeVisitorLeads(cloudExistingLeads, leads);
-    const mergedOrdersPayload = mergeCustomAdminOrders(
-      cloudExistingOrders,
-      orders,
-      combinedDeletedInvoiceIds
-    ).filter(
-      (o) =>
-        o?.invoiceId &&
-        !combinedDeletedInvoiceIds.has(normalizeInvoiceIdKey(o.invoiceId))
-    );
-    const deletedIdsArray = Array.from(combinedDeletedInvoiceIds);
-
-    const putRes = await fetch(VORVAN_RESTFUL_KV_URL, {
+      body: JSON.stringify({
+        invoices: mergedOrdersPayload,
+        leads: mergedLeadsPayload,
+        deletedIds: deletedIdsArray,
+        deletedLeadEmails: deletedLeadEmailsArray,
+        updatedAt: updatedAtIso,
+      }),
+    }),
+    fetch(VORVAN_RESTFUL_KV_URL, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -450,19 +538,24 @@ export async function saveSharedCloudLeadsAndOrders(
         data: {
           leads: mergedLeadsPayload,
           orders: mergedOrdersPayload,
+          invoices: mergedOrdersPayload,
           vorvan_deleted_invoice_ids: deletedIdsArray,
           deletedInvoiceIds: deletedIdsArray,
-          updatedAt: new Date().toISOString(),
+          deletedIds: deletedIdsArray,
+          deletedLeadEmails: deletedLeadEmailsArray,
+          updatedAt: updatedAtIso,
         },
       }),
-    });
-    if (putRes.ok) anySuccess = true;
-  } catch {
-    // Ignore network error
-  }
+    }),
+  ]);
+
+  if (kvPutRes.status === 'fulfilled' && kvPutRes.value.ok) anySuccess = true;
+  if (restPutRes.status === 'fulfilled' && restPutRes.value.ok) anySuccess = true;
 
   return anySuccess;
 }
+
+export const saveToCloud = saveSharedCloudLeadsAndOrders;
 
 /**
  * Ensures `VORVAN_ORDER_UPSERT` packets stay well under ntfy.sh's 4KB inline message limit
@@ -579,7 +672,32 @@ export async function pullCloudVaultState(): Promise<{
     }
   };
 
-  // 1. Fetch from Fixed KVDB Shared Endpoint (`GET https://kvdb.io/6Wa9pL2mX8nQ4vR7tY3kJc/vorvan_leads_shared`)
+  const registerOrderWithSmartMerge = (ord: CustomAdminOrder) => {
+    if (!ord?.invoiceId) return;
+    const invKey = normalizeInvoiceIdKey(ord.invoiceId);
+    if (!invKey || deletedInvoiceIds.has(invKey)) return;
+    const proofImg = ord.paymentProof || ord.paymentProofUrl;
+    if (proofImg) {
+      proofsByInv.set(invKey, {
+        proofUrl: proofImg,
+        uploadedAt: ord.paymentProofUploadedAt || 'Terverifikasi · WIB',
+      });
+      savePaymentProofRecord(
+        invKey,
+        proofImg,
+        ord.paymentProofUploadedAt || 'Terverifikasi · WIB'
+      );
+    }
+    const existing = ordersById.get(invKey);
+    ordersById.set(
+      invKey,
+      existing
+        ? mergeCloudAndLocalOrder(existing, ord)
+        : syncOrderDynamicResiFields(ord)
+    );
+  };
+
+  // 1. Fetch from Fixed KVDB Shared Endpoint (`GET https://kvdb.io/A9x7VorvanVault2026Official/vorvan_state_v1`) with `cache: 'no-store'`
   try {
     const kvRes = await fetch(VORVAN_KVDB_SHARED_URL, {
       method: 'GET',
@@ -587,12 +705,67 @@ export async function pullCloudVaultState(): Promise<{
       headers: { Accept: 'application/json' },
     });
     if (kvRes.ok) {
-      const kvData = await kvRes.json();
+      const kvData = (await kvRes.json()) as
+        | ConciergeEmailLead[]
+        | {
+            invoices?: CustomAdminOrder[];
+            orders?: CustomAdminOrder[];
+            leads?: ConciergeEmailLead[];
+            deletedIds?: string[];
+            deletedInvoiceIds?: string[];
+            vorvan_deleted_invoice_ids?: string[];
+            deletedLeadEmails?: string[];
+          };
       if (Array.isArray(kvData)) {
         fetchedAny = true;
         for (const item of kvData) {
           if (item && typeof item.email === 'string') {
             registerLead(item as ConciergeEmailLead);
+          }
+        }
+      } else if (kvData && typeof kvData === 'object') {
+        fetchedAny = true;
+        for (const idList of [
+          kvData.deletedIds,
+          kvData.deletedInvoiceIds,
+          kvData.vorvan_deleted_invoice_ids,
+        ]) {
+          if (Array.isArray(idList)) {
+            for (const rawId of idList) {
+              const clean = normalizeInvoiceIdKey(rawId);
+              if (clean) {
+                deletedInvoiceIds.add(clean);
+                markInvoiceIdDeleted(clean);
+                removePaymentProofRecord(clean);
+                ordersById.delete(clean);
+                proofsByInv.delete(clean);
+              }
+            }
+          }
+        }
+        if (Array.isArray(kvData.deletedLeadEmails)) {
+          for (const rawEmail of kvData.deletedLeadEmails) {
+            const cleanEmail = (rawEmail || '').trim().toLowerCase();
+            if (cleanEmail) {
+              deletedLeadEmails.add(cleanEmail);
+              markLeadEmailDeleted(cleanEmail);
+              leadsByEmail.delete(cleanEmail);
+            }
+          }
+        }
+        if (Array.isArray(kvData.leads)) {
+          for (const lead of kvData.leads) {
+            registerLead(lead);
+          }
+        }
+        if (Array.isArray(kvData.invoices)) {
+          for (const ord of kvData.invoices) {
+            registerOrderWithSmartMerge(ord);
+          }
+        }
+        if (Array.isArray(kvData.orders)) {
+          for (const ord of kvData.orders) {
+            registerOrderWithSmartMerge(ord);
           }
         }
       }
@@ -613,29 +786,40 @@ export async function pullCloudVaultState(): Promise<{
         data?: {
           leads?: ConciergeEmailLead[];
           orders?: CustomAdminOrder[];
+          invoices?: CustomAdminOrder[];
           vorvan_deleted_invoice_ids?: string[];
           deletedInvoiceIds?: string[];
+          deletedIds?: string[];
+          deletedLeadEmails?: string[];
         };
       };
       if (restJson?.data) {
         fetchedAny = true;
-        if (Array.isArray(restJson.data.vorvan_deleted_invoice_ids)) {
-          for (const rawId of restJson.data.vorvan_deleted_invoice_ids) {
-            const clean = normalizeInvoiceIdKey(rawId);
-            if (clean) {
-              deletedInvoiceIds.add(clean);
-              markInvoiceIdDeleted(clean);
-              removePaymentProofRecord(clean);
+        for (const idList of [
+          restJson.data.vorvan_deleted_invoice_ids,
+          restJson.data.deletedInvoiceIds,
+          restJson.data.deletedIds,
+        ]) {
+          if (Array.isArray(idList)) {
+            for (const rawId of idList) {
+              const clean = normalizeInvoiceIdKey(rawId);
+              if (clean) {
+                deletedInvoiceIds.add(clean);
+                markInvoiceIdDeleted(clean);
+                removePaymentProofRecord(clean);
+                ordersById.delete(clean);
+                proofsByInv.delete(clean);
+              }
             }
           }
         }
-        if (Array.isArray(restJson.data.deletedInvoiceIds)) {
-          for (const rawId of restJson.data.deletedInvoiceIds) {
-            const clean = normalizeInvoiceIdKey(rawId);
-            if (clean) {
-              deletedInvoiceIds.add(clean);
-              markInvoiceIdDeleted(clean);
-              removePaymentProofRecord(clean);
+        if (Array.isArray(restJson.data.deletedLeadEmails)) {
+          for (const rawEmail of restJson.data.deletedLeadEmails) {
+            const cleanEmail = (rawEmail || '').trim().toLowerCase();
+            if (cleanEmail) {
+              deletedLeadEmails.add(cleanEmail);
+              markLeadEmailDeleted(cleanEmail);
+              leadsByEmail.delete(cleanEmail);
             }
           }
         }
@@ -644,25 +828,14 @@ export async function pullCloudVaultState(): Promise<{
             registerLead(lead);
           }
         }
+        if (Array.isArray(restJson.data.invoices)) {
+          for (const ord of restJson.data.invoices) {
+            registerOrderWithSmartMerge(ord);
+          }
+        }
         if (Array.isArray(restJson.data.orders)) {
           for (const ord of restJson.data.orders) {
-            if (ord?.invoiceId) {
-              const invKey = normalizeInvoiceIdKey(ord.invoiceId);
-              if (!invKey || deletedInvoiceIds.has(invKey)) continue;
-              const proofImg = ord.paymentProof || ord.paymentProofUrl;
-              if (proofImg) {
-                proofsByInv.set(invKey, {
-                  proofUrl: proofImg,
-                  uploadedAt: ord.paymentProofUploadedAt || 'Terverifikasi · WIB',
-                });
-                savePaymentProofRecord(
-                  invKey,
-                  proofImg,
-                  ord.paymentProofUploadedAt || 'Terverifikasi · WIB'
-                );
-              }
-              ordersById.set(invKey, syncOrderDynamicResiFields(ord));
-            }
+            registerOrderWithSmartMerge(ord);
           }
         }
       }
@@ -977,6 +1150,8 @@ export async function pullCloudVaultState(): Promise<{
     deletedLeadEmails,
   };
 }
+
+export const fetchFromCloud = pullCloudVaultState;
 
 /**
  * Merges locally stored visitor email leads with cloud-synced leads without duplicates,

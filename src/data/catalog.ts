@@ -32,22 +32,7 @@ export const DEFAULT_VORVAN_SETTINGS: VorvanSiteSettings = {
 };
 
 
-export const INITIAL_CONCIERGE_EMAIL_LEADS: ConciergeEmailLead[] = [
-  {
-    id: 'LEAD-VRV-001',
-    email: 'raditya.pradiptha@capital.co.id',
-    registeredAt: '26 Okt 2026 · 09:42 WIB',
-    triggeredByFragrance: 'Maison Francis Kurkdjian — Baccarat Rouge 540 (70ml)',
-    syncedToVorvanMail: true,
-  },
-  {
-    id: 'LEAD-VRV-002',
-    email: 'clarissa.tanuwijaya@luxuryestates.id',
-    registeredAt: '25 Okt 2026 · 18:15 WIB',
-    triggeredByFragrance: 'Louis Vuitton — Afternoon Swim (100ml)',
-    syncedToVorvanMail: true,
-  },
-];
+export const INITIAL_CONCIERGE_EMAIL_LEADS: ConciergeEmailLead[] = [];
 
 export const LUXURY_BRAND_HOUSES: BrandHouseInfo[] = [
   {

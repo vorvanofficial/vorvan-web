@@ -1444,7 +1444,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                     role="tab"
                     aria-selected={effectivePaymentTab === 'bank_transfer'}
                     onClick={() => setActivePaymentTab('bank_transfer')}
-                    className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                    className={`p-4 rounded-xl border text-left flex items-start gap-3 ${
                       effectivePaymentTab === 'bank_transfer'
                         ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
                         : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
@@ -1454,10 +1454,10 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                     <Building2 className="w-5 h-5 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-brand text-[10px] uppercase tracking-wider">
-                        TAB 1 · TRANSFER BANK RESMI
+                        METODE 1 · TRANSFER BANK RESMI (INDONESIA)
                       </p>
                       <p className="text-xs sm:text-sm font-semibold mt-0.5">
-                        TRANSFER BANK RESMI (INDONESIA)
+                        Bank Mandiri, BNI, BRI &amp; QRIS Instan
                       </p>
                     </div>
                   </button>
@@ -1469,13 +1469,13 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                     role="tab"
                     aria-selected={effectivePaymentTab === 'cod_hand_delivery'}
                     onClick={() => setActivePaymentTab('cod_hand_delivery')}
-                    className="p-4 rounded-xl border text-left transition-all flex items-start gap-3 btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer"
+                    className="p-4 rounded-xl border text-left flex items-start gap-3 btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer"
                     data-testid="payment-tab-cod"
                   >
                     <Truck className="w-5 h-5 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-brand text-[10px] uppercase tracking-wider">
-                        TAB 2 · PRIVATE COURIER — COD / PRIVATE HAND-DELIVERY
+                        PRIVATE COURIER — COD / PRIVATE HAND-DELIVERY
                       </p>
                       <p
                         className="text-xs sm:text-sm font-semibold mt-0.5"
@@ -1497,7 +1497,7 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                     onClick={() =>
                       setActivePaymentTab('international_paypal')
                     }
-                    className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                    className={`p-4 rounded-xl border text-left flex items-start gap-3 ${
                       effectivePaymentTab === 'international_paypal'
                         ? 'btn-luxury-gold text-zinc-950 font-bold shadow-lg cursor-pointer'
                         : 'bg-[#14131B] text-zinc-200 border-[#D4AF37]/30 hover:border-[#E5C87E] cursor-pointer'
@@ -1507,10 +1507,10 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                     <Globe className="w-5 h-5 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-brand text-[10px] uppercase tracking-wider">
-                        TAB 3 · GLOBAL SETTLEMENT
+                        METODE 2 · INTERNATIONAL PAYMENT (PAYPAL &amp; SWIFT)
                       </p>
                       <p className="text-xs sm:text-sm font-semibold mt-0.5">
-                        INTERNATIONAL PAYMENT (PAYPAL QR &amp; SWIFT WIRE)
+                        PayPal QR &amp; Rekening Valas SWIFT Wire
                       </p>
                     </div>
                   </button>
@@ -1539,12 +1539,40 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   serta Tombol Konfirmasi Pembayaran.
                 </p>
               </div>
-            ) : (
-              <>
-                {/* TAB 1 CONTENT: TRANSFER BANK RESMI (INDONESIA) */}
-                {effectivePaymentTab === 'bank_transfer' && (
+            ) : isCodOrder ? (
               <div
-                className="space-y-5 animate-fade-up"
+                key="payment-panel-cod"
+                className="p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-[#171622] to-[#100F16] border border-[#D4AF37]/45 space-y-4"
+                data-testid="payment-content-cod"
+              >
+                <div className="flex items-center gap-2.5 text-[#E5C87E] font-brand text-xs uppercase tracking-[0.2em] font-semibold">
+                  <Truck className="w-5 h-5 text-[#E5C87E]" />
+                  <span>LAYANAN KURIR INTERNAL VORVAN · SERAH TERIMA LANGSUNG</span>
+                </div>
+                <h4 className="font-serif-luxury text-2xl font-semibold text-white">
+                  COD / Private Hand-Delivery (Khusus Jangkauan Area Terdekat)
+                </h4>
+                <p className="text-sm sm:text-base text-zinc-200 leading-relaxed">
+                  Layanan pengantaran eksklusif langsung oleh tim internal VORVAN ke
+                  lokasi Anda (khusus jangkauan area terdekat sesuai kesepakatan).
+                  Anda dapat memeriksa fisik unit secara langsung dan melakukan
+                  pembayaran saat serah terima.
+                </p>
+                <div className="pt-2 flex flex-wrap items-center gap-4 text-xs text-[#F5E6B8]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-[#E5C87E]" />
+                    Inspeksi Fisik Botol &amp; Segel Vault Langsung di Tempat
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-[#E5C87E]" />
+                    Pembayaran Saat Serah Terima Unit
+                  </span>
+                </div>
+              </div>
+            ) : effectivePaymentTab === 'bank_transfer' ? (
+              <div
+                key="payment-panel-bank"
+                className="space-y-5"
                 data-testid="payment-content-bank"
               >
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -1701,44 +1729,10 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   </p>
                 </div>
               </div>
-            )}
-
-            {/* TAB 2 CONTENT: COD / PRIVATE HAND-DELIVERY (AREA TERDEKAT) */}
-            {isCodOrder && effectivePaymentTab === 'cod_hand_delivery' && (
+            ) : (
               <div
-                className="p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-[#171622] to-[#100F16] border border-[#D4AF37]/45 space-y-4 animate-fade-up"
-                data-testid="payment-content-cod"
-              >
-                <div className="flex items-center gap-2.5 text-[#E5C87E] font-brand text-xs uppercase tracking-[0.2em] font-semibold">
-                  <Truck className="w-5 h-5 text-[#E5C87E]" />
-                  <span>LAYANAN KURIR INTERNAL VORVAN · SERAH TERIMA LANGSUNG</span>
-                </div>
-                <h4 className="font-serif-luxury text-2xl font-semibold text-white">
-                  COD / Private Hand-Delivery (Khusus Jangkauan Area Terdekat)
-                </h4>
-                <p className="text-sm sm:text-base text-zinc-200 leading-relaxed">
-                  Layanan pengantaran eksklusif langsung oleh tim internal VORVAN ke
-                  lokasi Anda (khusus jangkauan area terdekat sesuai kesepakatan).
-                  Anda dapat memeriksa fisik unit secara langsung dan melakukan
-                  pembayaran saat serah terima.
-                </p>
-                <div className="pt-2 flex flex-wrap items-center gap-4 text-xs text-[#F5E6B8]">
-                  <span className="inline-flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-[#E5C87E]" />
-                    Inspeksi Fisik Botol &amp; Segel Vault Langsung di Tempat
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-[#E5C87E]" />
-                    Pembayaran Saat Serah Terima Unit
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 3 CONTENT: INTERNATIONAL PAYMENT (PAYPAL QR & SWIFT WIRE) */}
-            {effectivePaymentTab === 'international_paypal' && (
-              <div
-                className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-up"
+                key="payment-panel-international"
+                className="grid grid-cols-1 lg:grid-cols-12 gap-6"
                 data-testid="payment-content-international"
               >
                 {/* Left: PayPal QR Code */}
@@ -1911,13 +1905,11 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                 </div>
               </div>
             )}
-              </>
-            )}
 
             {/* TAHAP 2 & 3: KOTAK UPLOAD BUKTI PEMBAYARAN (WAJIB FOTO/SCREENSHOT TRANSFER — HANYA UNTUK TRANSFER EKSPEDISI, DISEMBUNYIKAN UNTUK COD) */}
             {isPaymentUnlocked && !isCodOrder && (
               <div
-                className="p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-[#181622] via-[#121118] to-[#0D0C13] border border-[#D4AF37]/50 shadow-xl space-y-4 animate-fade-up"
+                className="p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-[#181622] via-[#121118] to-[#0D0C13] border border-[#D4AF37]/50 shadow-xl space-y-4"
                 data-testid="payment-proof-upload-box"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#D4AF37]/20 pb-3">

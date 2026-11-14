@@ -378,6 +378,12 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && isPinUnlocked && activeTab === 'database') {
+      void onSyncCloud?.();
+    }
+  }, [isOpen, isPinUnlocked, activeTab, onSyncCloud]);
+
   if (!isOpen) return null;
 
   // Resolve currently selected SKU pricing entry for the live badge
@@ -2568,72 +2574,6 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
           {/* TAB 3: DATABASE EMAIL KLIEN & DAFTAR KODE AKTIF */}
           {activeTab === 'database' && (
             <div className="space-y-6">
-              {/* Sample Codes Box for Admin Testing */}
-              <div className="p-5 rounded-2xl bg-[#0B0A0E] border border-[#D4AF37]/35 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                  <p className="font-brand text-xs uppercase tracking-[0.18em] text-[#E5C87E] font-semibold">
-                    Sampel Simulasi Auto-Tracking &amp; Kurir Ekspedisi Terintegrasi:
-                  </p>
-                  <span className="text-[11px] text-emerald-400 font-mono-tabular">
-                    ● Mode Otomatis Aktif (Tanpa Edit Tahap Manual)
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenInvoicePreview('INV-SAMPLE');
-                      onClose();
-                    }}
-                    className="px-3.5 py-2.5 rounded-xl bg-[#15141D] hover:bg-[#1E1C29] border border-[#D4AF37]/40 text-left text-xs font-mono-tabular text-[#F5E6B8] cursor-pointer transition-colors"
-                  >
-                    <span className="block text-[10px] text-zinc-400 uppercase">
-                      Sampel Tagihan Privat
-                    </span>
-                    <span className="font-bold">INV-SAMPLE</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenTrackingPreview('JNE-INS-88019420019');
-                      onClose();
-                    }}
-                    className="px-3.5 py-2.5 rounded-xl bg-[#15141D] hover:bg-[#1E1C29] border border-[#D4AF37]/40 text-left text-xs font-mono-tabular text-[#F5E6B8] cursor-pointer transition-colors"
-                  >
-                    <span className="block text-[10px] text-emerald-400 uppercase">
-                      Auto-Track JNE Express
-                    </span>
-                    <span className="font-bold">JNE-INS-88019420019</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenTrackingPreview('SCP-0049182731');
-                      onClose();
-                    }}
-                    className="px-3.5 py-2.5 rounded-xl bg-[#15141D] hover:bg-[#1E1C29] border border-[#D4AF37]/40 text-left text-xs font-mono-tabular text-[#F5E6B8] cursor-pointer transition-colors"
-                  >
-                    <span className="block text-[10px] text-emerald-400 uppercase">
-                      Auto-Track SiCepat
-                    </span>
-                    <span className="font-bold">SCP-0049182731</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenTrackingPreview('COD-VRV-004192');
-                      onClose();
-                    }}
-                    className="px-3.5 py-2.5 rounded-xl bg-[#15141D] hover:bg-[#1E1C29] border border-[#D4AF37]/40 text-left text-xs font-mono-tabular text-[#F5E6B8] cursor-pointer transition-colors"
-                  >
-                    <span className="block text-[10px] text-[#E5C87E] uppercase">
-                      Auto-Track COD Internal
-                    </span>
-                    <span className="font-bold">COD-VRV-004192</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Created Custom Orders Card List (Responsive Desktop & Mobile) */}
               <div className="p-4 sm:p-5 rounded-2xl bg-[#0B0A0E] border border-zinc-800 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

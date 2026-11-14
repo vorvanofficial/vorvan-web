@@ -3316,9 +3316,8 @@ test('48. Six Precision Improvements on INVOICE and CEK RESI (COD Tab Hiding, No
   );
   assert.ok(invoiceViewCode.includes('{!isCodOrder && ('));
   assert.ok(
-    invoiceViewCode.includes(
-      "{isCodOrder && effectivePaymentTab === 'cod_hand_delivery' && ("
-    )
+    invoiceViewCode.includes(') : isCodOrder ? (') &&
+      invoiceViewCode.includes('data-testid="payment-content-cod"')
   );
 
   // 2. INVOICE: COD hides Upload Bukti Pembayaran & unlocks WA/Telegram COD confirmation immediately on S&K check; date never displays "Terverifikasi · WIB"
@@ -3601,8 +3600,173 @@ test('49. Admin Resi Save & Stage 4 Confirm populate all dynamic Resi/timestamp 
   assert.ok(cloudCode.includes("packet.kind === 'VORVAN_ORDER_RESI_UPDATE'"));
   assert.ok(cloudCode.includes('mergeCloudAndLocalOrder(local, ord)'));
 
-  assert.ok(trackingCode.includes('}, 4000);'));
+  assert.ok(trackingCode.includes('}, 5000);'));
   assert.ok(trackingCode.includes('const refreshed = await onRefreshFromCloud?.();'));
   assert.ok(trackingCode.includes('}, [initialQuery, smartOrder]);'));
+});
+
+test('50. Admin Tab 3 removes simulation samples & dummy emails, Invoice payment tabs switch instantaneously (0ms) with METODE 1 & METODE 2 labels, and saveToCloud/fetchFromCloud sync { invoices, leads, deletedIds } to kvdb.io with 5-second auto-polling', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { INITIAL_CONCIERGE_EMAIL_LEADS } = await import('../data/catalog.ts');
+  const {
+    VORVAN_KVDB_SHARED_URL,
+    fetchFromCloud,
+    saveToCloud,
+  } = await import('./cloudSync.ts');
+  const { clearDeletedInvoiceIdsForTest, syncOrderDynamicResiFields } =
+    await import('./businessRules.ts');
+
+  // 1. Dummy leads & Admin Tab 3 simulation samples are completely removed
+  assert.equal(INITIAL_CONCIERGE_EMAIL_LEADS.length, 0);
+
+  const catalogCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'data', 'catalog.ts'),
+    'utf8'
+  );
+  assert.ok(!catalogCode.includes('raditya.pradiptha@capital.co.id'));
+  assert.ok(!catalogCode.includes('clarissa.tanuwijaya@luxuryestates.id'));
+
+  const modalCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'EmailGatewayModal.tsx'),
+    'utf8'
+  );
+  assert.ok(!modalCode.includes('Sampel Simulasi Auto-Tracking'));
+  assert.ok(!modalCode.includes('JNE-INS-88019420019'));
+  assert.ok(!modalCode.includes('SCP-0049182731'));
+  assert.ok(!modalCode.includes('COD-VRV-004192'));
+  assert.ok(modalCode.includes("activeTab === 'database'"));
+
+  // 2. Invoice payment tabs use METODE 1 & METODE 2 labels and 0ms conditional rendering without animate-fade-up/transition-all
+  const invoiceViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'PrivateInvoiceView.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    invoiceViewCode.includes('METODE 1 · TRANSFER BANK RESMI (INDONESIA)')
+  );
+  assert.ok(
+    invoiceViewCode.includes(
+      'METODE 2 · INTERNATIONAL PAYMENT (PAYPAL &amp; SWIFT)'
+    )
+  );
+  assert.ok(!invoiceViewCode.includes('TAB 1 · TRANSFER BANK RESMI'));
+  assert.ok(!invoiceViewCode.includes('TAB 3 · GLOBAL SETTLEMENT'));
+  assert.ok(invoiceViewCode.includes('key="payment-panel-bank"'));
+  assert.ok(invoiceViewCode.includes('key="payment-panel-international"'));
+
+  const bankPanelIdx = invoiceViewCode.indexOf('key="payment-panel-bank"');
+  const bankPanelSnippet = invoiceViewCode.slice(
+    bankPanelIdx,
+    bankPanelIdx + 160
+  );
+  assert.ok(!bankPanelSnippet.includes('animate-fade-up'));
+
+  const intlPanelIdx = invoiceViewCode.indexOf(
+    'key="payment-panel-international"'
+  );
+  const intlPanelSnippet = invoiceViewCode.slice(
+    intlPanelIdx,
+    intlPanelIdx + 160
+  );
+  assert.ok(!intlPanelSnippet.includes('animate-fade-up'));
+
+  // 3. KVDB Bucket URL + saveToCloud PUT { invoices, leads, deletedIds } + fetchFromCloud GET cache: 'no-store'
+  assert.equal(
+    VORVAN_KVDB_SHARED_URL,
+    'https://kvdb.io/A9x7VorvanVault2026Official/vorvan_state_v1'
+  );
+
+  clearDeletedInvoiceIdsForTest();
+  const origFetch = globalThis.fetch;
+  let kvBucketState: Record<string, unknown> | null = null;
+  const getCacheModes: (RequestCache | undefined)[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method || 'GET').toUpperCase();
+    if (url === VORVAN_KVDB_SHARED_URL && method === 'PUT') {
+      kvBucketState = JSON.parse(String(init?.body || '{}'));
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }
+    if (url === VORVAN_KVDB_SHARED_URL && method === 'GET') {
+      getCacheModes.push(init?.cache);
+      return new Response(JSON.stringify(kvBucketState || {}), { status: 200 });
+    }
+    return new Response('{}', { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const sampleLead = {
+      id: 'LEAD-VRV-001',
+      email: 'client.real@example.com',
+      registeredAt: '14 Nov 2026 · 16.00 WIB',
+      triggeredByFragrance: 'Creed — Aventus (100ml)',
+      syncedToVorvanMail: true,
+    };
+    const sampleInvoice = syncOrderDynamicResiFields({
+      invoiceId: 'INV-VRV-9090',
+      trackingId: 'JP 90908888',
+      createdAt: '14 Nov 2026 · 16.05 WIB',
+      createdAtTimestampMs: Date.now(),
+      buyerName: 'Bpk. Arya',
+      buyerCity: 'Bandung',
+      house: 'Creed',
+      fragranceName: 'Aventus',
+      concentration: 'Eau de Parfum',
+      volume: '100ml',
+      batchCode: 'CR-9090',
+      dealPriceIDR: 4500000,
+      shippingMethod: 'J&T Express',
+      courier: 'J&T Express',
+      isCOD: false,
+      isDelivered: false,
+      awbNumber: 'JP 90908888',
+      resi: 'JP 90908888',
+      trackingNumber: 'JP 90908888',
+      noResi: 'JP 90908888',
+      shippingStage: 3,
+      trackingStage: 3,
+      shippingStageOverride: 'AUTO',
+      status: 'PAID',
+    });
+
+    const savedOk = await saveToCloud([sampleLead], [sampleInvoice], [
+      'INV-VRV-OLD-DELETED',
+    ]);
+    assert.equal(savedOk, true);
+    assert.ok(kvBucketState);
+    const writtenBucket = kvBucketState as {
+      invoices: { invoiceId: string; resi: string }[];
+      leads: { email: string }[];
+      deletedIds: string[];
+    };
+    assert.equal(writtenBucket.invoices.length, 1);
+    assert.equal(writtenBucket.invoices[0].invoiceId, 'INV-VRV-9090');
+    assert.equal(writtenBucket.invoices[0].resi, 'JP 90908888');
+    assert.equal(writtenBucket.leads.length, 1);
+    assert.equal(writtenBucket.leads[0].email, 'client.real@example.com');
+    assert.ok(writtenBucket.deletedIds.includes('INV-VRV-OLD-DELETED'));
+
+    const pulled = await fetchFromCloud();
+    assert.ok(pulled);
+    assert.equal(pulled!.orders.length, 1);
+    assert.equal(pulled!.orders[0].resi, 'JP 90908888');
+    assert.equal(pulled!.leads.length, 1);
+    assert.equal(pulled!.leads[0].email, 'client.real@example.com');
+    assert.ok(pulled!.deletedInvoiceIds.has('INV-VRV-OLD-DELETED'));
+    assert.ok(getCacheModes.every((m) => m === 'no-store'));
+
+    // 4. Verify 5-second auto-sync interval exists in App.tsx & OrderTrackingView.tsx
+    const appCode = fs.readFileSync(
+      path.join(process.cwd(), 'src', 'App.tsx'),
+      'utf8'
+    );
+    assert.ok(appCode.includes("if (!adminLogModalOpen && route.view !== 'invoice') return;"));
+    assert.ok(appCode.includes('}, 5000);'));
+  } finally {
+    globalThis.fetch = origFetch;
+    clearDeletedInvoiceIdsForTest();
+  }
 });
 

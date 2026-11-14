@@ -568,6 +568,15 @@ export default function App() {
     void syncFromCloudVault();
   }, [syncFromCloudVault, adminLogModalOpen, route.view]);
 
+  // Auto-sync Cloud state every 5 seconds when viewing Invoice or Admin Console (CEK RESI polls every 5s in OrderTrackingView)
+  useEffect(() => {
+    if (!adminLogModalOpen && route.view !== 'invoice') return;
+    const cloudPollTimer = window.setInterval(() => {
+      void syncFromCloudVault();
+    }, 5000);
+    return () => window.clearInterval(cloudPollTimer);
+  }, [syncFromCloudVault, adminLogModalOpen, route.view]);
+
   // Cache order locally when opened via `?v=...` Smart URL while NEVER letting an old URL parameter overwrite updated Resi/Courier/Proof/Stage4 in localStorage or Cloud
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -899,7 +908,12 @@ export default function App() {
     } catch {
       // ignore
     }
-    void saveSharedCloudLeadsAndOrders(updatedLeads, customOrders);
+    void saveSharedCloudLeadsAndOrders(
+      updatedLeads,
+      customOrders,
+      undefined,
+      [cleanEmail]
+    );
     void pushCloudVaultPacket({
       kind: 'VORVAN_LEAD_DELETE',
       email: cleanEmail,
@@ -946,9 +960,14 @@ export default function App() {
       paymentProofUrl: null,
       paymentProofUploadedAt: null,
     });
+    const baseOrders = mergeCustomAdminOrders(
+      customOrders,
+      loadCustomAdminOrders(),
+      loadDeletedInvoiceIds()
+    );
     const updated = [
       cleanNewOrder,
-      ...customOrders.filter(
+      ...baseOrders.filter(
         (o) =>
           o.invoiceId.trim().toUpperCase() !==
           cleanNewOrder.invoiceId.trim().toUpperCase()

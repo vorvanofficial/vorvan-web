@@ -96,12 +96,12 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   const effectiveSettings = settings || loadVorvanSettings();
   const activeBinderbyteKey = (effectiveSettings.binderbyteApiKey || '').trim();
 
-  // Pull latest Resi & Order Status from Cloud when opening CEK RESI and every 4 seconds
+  // Pull latest Resi & Order Status from Cloud when opening CEK RESI and every 5 seconds
   useEffect(() => {
     void onRefreshFromCloud?.();
     const cloudTimer = window.setInterval(() => {
       void onRefreshFromCloud?.();
-    }, 4000);
+    }, 5000);
     return () => window.clearInterval(cloudTimer);
   }, [onRefreshFromCloud]);
 
