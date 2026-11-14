@@ -72,6 +72,12 @@ import {
   ConciergeGenderFilterKey,
   ConciergeMomentFilterKey,
 } from '../data/conciergeGuide81';
+import {
+  OfficialPdfInvoiceData,
+  buildOfficialPdfInvoiceData,
+  downloadOfficialPdfInvoice,
+} from '../utils/officialInvoicePdf';
+import { OfficialPdfInvoiceModal } from './OfficialPdfInvoiceModal';
 
 const ADMIN_COURIER_OPTIONS: ShippingMethodType[] = [
   'JNE',
@@ -363,9 +369,43 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     'AUTO' | 1 | 2 | 3 | 4
   >('AUTO');
 
+  // Official A4 PDF Invoice state for Admin Tab 2
+  const [adminPdfPreviewData, setAdminPdfPreviewData] =
+    useState<OfficialPdfInvoiceData | null>(null);
+  const [adminIsGeneratingPdf, setAdminIsGeneratingPdf] =
+    useState<boolean>(false);
+  const [adminPdfStatusMsg, setAdminPdfStatusMsg] = useState<string | null>(
+    null
+  );
+
   // Tab 2: Settings form state
   const [formSettings, setFormSettings] = useState<VorvanSiteSettings>(settings);
   const [settingsSavedBanner, setSettingsSavedBanner] = useState<boolean>(false);
+
+  const handleAdminDownloadOfficialPdf = async (order: CustomAdminOrder) => {
+    const data = buildOfficialPdfInvoiceData(order, {
+      conciergeEmail: settings.conciergeEmail || 'vorvanlifestyle@gmail.com',
+      hasProofUploaded: Boolean(
+        order.paymentProof || order.paymentProofUrl || order.status === 'PAID'
+      ),
+      agreedTimestamp: order.codTermsAgreedAt || '',
+    });
+    setAdminPdfPreviewData(data);
+    setAdminIsGeneratingPdf(true);
+    setAdminPdfStatusMsg(null);
+    try {
+      await downloadOfficialPdfInvoice(data);
+      setAdminPdfStatusMsg(
+        `✓ File PDF resmi "${data.filename}" berhasil diunduh ke perangkat Anda.`
+      );
+    } catch {
+      setAdminPdfStatusMsg(
+        'Preview dokumen terbuka — klik "Unduh PDF Lagi" jika perangkat Anda meminta konfirmasi ulang.'
+      );
+    } finally {
+      setAdminIsGeneratingPdf(false);
+    }
+  };
 
   useEffect(() => {
     setFormSettings(settings);
@@ -3082,6 +3122,20 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                                 ? '✓ Link Resi Tersalin!'
                                 : '📦 Copy Link Resi'}
                             </button>
+
+                            {/* 6. UNDUH DOKUMEN INVOICE RESMI (PDF) */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleAdminDownloadOfficialPdf(
+                                  effectiveOrder
+                                )
+                              }
+                              data-testid={`admin-download-pdf-btn-${ord.invoiceId}`}
+                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#1A160B] via-[#28200F] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] border border-[#D4AF37]/80 text-[#F5E6B8] hover:text-zinc-950 font-brand text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                            >
+                              <span>📥 UNDUH DOKUMEN INVOICE RESMI (PDF)</span>
+                            </button>
                           </div>
                         </div>
                       );
@@ -3665,6 +3719,14 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
           </div>
         </div>
       )}
+
+      {/* Official A4 Boutique PDF Invoice Preview & Download Modal */}
+      <OfficialPdfInvoiceModal
+        data={adminPdfPreviewData}
+        isGenerating={adminIsGeneratingPdf}
+        downloadSuccessMessage={adminPdfStatusMsg}
+        onClose={() => setAdminPdfPreviewData(null)}
+      />
     </div>
   );
 };

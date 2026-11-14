@@ -126,6 +126,8 @@ export interface PrivateInvoice {
   expiresAt: string;
   buyerName: string;
   buyerPhoneMasked: string;
+  buyerPhone?: string;
+  buyerEmail?: string;
   buyerCity: string;
   conciergeAdvisor: string;
   status: 'PENDING_PAYMENT' | 'PAID' | 'EXPIRED';
@@ -138,7 +140,10 @@ export interface PrivateInvoice {
   extraDiscountIDR?: number;
   shippingLabel?: string;
   shippingMethod?: ShippingMethodType;
+  courier?: string;
+  awbNumber?: string;
   isCOD?: boolean;
+  isDelivered?: boolean;
   codTermsAgreed?: boolean;
   codTermsAgreedAt?: string;
   items: PrivateInvoiceItem[];

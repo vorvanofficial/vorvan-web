@@ -2433,6 +2433,8 @@ export function buildInvoiceFromCustomOrder(
     expiresAt: '24 Jam Sejak Diterbitkan',
     buyerName: order.buyerName,
     buyerPhoneMasked: 'Private VIP Client',
+    buyerPhone: order.buyerPhone || undefined,
+    buyerEmail: order.buyerEmail || undefined,
     buyerCity: order.buyerCity,
     conciergeAdvisor: 'VORVAN Official Concierge',
     status: resolvedStatus,
@@ -2449,7 +2451,12 @@ export function buildInvoiceFromCustomOrder(
     extraDiscountIDR: Math.max(0, Math.round(order.extraDiscountIDR || 0)),
     shippingLabel,
     shippingMethod: effectiveShippingMethod,
+    courier: order.courier || effectiveShippingMethod,
+    awbNumber: hasAwb
+      ? (order.resi || order.trackingNumber || order.noResi || order.awbNumber || '').trim()
+      : '',
     isCOD: isCod,
+    isDelivered: Boolean(order.isDelivered),
     codTermsAgreed: resolvedCodAgreed,
     codTermsAgreedAt: order.codTermsAgreedAt || storedCod?.agreedAt,
     paymentProof: resolvedProof,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -49,6 +49,12 @@ import {
   savePaymentProofRecord,
 } from '../utils/businessRules';
 import { pushCloudVaultPacket, sendPaymentProofWebhook } from '../utils/cloudSync';
+import {
+  OfficialPdfInvoiceData,
+  buildOfficialPdfInvoiceData,
+  downloadOfficialPdfInvoice,
+} from '../utils/officialInvoicePdf';
+import { OfficialPdfInvoiceModal } from './OfficialPdfInvoiceModal';
 
 interface AuthorizedPaymentChannel {
   id:
@@ -540,28 +546,46 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
   const [proofError, setProofError] = useState<string | null>(null);
   const [isProofModalOpen, setIsProofModalOpen] = useState<boolean>(false);
 
+  // Official Downloadable A4 PDF Invoice state
+  const [pdfPreviewData, setPdfPreviewData] =
+    useState<OfficialPdfInvoiceData | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+  const [pdfStatusMsg, setPdfStatusMsg] = useState<string | null>(null);
+
+  const prevInvoiceRouteCodeRef = useRef<string>(
+    (invoiceId || smartOrder?.invoiceId || '').trim()
+  );
+
+  // Sync route invoice ONLY when explicit URL invoiceId / smartOrder.invoiceId changes.
+  // Never clear or overwrite `customIdInput` when `customOrders` updates from Cloud 5s polling.
   useEffect(() => {
-    if (invoiceId?.trim() || smartOrder) {
-      const targetCode = (invoiceId || smartOrder?.invoiceId || '').trim();
+    const targetCode = (invoiceId || smartOrder?.invoiceId || '').trim();
+    const routeCodeChanged = targetCode !== prevInvoiceRouteCodeRef.current;
+    prevInvoiceRouteCodeRef.current = targetCode;
+
+    if (targetCode) {
+      if (routeCodeChanged) {
+        setCustomIdInput(targetCode);
+      }
       const matched =
         lookupPrivateInvoice(targetCode, customOrders, smartOrder) ||
-        (isDirectLink && targetCode
+        (isDirectLink
           ? resolvePrivateInvoice(targetCode, customOrders, smartOrder)
           : null);
-      setCustomIdInput(targetCode);
       if (matched) {
-        setSubmittedInvoiceId(matched.invoiceId);
-        setInputError(null);
-        setIsUnlocked(true);
+        setSubmittedInvoiceId((prev) =>
+          prev === matched.invoiceId ? prev : matched.invoiceId
+        );
+        setInputError((prev) => (prev === null ? prev : null));
+        setIsUnlocked((prev) => (prev ? prev : true));
       } else {
-        setSubmittedInvoiceId('');
-        setIsUnlocked(false);
+        setSubmittedInvoiceId((prev) => (prev === '' ? prev : ''));
+        setIsUnlocked((prev) => (!prev ? prev : false));
         setInputError(
           `Dokumen tagihan untuk kode "${targetCode.toUpperCase()}" tidak ditemukan. Demi privasi pelanggan VORVAN, hanya dokumen dengan tautan atau Kode Private Invoice resmi yang valid yang dapat dibuka.`
         );
       }
-    } else {
-      setCustomIdInput('');
+    } else if (routeCodeChanged) {
       setSubmittedInvoiceId('');
       setInputError(null);
       setIsUnlocked(false);
@@ -901,6 +925,31 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
     : isPaymentUnlocked && hasProof;
   void isConfirmationUnlocked;
 
+  const handleOpenAndDownloadOfficialPdf = async () => {
+    const data = buildOfficialPdfInvoiceData(baseInvoice, {
+      conciergeEmail:
+        activeSettings.conciergeEmail || 'vorvanlifestyle@gmail.com',
+      hasProofUploaded: hasProof,
+      agreedTimestamp:
+        legalAgreedTimestamp || baseInvoice.codTermsAgreedAt || '',
+    });
+    setPdfPreviewData(data);
+    setIsGeneratingPdf(true);
+    setPdfStatusMsg(null);
+    try {
+      await downloadOfficialPdfInvoice(data);
+      setPdfStatusMsg(
+        `✓ File PDF resmi "${data.filename}" berhasil diunduh ke perangkat Anda.`
+      );
+    } catch {
+      setPdfStatusMsg(
+        'Preview dokumen terbuka — klik "Unduh PDF Lagi" jika perangkat Anda meminta konfirmasi ulang.'
+      );
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   return (
     <section
       className="py-12 sm:py-16 pb-[120px] sm:pb-[120px] max-w-5xl mx-auto px-4 sm:px-6 lg:px-8"
@@ -951,18 +1000,34 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
               onSubmit={handleOpenInvoiceSubmit}
               className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto"
             >
-              <input
-                type="text"
-                value={customIdInput}
-                onChange={(e) => {
-                  setCustomIdInput(e.target.value);
-                  if (inputError) setInputError(null);
-                }}
-                placeholder="Ketik Kode Invoice (mis. INV-VRV-...)"
-                className="w-full sm:w-64 px-4 py-3 rounded-xl bg-[#0B0A0E] border border-[#D4AF37]/40 focus:border-[#F5E6B8] text-xs sm:text-sm font-mono-tabular uppercase text-white placeholder:text-zinc-600 outline-none"
-                aria-label="Masukkan nomor Private Invoice"
-                data-testid="invoice-code-input"
-              />
+              <div className="relative w-full sm:w-64">
+                <input
+                  type="text"
+                  value={customIdInput}
+                  onChange={(e) => {
+                    setCustomIdInput(e.target.value);
+                    if (inputError) setInputError(null);
+                  }}
+                  placeholder="Ketik Kode Invoice (mis. INV-VRV-...)"
+                  className="w-full px-4 pr-9 py-3 rounded-xl bg-[#0B0A0E] border border-[#D4AF37]/40 focus:border-[#F5E6B8] text-xs sm:text-sm font-mono-tabular uppercase text-white placeholder:text-zinc-600 outline-none"
+                  aria-label="Masukkan nomor Private Invoice"
+                  data-testid="invoice-code-input"
+                />
+                {customIdInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomIdInput('');
+                      setInputError(null);
+                    }}
+                    aria-label="Bersihkan kode invoice"
+                    data-testid="invoice-clear-input-btn"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
               <button
                 type="submit"
                 className="px-6 py-3 rounded-xl btn-luxury-gold text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.18em] cursor-pointer whitespace-nowrap shrink-0"
@@ -1090,6 +1155,14 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   VORVAN Official Concierge
                 </strong>
               </div>
+              <button
+                type="button"
+                onClick={handleOpenAndDownloadOfficialPdf}
+                data-testid="download-official-pdf-top-btn"
+                className="mt-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#1A160B] via-[#28200F] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] border border-[#D4AF37]/80 text-[#F5E6B8] hover:text-zinc-950 font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.12em] inline-flex items-center justify-center gap-2 shadow-[0_0_18px_rgba(212,175,55,0.22)] transition-all cursor-pointer"
+              >
+                <span>📥 UNDUH DOKUMEN INVOICE RESMI (PDF)</span>
+              </button>
             </div>
           </div>
 
@@ -2161,6 +2234,18 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
                   </a>
                 )}
               </div>
+
+              {/* TOMBOL UNDUH DOKUMEN INVOICE RESMI (PDF) — BAGIAN BAWAH */}
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleOpenAndDownloadOfficialPdf}
+                  data-testid="download-official-pdf-bottom-btn"
+                  className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#1A160B] via-[#28200F] to-[#1A160B] hover:from-[#D4AF37] hover:to-[#F5E6B8] border border-[#D4AF37]/80 text-[#F5E6B8] hover:text-zinc-950 font-brand text-xs font-bold uppercase tracking-[0.14em] flex items-center justify-center gap-2.5 shadow-[0_0_22px_rgba(212,175,55,0.22)] transition-all cursor-pointer"
+                >
+                  <span>📥 UNDUH DOKUMEN INVOICE RESMI (PDF)</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2216,6 +2301,13 @@ export const PrivateInvoiceView: React.FC<PrivateInvoiceViewProps> = ({
           </div>
         </div>
       )}
+      {/* Official A4 Boutique PDF Invoice Preview & Download Modal */}
+      <OfficialPdfInvoiceModal
+        data={pdfPreviewData}
+        isGenerating={isGeneratingPdf}
+        downloadSuccessMessage={pdfStatusMsg}
+        onClose={() => setPdfPreviewData(null)}
+      />
     </section>
   );
 };

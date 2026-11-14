@@ -3770,3 +3770,163 @@ test('50. Admin Tab 3 removes simulation samples & dummy emails, Invoice payment
   }
 });
 
+test('51. Invoice and CEK RESI search input states stay isolated from 5-second Cloud polling, use deep-equality checks in syncFromCloudVault, and never clear typed text outside explicit Clear buttons', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+  const invoiceViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'PrivateInvoiceView.tsx'),
+    'utf8'
+  );
+  const trackingViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'OrderTrackingView.tsx'),
+    'utf8'
+  );
+
+  // 1. App.tsx syncFromCloudVault skips state updates if Cloud data matches local state
+  assert.ok(appCode.includes('if (JSON.stringify(prev) === JSON.stringify(merged)) {'));
+  assert.ok(
+    appCode.includes('if (JSON.stringify(prevRoute.smartOrder) === JSON.stringify(match)) {')
+  );
+
+  // 2. PrivateInvoiceView.tsx guards customIdInput with prevInvoiceRouteCodeRef and only clears on explicit Clear click
+  assert.ok(invoiceViewCode.includes('prevInvoiceRouteCodeRef'));
+  assert.ok(invoiceViewCode.includes('data-testid="invoice-clear-input-btn"'));
+  const invoiceEffectSection = invoiceViewCode.slice(
+    invoiceViewCode.indexOf('prevInvoiceRouteCodeRef = useRef'),
+    invoiceViewCode.indexOf('const matchedInvoice: PrivateInvoice | null =')
+  );
+  assert.ok(!invoiceEffectSection.includes("setCustomIdInput('')"));
+  assert.ok(invoiceEffectSection.includes('if (routeCodeChanged) {'));
+
+  // 3. OrderTrackingView.tsx guards searchInput with prevTrackingRouteKeyRef and only clears on explicit Clear click
+  assert.ok(trackingViewCode.includes('prevTrackingRouteKeyRef'));
+  assert.ok(trackingViewCode.includes('data-testid="tracking-clear-input-btn"'));
+  assert.ok(trackingViewCode.includes('lastAttemptedQuery'));
+  const trackingEffectSection = trackingViewCode.slice(
+    trackingViewCode.indexOf('prevTrackingRouteKeyRef = useRef'),
+    trackingViewCode.indexOf('const activeRecord: TrackingRecord | null =')
+  );
+  assert.ok(!trackingEffectSection.includes("setSearchInput('')"));
+  assert.ok(trackingEffectSection.includes('if (routeKeyChanged) {'));
+});
+
+test('52. Downloadable Official A4 PDF Invoice builds accurate luxury European boutique letterhead, status stamp, client & logistics metadata, valuation ledger, digital vault seal, and renders download buttons in Invoice (top & bottom) and Admin Tab 2', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { syncOrderDynamicResiFields } = await import('./businessRules.ts');
+  const { buildOfficialPdfInvoiceData, getOfficialInvoicePdfFilename } =
+    await import('./officialInvoicePdf.ts');
+
+  assert.equal(
+    getOfficialInvoicePdfFilename('inv-vrv-8899'),
+    'VORVAN-Official-Invoice-INV-VRV-8899.pdf'
+  );
+
+  // 1. Unpaid order -> PROFORMA INVOICE (MENUNGGU PEMBAYARAN) & pending Resi
+  const unpaidOrder = syncOrderDynamicResiFields({
+    invoiceId: 'INV-VRV-8899',
+    trackingId: 'INV-VRV-8899',
+    createdAt: '14 Nov 2026 · 14.30 WIB',
+    createdAtTimestampMs: Date.now(),
+    buyerName: 'Bpk. Adrian Kusuma',
+    buyerPhone: '628119998887',
+    buyerEmail: 'adrian.kusuma@example.com',
+    buyerCity: 'Jl. Senopati Raya No. 88, Kebayoran Baru, Jakarta Selatan',
+    house: 'Creed',
+    fragranceName: 'Aventus',
+    concentration: 'Eau de Parfum',
+    volume: '100ml',
+    quantity: 1,
+    batchCode: 'CR-AV100',
+    retailPriceIDR: 6500000,
+    discountPct: 26,
+    dealPriceIDR: 4810000,
+    extraDiscountIDR: 100000,
+    shippingCostIDR: 0,
+    shippingLabel: 'Complimentary VIP Armored Courier (Rp 0)',
+    shippingMethod: 'JNE',
+    courier: 'JNE',
+    isCOD: false,
+    isDelivered: false,
+    awbNumber: '',
+    status: 'PENDING_PAYMENT',
+  });
+
+  const unpaidPdf = buildOfficialPdfInvoiceData(unpaidOrder);
+  assert.equal(unpaidPdf.filename, 'VORVAN-Official-Invoice-INV-VRV-8899.pdf');
+  assert.equal(unpaidPdf.isPaid, false);
+  assert.equal(
+    unpaidPdf.statusStampLabel,
+    'PROFORMA INVOICE (MENUNGGU PEMBAYARAN)'
+  );
+  assert.equal(unpaidPdf.buyerName, 'Bpk. Adrian Kusuma');
+  assert.equal(unpaidPdf.buyerPhone, '628119998887');
+  assert.equal(unpaidPdf.buyerEmail, 'adrian.kusuma@example.com');
+  assert.ok(unpaidPdf.buyerAddress.includes('Senopati'));
+  assert.ok(unpaidPdf.resiDisplay.includes('Menunggu Input'));
+  assert.equal(unpaidPdf.retailTotalIDR, 6500000);
+  assert.equal(unpaidPdf.itemsSubtotalIDR, 4810000);
+  assert.equal(unpaidPdf.extraDiscountIDR, 100000);
+  assert.equal(unpaidPdf.grandTotalIDR, 4710000);
+  assert.ok(unpaidPdf.items[0].description.includes('Creed — Aventus (100ml)'));
+
+  // 2. Paid order with AWB + electronic agreement timestamp -> OFFICIAL PAID RECEIPT (LUNAS)
+  const paidOrder = syncOrderDynamicResiFields({
+    ...unpaidOrder,
+    shippingMethod: 'J&T Express',
+    courier: 'J&T Express',
+    awbNumber: 'JP 55667788',
+    resi: 'JP 55667788',
+    status: 'PAID',
+    paymentProof: 'data:image/jpeg;base64,PROOF_OK',
+  });
+  const paidPdf = buildOfficialPdfInvoiceData(paidOrder, {
+    conciergeEmail: 'vorvanlifestyle@gmail.com',
+    hasProofUploaded: true,
+    agreedTimestamp: '14 Nov 2026 · 14.35 WIB',
+  });
+  assert.equal(paidPdf.isPaid, true);
+  assert.equal(paidPdf.statusStampLabel, 'OFFICIAL PAID RECEIPT (LUNAS)');
+  assert.equal(paidPdf.resiDisplay, 'JP 55667788');
+  assert.equal(paidPdf.electronicAgreementTimestamp, '14 Nov 2026 · 14.35 WIB');
+
+  // 3. Verify buttons & luxury A4 preview components exist across PrivateInvoiceView, EmailGatewayModal, OfficialPdfInvoiceModal, and officialInvoicePdf
+  const invoiceViewCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'PrivateInvoiceView.tsx'),
+    'utf8'
+  );
+  const modalCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'EmailGatewayModal.tsx'),
+    'utf8'
+  );
+  const pdfModalCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'OfficialPdfInvoiceModal.tsx'),
+    'utf8'
+  );
+  const pdfUtilCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'utils', 'officialInvoicePdf.ts'),
+    'utf8'
+  );
+
+  assert.ok(invoiceViewCode.includes('data-testid="download-official-pdf-top-btn"'));
+  assert.ok(invoiceViewCode.includes('data-testid="download-official-pdf-bottom-btn"'));
+  assert.ok(invoiceViewCode.includes('📥 UNDUH DOKUMEN INVOICE RESMI (PDF)'));
+  assert.ok(modalCode.includes('admin-download-pdf-btn-'));
+  assert.ok(modalCode.includes('📥 UNDUH DOKUMEN INVOICE RESMI (PDF)'));
+  assert.ok(pdfModalCode.includes('VORVAN — LA MAISON DE HAUTE PARFUMERIE'));
+  assert.ok(pdfModalCode.includes('VORVAN OFFICIAL VAULT'));
+  assert.ok(pdfModalCode.includes('VERIFIED CURATION DOCUMENT'));
+  assert.ok(pdfUtilCode.includes('VORVAN — LA MAISON DE HAUTE PARFUMERIE'));
+  assert.ok(pdfUtilCode.includes('Direct International Curation'));
+  assert.ok(pdfUtilCode.includes('Garansi Unboxing 360° Tanpa Jeda'));
+  assert.ok(pdfUtilCode.includes('Final Sale'));
+  assert.ok(pdfUtilCode.includes('new jsPDF'));
+});
+
+
+

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Truck,
   Video,
+  X,
 } from 'lucide-react';
 import {
   CustomAdminOrder,
@@ -84,6 +85,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
     initialQuery?.trim() ||
       (smartOrder ? smartOrder.awbNumber || smartOrder.invoiceId : '')
   );
+  const [lastAttemptedQuery, setLastAttemptedQuery] = useState<string>('');
   const [notFoundError, setNotFoundError] = useState<string | null>(null);
   const [, setAutoTick] = useState<number>(0);
   const [copiedAwb, setCopiedAwb] = useState<boolean>(false);
@@ -113,19 +115,39 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
     return () => window.clearInterval(timer);
   }, []);
 
-  // Sync only when URL route query or smartOrder changes (never wipe active searchInput/submittedQuery on background customOrders polling)
+  const prevTrackingRouteKeyRef = useRef<string>(
+    `${(initialQuery || '').trim().toUpperCase()}::${(
+      smartOrder?.invoiceId || ''
+    )
+      .trim()
+      .toUpperCase()}`
+  );
+
+  // Sync only when URL route query or smartOrder invoiceId changes (never wipe active searchInput while typing or during 5s Cloud polling)
   useEffect(() => {
-    if (initialQuery?.trim()) {
-      const clean = initialQuery.trim();
-      setSearchInput(clean);
-      const found = lookupTrackingOrder(clean, customOrders, smartOrder);
+    const cleanInitial = (initialQuery || '').trim();
+    const nextRouteKey = `${cleanInitial.toUpperCase()}::${(
+      smartOrder?.invoiceId || ''
+    )
+      .trim()
+      .toUpperCase()}`;
+    const routeKeyChanged = nextRouteKey !== prevTrackingRouteKeyRef.current;
+    prevTrackingRouteKeyRef.current = nextRouteKey;
+
+    if (cleanInitial) {
+      if (routeKeyChanged) {
+        setSearchInput(cleanInitial);
+      }
+      const found = lookupTrackingOrder(cleanInitial, customOrders, smartOrder);
       if (found) {
-        setSubmittedQuery(clean);
-        setNotFoundError(null);
+        setSubmittedQuery((prev) =>
+          prev === cleanInitial ? prev : cleanInitial
+        );
+        setNotFoundError((prev) => (prev === null ? prev : null));
       } else {
-        setSubmittedQuery('');
+        setSubmittedQuery((prev) => (prev === '' ? prev : ''));
         setNotFoundError(
-          `Data pengiriman untuk kode "${clean.toUpperCase()}" tidak ditemukan. Pastikan Nomor Resi atau Kode Invoice sesuai dengan yang dikirimkan oleh Concierge VORVAN.`
+          `Data pengiriman untuk kode "${cleanInitial.toUpperCase()}" tidak ditemukan. Pastikan Nomor Resi atau Kode Invoice sesuai dengan yang dikirimkan oleh Concierge VORVAN.`
         );
       }
     } else if (smartOrder) {
@@ -135,28 +157,33 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
         smartOrder.invoiceId ||
         ''
       ).trim();
-      setSearchInput(code);
-      setSubmittedQuery(code);
-      setNotFoundError(null);
-    } else {
-      setSearchInput('');
+      if (routeKeyChanged) {
+        setSearchInput(code);
+        setSubmittedQuery(code);
+      } else {
+        setSubmittedQuery((prev) => prev || code);
+      }
+      setNotFoundError((prev) => (prev === null ? prev : null));
+    } else if (routeKeyChanged) {
       setSubmittedQuery('');
       setNotFoundError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery, smartOrder]);
 
-  // If a searched/initial order arrives from background Cloud fetch while showing notFoundError, automatically resolve it
+  // If a previously submitted/URL order arrives from background Cloud fetch while showing notFoundError, automatically resolve it
   useEffect(() => {
     if (!notFoundError) return;
-    const candidate = (searchInput || initialQuery || '').trim().toUpperCase();
+    const candidate = (lastAttemptedQuery || initialQuery || '')
+      .trim()
+      .toUpperCase();
     if (!candidate) return;
     const found = lookupTrackingOrder(candidate, customOrders, smartOrder);
     if (found) {
       setSubmittedQuery(candidate);
       setNotFoundError(null);
     }
-  }, [customOrders, smartOrder, initialQuery, searchInput, notFoundError]);
+  }, [customOrders, smartOrder, initialQuery, lastAttemptedQuery, notFoundError]);
 
   const activeRecord: TrackingRecord | null =
     (submittedQuery || smartOrder) && !notFoundError
@@ -276,6 +303,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleaned = searchInput.trim().toUpperCase();
+    setLastAttemptedQuery(cleaned);
     if (!cleaned) {
       setNotFoundError(
         'Mohon masukkan Nomor Resi Pengiriman atau Kode Private Invoice Anda.'
@@ -358,10 +386,24 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                 if (notFoundError) setNotFoundError(null);
               }}
               placeholder="Ketik Nomor Resi atau Kode Invoice Anda..."
-              className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-[#0B0A0E] border border-[#D4AF37]/40 focus:border-[#F5E6B8] text-sm font-mono-tabular uppercase text-white placeholder:text-zinc-600 outline-none"
+              className="w-full pl-11 pr-10 py-3.5 rounded-xl bg-[#0B0A0E] border border-[#D4AF37]/40 focus:border-[#F5E6B8] text-sm font-mono-tabular uppercase text-white placeholder:text-zinc-600 outline-none"
               aria-label="Nomor Resi atau Invoice"
               data-testid="tracking-search-input"
             />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput('');
+                  setNotFoundError(null);
+                }}
+                aria-label="Bersihkan input pencarian resi"
+                data-testid="tracking-clear-input-btn"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <button
             type="submit"

@@ -457,6 +457,7 @@ export default function App() {
   }, []);
 
   // Cross-device & Incognito Cloud Sync function (pulls leads & orders from shared Cloud Vault)
+  // NEVER touches or resets search input states; only updates state if Cloud data genuinely differs.
   const syncFromCloudVault = React.useCallback(async (): Promise<
     CustomAdminOrder[]
   > => {
@@ -475,6 +476,9 @@ export default function App() {
         const merged = reindexVisitorLeads(
           mergeVisitorLeads(prev, cloudData.leads)
         );
+        if (JSON.stringify(prev) === JSON.stringify(merged)) {
+          return prev;
+        }
         try {
           localStorage.setItem(STORAGE_LEADS_KEY, JSON.stringify(merged));
         } catch {
@@ -502,10 +506,12 @@ export default function App() {
           cloudData.orders,
           deletedIds
         );
+        if (JSON.stringify(prev) === JSON.stringify(merged)) {
+          return prev;
+        }
         saveCustomAdminOrders(merged);
         return merged;
       });
-      saveCustomAdminOrders(syncMerged);
 
       setActiveBuyerSession((prevSession) => {
         if (!prevSession) return prevSession;
@@ -514,14 +520,22 @@ export default function App() {
           (o) => normalizeInvoiceIdKey(o.invoiceId) === targetKey
         );
         if (!match) return prevSession;
+        const nextTrackingQuery = (
+          match.resi ||
+          match.awbNumber ||
+          match.trackingId ||
+          match.invoiceId
+        ).trim();
+        if (
+          prevSession.trackingQuery === nextTrackingQuery &&
+          prevSession.smartOrder &&
+          JSON.stringify(prevSession.smartOrder) === JSON.stringify(match)
+        ) {
+          return prevSession;
+        }
         return {
           invoiceId: match.invoiceId.trim().toUpperCase(),
-          trackingQuery: (
-            match.resi ||
-            match.awbNumber ||
-            match.trackingId ||
-            match.invoiceId
-          ).trim(),
+          trackingQuery: nextTrackingQuery,
           smartOrder: match,
         };
       });
@@ -538,6 +552,9 @@ export default function App() {
             (o) => normalizeInvoiceIdKey(o.invoiceId) === targetKey
           );
           if (match) {
+            if (JSON.stringify(prevRoute.smartOrder) === JSON.stringify(match)) {
+              return prevRoute;
+            }
             return {
               ...prevRoute,
               smartOrder: match,
@@ -561,6 +578,9 @@ export default function App() {
           stored,
           loadDeletedInvoiceIds()
         );
+        if (JSON.stringify(prev) === JSON.stringify(merged)) {
+          return prev;
+        }
         saveCustomAdminOrders(merged);
         return merged;
       });
@@ -604,6 +624,9 @@ export default function App() {
                 return merged;
               })
             : [latestMergedOrder, ...prev];
+          if (JSON.stringify(prev) === JSON.stringify(next)) {
+            return prev;
+          }
           saveCustomAdminOrders(next);
           return next;
         });
