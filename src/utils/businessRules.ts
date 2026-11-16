@@ -854,6 +854,7 @@ export function compressPaymentProofImage(
 
 export function formatInquiryMessage(
   fragrance: Pick<FragranceItem, 'house' | 'name' | 'concentration'> & {
+    id?: string;
     gender?: GenderCategory;
     defaultVolume?: string;
   },
@@ -862,6 +863,13 @@ export function formatInquiryMessage(
   registeredEmail?: string
 ): string {
   const volumeLabel = selectedVolume || fragrance.defaultVolume || '100ml';
+  const skuForVolume =
+    (fragrance.id
+      ? resolveVorvanSkuPricing(fragrance.id, undefined, volumeLabel)
+      : null) || resolveVorvanSkuPricing(fragrance.name, undefined, volumeLabel);
+  const retailRefPart = skuForVolume
+    ? `\n• Ritel Butik (${volumeLabel}): ${formatIDRCurrency(skuForVolume.retail)}`
+    : '';
   const genderLabel =
     fragrance.gender === 'GENTLEMAN'
       ? 'Gentleman (Men)'
@@ -881,7 +889,7 @@ export function formatInquiryMessage(
     `• Merk: ${fragrance.house}\n` +
     `• Tipe Parfum: ${fragrance.name} (${fragrance.concentration})\n` +
     `• Gender: ${genderLabel}\n` +
-    `• Ukuran: ${volumeLabel}${emailPart}${extraPart}\n\n` +
+    `• Ukuran: ${volumeLabel}${retailRefPart}${emailPart}${extraPart}\n\n` +
     `Mohon informasi alokasi stok dan penawaran terbaiknya (Private Fragrance Curation — Privilege Efisiensi Valuasi 20%–30%). Terima kasih.`
   );
 }
@@ -892,6 +900,7 @@ export function formatInquiryMessage(
  */
 export function buildWhatsAppInquiryUrl(
   fragrance: Pick<FragranceItem, 'house' | 'name' | 'concentration'> & {
+    id?: string;
     gender?: GenderCategory;
     defaultVolume?: string;
   },
@@ -923,6 +932,7 @@ export function buildWhatsAppInquiryUrl(
  */
 export function buildTelegramInquiryUrl(
   fragrance: Pick<FragranceItem, 'house' | 'name' | 'concentration'> & {
+    id?: string;
     gender?: GenderCategory;
     defaultVolume?: string;
   },
@@ -1547,7 +1557,7 @@ export function computeCheatSheetRowFromDiscount(
 }
 
 /**
- * Loads saved custom discount percentage overrides (keyed by SKU `no` 1..81) from localStorage.
+ * Loads saved custom discount percentage overrides (keyed by SKU `no` 1..83+) from localStorage.
  */
 export function loadCheatSheetDiscountOverrides(): Record<number, number> {
   try {
@@ -1563,7 +1573,7 @@ export function loadCheatSheetDiscountOverrides(): Record<number, number> {
       if (
         Number.isInteger(no) &&
         no >= 1 &&
-        no <= 81 &&
+        no <= VORVAN_81_CATALOG.length &&
         Number.isFinite(disc)
       ) {
         result[no] = Math.max(0, Math.min(90, Math.round(disc)));
@@ -1576,7 +1586,7 @@ export function loadCheatSheetDiscountOverrides(): Record<number, number> {
 }
 
 /**
- * Persists custom discount percentage overrides (keyed by SKU `no` 1..81) to localStorage.
+ * Persists custom discount percentage overrides (keyed by SKU `no` 1..83+) to localStorage.
  */
 export function saveCheatSheetDiscountOverrides(
   overrides: Record<number, number>
@@ -1590,7 +1600,7 @@ export function saveCheatSheetDiscountOverrides(
       if (
         Number.isInteger(no) &&
         no >= 1 &&
-        no <= 81 &&
+        no <= VORVAN_81_CATALOG.length &&
         Number.isFinite(disc)
       ) {
         clean[no] = Math.max(0, Math.min(90, Math.round(disc)));
@@ -1641,16 +1651,41 @@ export function applyCheatSheetDiscountOverride(
   return sku;
 }
 
+function normalizeVolumeKey(vol?: string): string {
+  return (vol || '').toLowerCase().replace(/\s+/g, '').trim();
+}
+
 /**
- * Resolves official VORVAN 81 SKU pricing & discount metadata by catalog index (0..80),
- * fragrance ID, or brand/perfume name, applying any active Cheat Sheet discount override.
+ * Resolves official VORVAN SKU pricing & discount metadata by catalog index,
+ * fragrance ID, or brand/perfume name, optionally matching a specific bottle volume
+ * (`volumeVariants`) and applying any active Cheat Sheet discount override.
  */
 export function resolveVorvanSkuPricing(
   catalogIdxOrIdOrName: number | string,
-  discountOverrides?: Record<number, number>
+  discountOverrides?: Record<number, number>,
+  volume?: string
 ): VorvanSkuPricingEntry | null {
-  const wrap = (entry: VorvanSkuPricingEntry | null | undefined) =>
-    entry ? applyCheatSheetDiscountOverride(entry, discountOverrides) : null;
+  const normVol = normalizeVolumeKey(volume);
+  const wrap = (entry: VorvanSkuPricingEntry | null | undefined) => {
+    if (!entry) return null;
+    let effectiveEntry = entry;
+    if (normVol && entry.volumeVariants && entry.volumeVariants.length > 0) {
+      const matchedVariant = entry.volumeVariants.find(
+        (v) => normalizeVolumeKey(v.size) === normVol
+      );
+      if (matchedVariant) {
+        effectiveEntry = {
+          ...entry,
+          size: matchedVariant.size,
+          retail: matchedVariant.retail,
+          disc: matchedVariant.disc,
+          cut: matchedVariant.cut,
+          price: matchedVariant.price,
+        };
+      }
+    }
+    return applyCheatSheetDiscountOverride(effectiveEntry, discountOverrides);
+  };
 
   if (typeof catalogIdxOrIdOrName === 'number') {
     return wrap(VORVAN_81_CATALOG[catalogIdxOrIdOrName]);
@@ -1838,7 +1873,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             house = customParts[0] || 'VORVAN Private Selection';
             fragranceName = customParts[1] || 'Bespoke Fragrance';
             volume = customParts[2] || '100ml';
-            resolvedSku = resolveVorvanSkuPricing(fragranceName);
+            resolvedSku = resolveVorvanSkuPricing(fragranceName, undefined, volume);
             batchCode = resolveArchiveRefCode(fragranceName);
           } else {
             const [idxPart, customVol] = fragField.split(':');
@@ -1846,7 +1881,7 @@ export function decodeSmartOrderParam(encoded: string): CustomAdminOrder | null 
             const safeIdx =
               !Number.isNaN(idx) && FRAGRANCE_CATALOG[idx] ? idx : 0;
             const item = FRAGRANCE_CATALOG[safeIdx];
-            resolvedSku = resolveVorvanSkuPricing(safeIdx);
+            resolvedSku = resolveVorvanSkuPricing(safeIdx, undefined, customVol);
             if (item) {
               house = item.house;
               fragranceName = item.name;
@@ -2359,7 +2394,11 @@ export function buildDirectBuyerWhatsAppUrl(order: CustomAdminOrder): string {
 export function buildInvoiceFromCustomOrder(
   order: CustomAdminOrder
 ): PrivateInvoice {
-  const skuPricing = resolveVorvanSkuPricing(order.fragranceName);
+  const skuPricing = resolveVorvanSkuPricing(
+    order.fragranceName,
+    undefined,
+    order.volume
+  );
   const qty = Math.max(1, Math.round(order.quantity || 1));
   const dealPrice = order.dealPriceIDR || skuPricing?.price || 3850000;
   const unitRetailPriceIDR =
@@ -3822,27 +3861,58 @@ export function buildExtendedArchiveTelegramUrl(
   return `https://t.me/${cleanUser}?text=${encodeURIComponent(message)}`;
 }
 
+const BRAND_SEARCH_ALIASES: Record<string, string> = {
+  'louis-vuitton': 'lv louis vuitton',
+  mfk: 'mfk maison francis kurkdjian baccarat br540',
+  ysl: 'ysl yves saint laurent ysl beaute',
+  armani: 'armani giorgio armani adg acqua di gio',
+  jpg: 'jpg jean paul gaultier le male',
+  'jo-malone': 'jo malone london jml',
+  'maison-margiela': 'maison margiela replica',
+  'tom-ford': 'tom ford tf',
+  'le-labo': 'le labo',
+  dior: 'dior christian dior',
+  chanel: 'chanel coco mademoiselle bleu chance',
+  creed: 'creed aventus',
+};
+
 /**
- * Searches across all 81 main curated fragrances in FRAGRANCE_CATALOG by brand house,
- * shortName, perfume name, concentration, tagline, description, or olfactory notes.
+ * Searches across all 83 main curated fragrances in FRAGRANCE_CATALOG using multi-token
+ * matching (front/middle/back across brand, aliases, name, concentration, subtitle & notes)
+ * and ranks exact name/concentration matches at the top.
  */
 export function searchCatalogFragrances81(query: string): FragranceItem[] {
   const clean = (query || '').trim().toLowerCase();
   if (!clean) {
     return FRAGRANCE_CATALOG;
   }
-  const terms = clean.split(/\s+/).filter(Boolean);
-  return FRAGRANCE_CATALOG.filter((item) => {
+  const tokens = clean.split(/\s+/).filter(Boolean);
+  const scored: { item: FragranceItem; score: number; originalIdx: number }[] = [];
+
+  FRAGRANCE_CATALOG.forEach((item, originalIdx) => {
     const brandMeta = LUXURY_BRAND_HOUSES.find((b) => b.id === item.brandId);
-    const haystack = [
-      item.house,
-      item.brandId,
-      brandMeta?.name || '',
+    const aliases = BRAND_SEARCH_ALIASES[item.brandId] || '';
+
+    const nameLower = item.name.toLowerCase();
+    const concLower = item.concentration.toLowerCase();
+    const nameAndConc = `${nameLower} ${concLower}`;
+    const brandNameAndConc = [
       brandMeta?.shortName || '',
+      brandMeta?.name || '',
+      item.house,
+      aliases,
       item.name,
       item.concentration,
       item.characterSummary,
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    const fullHaystack = [
+      brandNameAndConc,
+      item.brandId,
       item.editorialDescription,
+      item.seasonality,
       item.pyramid.top.join(' '),
       item.pyramid.heart.join(' '),
       item.pyramid.base.join(' '),
@@ -3850,8 +3920,54 @@ export function searchCatalogFragrances81(query: string): FragranceItem[] {
       .join(' ')
       .toLowerCase();
 
-    return terms.every((term) => haystack.includes(term));
+    if (!tokens.every((token) => fullHaystack.includes(token))) {
+      return;
+    }
+
+    let score = 0;
+    // Highest priority: exact phrase match inside Name or Concentration (e.g. "le parf" -> MYSLF Le Parfum)
+    if (nameLower === clean) {
+      score += 2000;
+    } else if (nameLower.includes(clean)) {
+      score += 1200;
+    } else if (concLower.includes(clean)) {
+      score += 1000;
+    } else if (nameAndConc.includes(clean)) {
+      score += 900;
+    }
+
+    // Next: full phrase match in Brand + Name + Concentration
+    if (brandNameAndConc.includes(clean)) {
+      score += 500;
+    }
+
+    // Next: all tokens present inside Name + Concentration (unordered multi-token like "chance edp")
+    if (tokens.every((t) => nameAndConc.includes(t))) {
+      score += 400;
+    } else if (tokens.every((t) => `${brandMeta?.shortName || ''} ${brandMeta?.name || ''} ${item.house} ${aliases} ${nameAndConc}`.toLowerCase().includes(t))) {
+      score += 220;
+    }
+
+    // Bonus for each token matching in Name directly vs Concentration vs Notes
+    for (const token of tokens) {
+      if (nameLower.startsWith(token)) score += 60;
+      else if (nameLower.includes(token)) score += 45;
+      if (concLower.includes(token)) score += 35;
+      if (
+        (brandMeta?.shortName || '').toLowerCase().includes(token) ||
+        item.house.toLowerCase().includes(token)
+      ) {
+        score += 25;
+      }
+    }
+
+    scored.push({ item, score, originalIdx });
   });
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.originalIdx - b.originalIdx;
+  });
+
+  return scored.map((entry) => entry.item);
 }
-
-

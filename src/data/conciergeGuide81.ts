@@ -29,7 +29,7 @@ export const CONCIERGE_MOMENT_BUTTONS: {
   key: ConciergeMomentFilterKey;
   label: string;
 }[] = [
-  { key: 'ALL', label: 'SEMUA (81)' },
+  { key: 'ALL', label: 'SEMUA (83)' },
   { key: 'NIGHT_CAFE', label: '🌙 Nongkrong Malam & Cafe' },
   { key: 'DATE_ATTRACT', label: '❤️ Ngedate & Pemikat' },
   { key: 'HOT_DAY', label: '☀️ Siang Panas & Keringetan' },
@@ -1056,6 +1056,30 @@ const CONCIERGE_81_META: Record<number, Omit<ConciergeGuideSeedMeta, 'no'>> = {
       '🌙 Nongkrong Siang/Malam',
     ],
     climateCategory: 'HOT_SAFE',
+  },
+  82: {
+    simpleNotes:
+      'Buah Quince & Grapefruit manis segar berpadu Mawar & Melati lembut lebih pekat + Musk Putih',
+    searchKeywords: 'chanel chance tendre edp bunga mawar melati jeruk manis segar cewek',
+    momentKeys: ['HOT_DAY', 'OFFICE_AC', 'DATE_ATTRACT', 'SULTAN_GALA'],
+    momentBadges: [
+      '❤️ Ngedate & Anggun',
+      '🏢 Kantor AC',
+      '☀️ Aman Cuaca Siang',
+    ],
+    climateCategory: 'HOT_SAFE',
+  },
+  83: {
+    simpleNotes:
+      'Lada Hitam segar pedas, Bergamot, Bunga Jeruk intens, & Bourbon Vanilla Amber hangat sensual',
+    searchKeywords: 'ysl myslf le parfum lada hitam bergamot vanilla amber malam ngedate cowok',
+    momentKeys: ['NIGHT_CAFE', 'DATE_ATTRACT', 'OFFICE_AC', 'SULTAN_GALA'],
+    momentBadges: [
+      '🌙 Nongkrong Malam & Lounge',
+      '❤️ Ngedate & Pemikat',
+      '🏢 Kantor AC Dingin',
+    ],
+    climateCategory: 'NIGHT_AC',
   },
 };
 

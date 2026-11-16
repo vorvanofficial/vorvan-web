@@ -10,7 +10,7 @@ import {
 } from '../data/catalog';
 
 interface ExtendedArchiveBannerProps {
-  mode?: 'showroom' | 'empty-search';
+  mode?: 'showroom' | 'empty-search' | 'catalog-footer';
   emptySearchTerm?: string;
   whatsappNumber?: string;
   telegramUsername?: string;
@@ -29,6 +29,7 @@ export const ExtendedArchiveBanner: React.FC<ExtendedArchiveBannerProps> = ({
   className = '',
 }) => {
   const cleanKeyword = emptySearchTerm.trim();
+
   const whatsappUrl = buildExtendedArchiveWhatsAppUrl(
     cleanKeyword,
     whatsappNumber
@@ -39,11 +40,14 @@ export const ExtendedArchiveBanner: React.FC<ExtendedArchiveBannerProps> = ({
   );
 
   const isShowroomMode = mode === 'showroom';
+  const isCatalogFooterMode = mode === 'catalog-footer';
 
   const headlineText = isShowroomMode
-    ? '81 Kurasi Utama & 693+ Koleksi Tambahan Dunia'
-    : cleanKeyword
-    ? `Pencarian "${cleanKeyword}" Tersedia Melalui Layanan Concierge`
+    ? '83 Kurasi Utama & 693+ Koleksi Tambahan Dunia'
+    : isCatalogFooterMode
+    ? 'Koleksi atau Varian yang Anda Cari Belum Tertera di Atas?'
+    : emptySearchTerm.trim()
+    ? `Pencarian "${emptySearchTerm.trim()}" Tersedia Melalui Layanan Concierge`
     : '693+ Koleksi Tambahan dari 63+ Rumah Mode Dunia';
 
   return (
@@ -103,11 +107,27 @@ export const ExtendedArchiveBanner: React.FC<ExtendedArchiveBannerProps> = ({
           }}
           className="relative z-10 font-latin-italic italic text-zinc-200 text-center max-w-[490px] m-0"
         >
-          Jelajahi 81 kurasi utama dari 19 Rumah Mode Eropa di katalog kami. Apabila parfum spesifik yang Anda cari belum tercantum, sistem pencarian kami terhubung dengan{' '}
+          Jelajahi 83 kurasi utama dari 19 Rumah Mode Eropa di katalog kami. Apabila parfum spesifik yang Anda cari belum tercantum, sistem pencarian kami terhubung dengan{' '}
           <strong className="text-[#F5E6B8] font-semibold">
             693+ tipe parfum tambahan dari 63+ brand internasional
           </strong>
           .
+        </p>
+      ) : isCatalogFooterMode ? (
+        <p
+          data-testid={`${testIdPrefix}-description`}
+          style={{
+            fontSize: 'clamp(0.96rem, 2.6vw, 1.12rem)',
+            lineHeight: 1.7,
+            textWrap: 'pretty',
+          }}
+          className="relative z-10 font-latin-italic italic text-zinc-200 text-center max-w-[490px] m-0"
+        >
+          Selain 83 etalase kurasi utama di atas, kami memiliki akses ke{' '}
+          <strong className="text-[#F5E6B8] font-semibold">
+            693+ tipe parfum tambahan dari 63+ brand internasional
+          </strong>{' '}
+          (efisiensi harga 20%–30% di bawah ritel butik). Silakan hubungi Concierge VIP kami untuk informasi stok &amp; penawaran harga privat.
         </p>
       ) : (
         <p
@@ -119,7 +139,7 @@ export const ExtendedArchiveBanner: React.FC<ExtendedArchiveBannerProps> = ({
           }}
           className="relative z-10 font-latin-italic italic text-zinc-200 text-center max-w-[490px] m-0"
         >
-          Koleksi yang Anda cari tidak ditampilkan pada 81 etalase utama, namun kami memiliki akses ke{' '}
+          Koleksi yang Anda cari tidak ditampilkan pada 83 etalase utama, namun kami memiliki akses ke{' '}
           <strong className="text-[#F5E6B8] font-semibold">
             693+ tipe parfum tambahan dari 63+ brand internasional
           </strong>{' '}
@@ -127,7 +147,7 @@ export const ExtendedArchiveBanner: React.FC<ExtendedArchiveBannerProps> = ({
         </p>
       )}
 
-      {/* 4. Tombol Aksi Sesuai Mode (Showroom vs Empty Search di 19 Houses) */}
+      {/* 4. CTA Buttons */}
       {isShowroomMode ? (
         <button
           type="button"

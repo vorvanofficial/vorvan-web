@@ -33,8 +33,8 @@ export const FragranceDossierModal: React.FC<FragranceDossierModalProps> = ({
   const [clientNote, setClientNote] = useState<string>('');
 
   const skuPricing =
-    resolveVorvanSkuPricing(fragrance.id) ||
-    resolveVorvanSkuPricing(fragrance.name);
+    resolveVorvanSkuPricing(fragrance.id, undefined, selectedVolume) ||
+    resolveVorvanSkuPricing(fragrance.name, undefined, selectedVolume);
   const retailPriceIDR = skuPricing?.retail || 4500000;
   const formattedRetail = formatIDRCurrency(retailPriceIDR);
 

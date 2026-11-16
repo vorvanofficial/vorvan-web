@@ -426,17 +426,26 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
 
   if (!isOpen) return null;
 
-  // Resolve currently selected SKU pricing entry for the live badge
+  // Resolve currently selected SKU pricing entry for the live badge (volume-aware)
   const selectedCatalogIndex = FRAGRANCE_CATALOG.findIndex(
     (f) => f.id === selectedFragranceId
   );
+  const activeCatalogItem =
+    selectedCatalogIndex >= 0 ? FRAGRANCE_CATALOG[selectedCatalogIndex] : null;
   const activeSkuPricing =
     selectedFragranceId === 'CUSTOM'
       ? null
       : resolveVorvanSkuPricing(
           selectedCatalogIndex >= 0 ? selectedCatalogIndex : selectedFragranceId,
-          cheatSheetDiscounts
+          cheatSheetDiscounts,
+          volume
         );
+  const activeVolumeChoices =
+    activeSkuPricing?.volumeVariants && activeSkuPricing.volumeVariants.length > 0
+      ? activeSkuPricing.volumeVariants.map((v) => v.size)
+      : activeCatalogItem?.volumes && activeCatalogItem.volumes.length > 1
+      ? activeCatalogItem.volumes
+      : [];
 
   // Live Real-Time Derived Pricing & Totals (Two-Way Sync Calculator)
   const liveRetailUnit = Math.max(
@@ -544,7 +553,8 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
 
   const handleSelectPerfumeByIdOrIndex = (
     idOrIdx: string | number,
-    customOverrides?: Record<number, number>
+    customOverrides?: Record<number, number>,
+    preferredVolume?: string
   ) => {
     if (idOrIdx === 'CUSTOM') {
       setSelectedFragranceId('CUSTOM');
@@ -557,12 +567,13 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     const catalogItem = idx >= 0 ? FRAGRANCE_CATALOG[idx] : undefined;
     const skuEntry = resolveVorvanSkuPricing(
       idx >= 0 ? idx : idOrIdx,
-      customOverrides ?? cheatSheetDiscounts
+      customOverrides ?? cheatSheetDiscounts,
+      preferredVolume
     );
 
     if (catalogItem) {
       setSelectedFragranceId(catalogItem.id);
-      setVolume(skuEntry?.size || catalogItem.defaultVolume);
+      setVolume(skuEntry?.size || preferredVolume || catalogItem.defaultVolume);
     }
     if (skuEntry) {
       setDealPriceIDR(String(skuEntry.price));
@@ -580,13 +591,44 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     }
   };
 
+  const handleChangeVolumeInAdminTab1 = (nextVolume: string) => {
+    setVolume(nextVolume);
+    if (selectedFragranceId === 'CUSTOM') return;
+    const skuForVol = resolveVorvanSkuPricing(
+      selectedCatalogIndex >= 0 ? selectedCatalogIndex : selectedFragranceId,
+      cheatSheetDiscounts,
+      nextVolume
+    );
+    if (
+      skuForVol &&
+      skuForVol.volumeVariants &&
+      skuForVol.volumeVariants.some(
+        (v) =>
+          v.size.toLowerCase().replace(/\s+/g, '') ===
+          nextVolume.toLowerCase().replace(/\s+/g, '')
+      )
+    ) {
+      setDealPriceIDR(String(skuForVol.price));
+      setRetailPriceIDR(String(skuForVol.retail));
+      setDiscountPct(String(skuForVol.disc));
+      syncActiveOrderWithPricing({
+        dealPriceIDR: skuForVol.price,
+        retailPriceIDR: skuForVol.retail,
+        discountPct: skuForVol.disc,
+        quantity: liveQty,
+        extraDiscountIDR: liveExtraDisc,
+        shippingCostIDR: liveShippingCost,
+      });
+    }
+  };
+
   const handleCheatSheetDiscountChange = (skuNo: number, rawVal: string) => {
     const baseSku = VORVAN_81_CATALOG.find((item) => item.no === skuNo);
     if (!baseSku) return;
 
     const cleanStr = rawVal.replace(/[^\d.]/g, '');
     const numericDisc = cleanStr === '' ? 0 : Number(cleanStr);
-    const { disc, price } = computeCheatSheetRowFromDiscount(
+    const { disc } = computeCheatSheetRowFromDiscount(
       baseSku.retail,
       numericDisc
     );
@@ -598,22 +640,29 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     setCheatSheetDiscounts(nextOverrides);
     saveCheatSheetDiscountOverrides(nextOverrides);
 
-    // If this SKU is currently selected in the Tab 1 Invoice form, sync it immediately
+    // If this SKU is currently selected in the Tab 1 Invoice form, sync it immediately (preserving selected volume)
     if (
       selectedFragranceId !== 'CUSTOM' &&
       selectedCatalogIndex === skuNo - 1
     ) {
-      setDiscountPct(String(disc));
-      setDealPriceIDR(String(price));
-      setRetailPriceIDR(String(baseSku.retail));
-      syncActiveOrderWithPricing({
-        dealPriceIDR: price,
-        retailPriceIDR: baseSku.retail,
-        discountPct: disc,
-        quantity: liveQty,
-        extraDiscountIDR: liveExtraDisc,
-        shippingCostIDR: liveShippingCost,
-      });
+      const resolvedActive = resolveVorvanSkuPricing(
+        skuNo - 1,
+        nextOverrides,
+        volume
+      );
+      if (resolvedActive) {
+        setDiscountPct(String(resolvedActive.disc));
+        setDealPriceIDR(String(resolvedActive.price));
+        setRetailPriceIDR(String(resolvedActive.retail));
+        syncActiveOrderWithPricing({
+          dealPriceIDR: resolvedActive.price,
+          retailPriceIDR: resolvedActive.retail,
+          discountPct: resolvedActive.disc,
+          quantity: liveQty,
+          extraDiscountIDR: liveExtraDisc,
+          shippingCostIDR: liveShippingCost,
+        });
+      }
     }
   };
 
@@ -621,7 +670,11 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
     resetCheatSheetDiscountOverrides();
     setCheatSheetDiscounts({});
     if (selectedFragranceId !== 'CUSTOM' && selectedCatalogIndex >= 0) {
-      const defaultSku = VORVAN_81_CATALOG[selectedCatalogIndex];
+      const defaultSku = resolveVorvanSkuPricing(
+        selectedCatalogIndex,
+        {},
+        volume
+      );
       if (defaultSku) {
         setDiscountPct(String(defaultSku.disc));
         setDealPriceIDR(String(defaultSku.price));
@@ -1063,7 +1116,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                   TAB 4 · CONCIERGE GUIDE
                 </p>
                 <p className="text-xs font-semibold truncate">
-                  Panduan 81 Parfum — Iklim Indonesia
+                  Panduan 83 Parfum — Iklim Indonesia
                 </p>
               </div>
             </button>
@@ -1165,7 +1218,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         htmlFor="admin-perfume-select"
                         className="block text-xs text-zinc-400 mb-1"
                       >
-                        Pilihan Parfum (81 SKU Resmi · Auto-Fill Harga &amp; Diskon)
+                        Pilihan Parfum (83 SKU Resmi · Auto-Fill Harga &amp; Diskon)
                       </label>
                       <select
                         id="admin-perfume-select"
@@ -1204,10 +1257,42 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                         id="admin-bottle-size"
                         type="text"
                         value={volume}
-                        onChange={(e) => setVolume(e.target.value)}
+                        onChange={(e) =>
+                          handleChangeVolumeInAdminTab1(e.target.value)
+                        }
                         placeholder="100ml"
                         className="w-full px-3.5 py-2.5 rounded-xl bg-[#14131A] border border-zinc-700 focus:border-[#E5C87E] text-sm text-white outline-none"
                       />
+                      {activeVolumeChoices.length > 1 && (
+                        <div
+                          className="mt-1.5 flex flex-wrap gap-1"
+                          role="group"
+                          aria-label="Pilihan Cepat Ukuran Botol"
+                        >
+                          {activeVolumeChoices.map((volOpt) => {
+                            const isSelectedVol =
+                              volume.trim().toLowerCase().replace(/\s+/g, '') ===
+                              volOpt.toLowerCase().replace(/\s+/g, '');
+                            return (
+                              <button
+                                key={volOpt}
+                                type="button"
+                                onClick={() =>
+                                  handleChangeVolumeInAdminTab1(volOpt)
+                                }
+                                data-testid={`admin-volume-pill-${volOpt}`}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono-tabular border cursor-pointer transition-colors ${
+                                  isSelectedVol
+                                    ? 'bg-[#E5C87E] text-zinc-950 border-[#F5E6B8] font-bold'
+                                    : 'bg-[#14131A] text-zinc-300 border-zinc-700 hover:border-[#D4AF37]/70'
+                                }`}
+                              >
+                                {volOpt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                     <div className="sm:col-span-2">
                       <label
@@ -2142,12 +2227,12 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 </div>
               </div>
 
-              {/* POIN 3: CONTEKAN HARGA CEPAT (CHEAT SHEET 81 SKU DARI EXCEL VORVAN) */}
+              {/* POIN 3: CONTEKAN HARGA CEPAT (CHEAT SHEET 83 SKU DARI EXCEL VORVAN) */}
               <div className="bg-[#0B0A0E] border border-[#D4AF37]/35 rounded-2xl p-5 sm:p-6 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
                   <div>
                     <span className="text-[10px] font-brand uppercase tracking-[0.2em] text-[#E5C87E] block">
-                      CONTEKAN HARGA CEPAT · 81 SKU RESMI EXCEL VORVAN
+                      CONTEKAN HARGA CEPAT · 83 SKU RESMI EXCEL VORVAN
                     </span>
                     <h3 className="font-serif-luxury text-lg sm:text-xl font-semibold text-white">
                       Tabel Katalog Harga Ritel, Diskon %, Potongan &amp; Harga VORVAN
@@ -2155,7 +2240,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                   </div>
                   <div className="flex flex-wrap items-center gap-2.5">
                     <span className="text-xs text-zinc-400 font-mono-tabular">
-                      Menampilkan {filteredCheatSheetItems.length} dari 81 SKU
+                      Menampilkan {filteredCheatSheetItems.length} dari 83 SKU
                     </span>
                     <button
                       type="button"
@@ -2180,7 +2265,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                   />
                   <div className="flex flex-wrap gap-1.5">
                     {[
-                      { id: 'ALL', label: 'Semua (81)' },
+                      { id: 'ALL', label: 'Semua (83)' },
                       { id: '1', label: 'Tier 1 (>3.5 Jt)' },
                       { id: '2', label: 'Tier 2 (3.0–3.5 Jt)' },
                       { id: '3', label: 'Tier 3 (2.5–3.0 Jt)' },
@@ -2207,7 +2292,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                   </div>
                 </div>
 
-                {/* Scrollable 81 SKU Cheat Sheet Table */}
+                {/* Scrollable 83 SKU Cheat Sheet Table */}
                 <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-zinc-800">
                   <table className="w-full text-left border-collapse">
                     <thead className="sticky top-0 bg-[#14131A] border-b border-zinc-700 text-[11px] uppercase tracking-wider text-zinc-400 z-10">
@@ -2242,7 +2327,36 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                             </span>
                           </td>
                           <td className="py-2 px-2 text-xs text-zinc-300 text-center font-mono-tabular">
-                            {sku.size}
+                            {sku.volumeVariants && sku.volumeVariants.length > 1 ? (
+                              <div className="inline-flex flex-wrap items-center justify-center gap-1">
+                                {sku.volumeVariants.map((variant) => (
+                                  <button
+                                    key={variant.size}
+                                    type="button"
+                                    onClick={() => {
+                                      handleSelectPerfumeByIdOrIndex(
+                                        sku.no - 1,
+                                        cheatSheetDiscounts,
+                                        variant.size
+                                      );
+                                      const formEl = document.getElementById(
+                                        'vorvan-admin-create-form'
+                                      );
+                                      formEl?.scrollIntoView({
+                                        behavior: 'smooth',
+                                        block: 'start',
+                                      });
+                                    }}
+                                    title={`Pakai ${sku.name} ${variant.size} (Ritel Rp ${variant.retail.toLocaleString('id-ID')} -> VORVAN Rp ${variant.price.toLocaleString('id-ID')})`}
+                                    className="px-1.5 py-0.5 rounded bg-[#181622] hover:bg-[#E5C87E] text-[#F5E6B8] hover:text-zinc-950 border border-[#D4AF37]/40 text-[10px] cursor-pointer transition-colors"
+                                  >
+                                    {variant.size}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              sku.size
+                            )}
                           </td>
                           <td className="py-2 px-3 text-xs text-zinc-400 text-right font-mono-tabular">
                             <del>Rp {sku.retail.toLocaleString('id-ID')}</del>
@@ -3235,14 +3349,14 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
                   <div>
                     <span className="font-brand text-[10px] uppercase tracking-[0.2em] text-[#E5C87E] block">
-                      CONTEKAN ADMIN SAAT DITANYA PEMBELI · 81 SKU RESMI VORVAN
+                      CONTEKAN ADMIN SAAT DITANYA PEMBELI · 83 SKU RESMI VORVAN
                     </span>
                     <h3 className="font-serif-luxury text-xl sm:text-2xl font-semibold text-white">
                       Panduan Karakter Wangi, Momen Pakai &amp; Cuaca Indonesia
                     </h3>
                   </div>
                   <span className="text-xs font-mono-tabular text-[#F5E6B8] bg-[#16141F] border border-[#D4AF37]/35 px-3 py-1.5 rounded-lg self-start sm:self-auto">
-                    Menampilkan {filteredConciergeGuideItems.length} dari 81 Parfum
+                    Menampilkan {filteredConciergeGuideItems.length} dari 83 Parfum
                   </span>
                 </div>
 
@@ -3329,7 +3443,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                 </div>
               </div>
 
-              {/* 2. Kartu Panduan Iklim Indonesia untuk Seluruh 81 Parfum */}
+              {/* 2. Kartu Panduan Iklim Indonesia untuk Seluruh 83 Parfum */}
               {filteredConciergeGuideItems.length === 0 ? (
                 <div className="p-8 rounded-2xl bg-[#0B0A0E] border border-zinc-800 text-center space-y-3">
                   <p className="text-sm text-zinc-300 font-medium">
@@ -3344,7 +3458,7 @@ export const AdminEmailRegistryModal: React.FC<AdminEmailRegistryModalProps> = (
                     }}
                     className="px-4 py-2 rounded-xl btn-luxury-gold text-zinc-950 text-xs font-bold cursor-pointer"
                   >
-                    Tampilkan Kembali Semua 81 Parfum
+                    Tampilkan Kembali Semua 83 Parfum
                   </button>
                 </div>
               ) : (

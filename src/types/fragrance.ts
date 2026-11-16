@@ -50,6 +50,7 @@ export interface FragranceItem {
     | 'Extrait de Parfum'
     | 'Eau de Parfum'
     | 'Parfum'
+    | 'Le Parfum'
     | 'Eau de Parfum Millésime'
     | 'Eau de Parfum Intense'
     | 'Eau de Toilette'
@@ -263,6 +264,14 @@ export type ShippingZoneKey =
   | 'ZONA_3'
   | 'ZONA_4';
 
+export interface VorvanSkuPricingVolumeVariant {
+  size: string;
+  retail: number;
+  disc: number;
+  cut: number;
+  price: number;
+}
+
 export interface VorvanSkuPricingEntry {
   no: number;
   brand: string;
@@ -274,6 +283,7 @@ export interface VorvanSkuPricingEntry {
   cut: number;
   price: number;
   tier: 1 | 2 | 3 | 4 | 5;
+  volumeVariants?: VorvanSkuPricingVolumeVariant[];
 }
 
 export interface CustomAdminOrder {

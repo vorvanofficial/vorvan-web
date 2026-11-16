@@ -13,13 +13,13 @@ import {
 } from './businessRules';
 import { FRAGRANCE_CATALOG, LUXURY_BRAND_HOUSES } from '../data/catalog';
 
-test('Catalog contains 31 Apex Prestige, 50 Urban Signatures, and covers all 19 luxury houses and 81 official fragrances with real bottle images', () => {
+test('Catalog contains 31 Apex Prestige, 52 Urban Signatures, and covers all 19 luxury houses and 83 official fragrances with real bottle images', () => {
   const apex = FRAGRANCE_CATALOG.filter((f) => f.tier === 'apex_prestige');
   const urban = FRAGRANCE_CATALOG.filter((f) => f.tier === 'urban_signatures');
   assert.equal(apex.length, 31);
-  assert.equal(urban.length, 50);
+  assert.equal(urban.length, 52);
   assert.equal(LUXURY_BRAND_HOUSES.length, 19);
-  assert.equal(FRAGRANCE_CATALOG.length, 81);
+  assert.equal(FRAGRANCE_CATALOG.length, 83);
 
   const expectedBrands = [
     'louis-vuitton',
@@ -54,7 +54,8 @@ test('Catalog contains 31 Apex Prestige, 50 Urban Signatures, and covers all 19 
 
   for (const item of FRAGRANCE_CATALOG) {
     assert.ok(
-      item.image.startsWith('https://fimgs.net/mdimg/perfume-thumbs/'),
+      item.image.startsWith('https://fimgs.net/mdimg/perfume-thumbs/') ||
+        item.image.startsWith('/assets/'),
       `${item.name} must have its official bottle image URL`
     );
     assert.ok(item.pyramid.top.length > 0, `${item.name} must have top notes`);
@@ -443,7 +444,7 @@ test('VORVAN 81 SKU Official Pricing, Auto-Detect Shipping Zones, Cheat Sheet Fi
   } = await import('./businessRules.ts');
   const { VORVAN_81_CATALOG } = await import('../data/catalog.ts');
 
-  assert.equal(VORVAN_81_CATALOG.length, 81);
+  assert.equal(VORVAN_81_CATALOG.length, 83);
   assert.equal(VORVAN_81_CATALOG[0].name, 'Afternoon Swim');
   assert.equal(VORVAN_81_CATALOG[0].retail, 6500000);
   assert.equal(VORVAN_81_CATALOG[0].disc, 30);
@@ -573,10 +574,10 @@ test('Tab 4 Concierge Guide (Panduan 81 Parfum — Iklim Indonesia) filters by m
     await import('./businessRules.ts');
   const { CONCIERGE_81_GUIDE } = await import('../data/conciergeGuide81.ts');
 
-  assert.equal(CONCIERGE_81_GUIDE.length, 81);
+  assert.equal(CONCIERGE_81_GUIDE.length, 83);
 
   const allItems = filterConciergeGuide81('', 'ALL', 'All');
-  assert.equal(allItems.length, 81);
+  assert.equal(allItems.length, 83);
 
   // Filter by moment
   const hotDayItems = filterConciergeGuide81('', 'HOT_DAY', 'All');
@@ -1257,12 +1258,12 @@ test('reindexVisitorLeads enforces sequential 3-digit IDs (LEAD-VRV-001..N) with
   assert.equal(trackCod.binderbyteCourierCode, '');
 });
 
-test('All 81 fragrances use VRV-[NomorSKU] archive codes (VRV-001..VRV-081) and boutique Olfactory Sillage & Presence descriptions with zero hour claims ("... Jam")', async () => {
+test('All 83 fragrances use VRV-[NomorSKU] archive codes (VRV-001..VRV-083) and boutique Olfactory Sillage & Presence descriptions with zero hour claims ("... Jam")', async () => {
   const { resolveArchiveRefCode, buildInvoiceFromCustomOrder } = await import(
     './businessRules.ts'
   );
 
-  assert.equal(FRAGRANCE_CATALOG.length, 81);
+  assert.equal(FRAGRANCE_CATALOG.length, 83);
   FRAGRANCE_CATALOG.forEach((frag, idx) => {
     const expectedArchiveCode = `VRV-${String(idx + 1).padStart(3, '0')}`;
     assert.equal(
@@ -2339,17 +2340,17 @@ test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 
 
   assert.ok(bannerCode.includes('✨ EXTENDED VAULT ARCHIVE'));
   assert.ok(
-    bannerCode.includes('81 Kurasi Utama & 693+ Koleksi Tambahan Dunia')
+    bannerCode.includes('83 Kurasi Utama & 693+ Koleksi Tambahan Dunia')
   );
   assert.ok(
     bannerCode.includes(
-      'Jelajahi 81 kurasi utama dari 19 Rumah Mode Eropa di katalog kami. Apabila parfum spesifik yang Anda cari belum tercantum, sistem pencarian kami terhubung dengan'
+      'Jelajahi 83 kurasi utama dari 19 Rumah Mode Eropa di katalog kami. Apabila parfum spesifik yang Anda cari belum tercantum, sistem pencarian kami terhubung dengan'
     )
   );
   assert.ok(bannerCode.includes('JELAJAHI &amp; CARI DI 19 HOUSES'));
   assert.ok(
     bannerCode.includes(
-      'Pencarian "${cleanKeyword}" Tersedia Melalui Layanan Concierge'
+      'Pencarian "${emptySearchTerm.trim()}" Tersedia Melalui Layanan Concierge'
     )
   );
   assert.ok(
@@ -2362,6 +2363,9 @@ test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 
   assert.ok(bannerCode.includes("maxWidth: '560px'"));
   assert.ok(bannerCode.includes("textWrap: 'balance'"));
   assert.ok(!bannerCode.includes('<input'));
+  assert.ok(
+    bannerCode.includes('Koleksi atau Varian yang Anda Cari Belum Tertera di Atas?')
+  );
 
   // Verify BrandHierarchyExplorer is NOT duplicated inside Showroom block
   const showroomBlockMatch = appCode.match(
@@ -2371,7 +2375,7 @@ test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 
   assert.ok(!showroomBlockMatch[0].includes('<BrandHierarchyExplorer'));
   assert.ok(showroomBlockMatch[0].includes('mode="showroom"'));
 
-  // Verify 19 Houses only renders ExtendedArchiveBanner on empty search (no bottom duplicate)
+  // Verify 19 Houses renders ExtendedArchiveBanner on empty search AND as catalog-footer below houses-fragrance-grid
   assert.ok(explorerCode.includes('data-testid="houses-search-input"'));
   assert.ok(
     explorerCode.includes('const isEmptySearch = isSearching && searchResults.length === 0;')
@@ -2380,7 +2384,11 @@ test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 
     explorerCode.includes('testIdPrefix="houses-empty-search-extended-archive"')
   );
   assert.ok(
-    !explorerCode.includes('testIdPrefix="houses-extended-archive-banner"')
+    explorerCode.includes('testIdPrefix="houses-extended-archive-banner"')
+  );
+  assert.ok(
+    explorerCode.indexOf('testIdPrefix="houses-extended-archive-banner"') >
+      explorerCode.indexOf('data-testid="houses-fragrance-grid"')
   );
 });
 
@@ -2439,8 +2447,8 @@ test('39. ExtendedArchiveBanner uses L’Archive Privée Étendue script crown &
   assert.ok(!cardCode.includes('skuPricing.disc'));
   assert.ok(!cardCode.includes('skuPricing?.disc'));
 
-  // 4. Ensure all 81 SKUs in VORVAN_81_CATALOG retain full retail, disc, cut, and final price for Admin Console
-  assert.equal(VORVAN_81_CATALOG.length, 81);
+  // 4. Ensure all 83 SKUs in VORVAN_81_CATALOG retain full retail, disc, cut, and final price for Admin Console
+  assert.equal(VORVAN_81_CATALOG.length, 83);
   for (const sku of VORVAN_81_CATALOG) {
     assert.ok(sku.retail > 0);
     assert.ok(sku.disc > 0);
@@ -2626,15 +2634,14 @@ test('43. Strict 19 Houses gender filter: starts as null on open and brand switc
   assert.ok(explorerCode.includes('>(null);'));
   assert.ok(explorerCode.includes('setSelectedGender(null);'));
   assert.ok(
-    explorerCode.includes(
-      'Silakan pilih kategori koleksi di atas untuk membuka etalase flacon.'
-    )
+    explorerCode.includes('Silakan ketuk kategori') &&
+      explorerCode.includes('pada bar di atas untuk membuka etalase flacon.')
   );
   assert.ok(explorerCode.includes('data-testid="empty-gender-filter-card"'));
   assert.ok(explorerCode.includes('whitespace-nowrap inline-block'));
   assert.ok(
     explorerCode.includes(
-      'untuk rumah mode ini tidak ditampilkan pada etalase utama (81 SKU), namun tersedia lengkap melalui Extended Archive (693+ Koleksi dari 63+ Brand).'
+      'untuk rumah mode ini tidak ditampilkan pada etalase utama (83 SKU), namun tersedia lengkap melalui Extended Archive (693+ Koleksi dari 63+ Brand).'
     )
   );
   assert.ok(explorerCode.includes('[ LIHAT SEMUA KOLEKSI ]'));
@@ -3970,5 +3977,332 @@ test('52. Downloadable Official A4 PDF Invoice builds accurate luxury European b
   assert.ok(pdfUtilCode.includes('new jsPDF'));
 });
 
+test('53. Catalog expansion (Chanel Chance Eau Tendre EDP, YSL MYSLF Le Parfum, Armani Profondo & Profumo 100ml/125ml), dynamic per-volume ml pricing everywhere, and Extended Archive footer banner in 19 Houses / APEX / URBAN', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const {
+    resolveVorvanSkuPricing,
+    buildWhatsAppInquiryUrl,
+    buildTelegramInquiryUrl,
+  } = await import('./businessRules.ts');
+  const { VORVAN_81_CATALOG } = await import('../data/catalog.ts');
+  const { CONCIERGE_81_GUIDE } = await import('../data/conciergeGuide81.ts');
 
+  // 1. Total SKUs expanded to 83 without removing existing variants
+  assert.equal(FRAGRANCE_CATALOG.length, 83);
+  assert.equal(VORVAN_81_CATALOG.length, 83);
+  assert.equal(CONCIERGE_81_GUIDE.length, 83);
+
+  // Chanel Chance Eau Tendre EDT (#49) preserved alongside new EDP (#82)
+  const tendreEdt = FRAGRANCE_CATALOG.find(
+    (f) => f.id === 'chanel-chance-eau-tendre'
+  );
+  const tendreEdp = FRAGRANCE_CATALOG.find(
+    (f) => f.id === 'chanel-chance-eau-tendre-edp'
+  );
+  assert.ok(tendreEdt);
+  assert.ok(tendreEdp);
+  assert.equal(tendreEdt.concentration, 'Eau de Toilette');
+  assert.equal(tendreEdt.batchCode, 'VRV-049');
+  assert.equal(tendreEdp.concentration, 'Eau de Parfum');
+  assert.equal(tendreEdp.gender, 'FEMME');
+  assert.deepEqual(tendreEdp.volumes, ['50ml', '100ml']);
+  assert.equal(tendreEdp.batchCode, 'VRV-082');
+
+  const edp50 = resolveVorvanSkuPricing('chanel-chance-eau-tendre-edp', undefined, '50ml');
+  const edp100 = resolveVorvanSkuPricing('chanel-chance-eau-tendre-edp', undefined, '100ml');
+  assert.ok(edp50 && edp100);
+  assert.equal(edp50.retail, 2550000);
+  assert.equal(edp50.disc, 24);
+  assert.equal(edp50.price, 1940000);
+  assert.equal(edp100.retail, 3400000);
+  assert.equal(edp100.disc, 25);
+  assert.equal(edp100.price, 2550000);
+
+  // YSL MYSLF EDP (#28) preserved alongside new MYSLF Le Parfum (#83)
+  const myslfEdp = FRAGRANCE_CATALOG.find((f) => f.id === 'ysl-myslf-edp');
+  const myslfLeParfum = FRAGRANCE_CATALOG.find(
+    (f) => f.id === 'ysl-myslf-le-parfum'
+  );
+  assert.ok(myslfEdp && myslfLeParfum);
+  assert.equal(myslfEdp.batchCode, 'VRV-028');
+  assert.equal(myslfLeParfum.concentration, 'Le Parfum');
+  assert.equal(myslfLeParfum.gender, 'GENTLEMAN');
+  assert.deepEqual(myslfLeParfum.volumes, ['100ml']);
+  assert.equal(myslfLeParfum.image, '/assets/ysl_myslf_le_parfum.jpg');
+  assert.equal(myslfLeParfum.batchCode, 'VRV-083');
+  const myslfLeParfumPricing = resolveVorvanSkuPricing('ysl-myslf-le-parfum', undefined, '100ml');
+  assert.ok(myslfLeParfumPricing);
+  assert.equal(myslfLeParfumPricing.retail, 3100000);
+  assert.equal(myslfLeParfumPricing.disc, 25);
+  assert.equal(myslfLeParfumPricing.price, 2325000);
+
+  assert.ok(myslfLeParfum.pyramid.top.includes('Black Pepper'));
+  assert.ok(myslfLeParfum.pyramid.base.includes('Bourbon Vanilla'));
+
+  const myslfGuide83 = CONCIERGE_81_GUIDE.find((g) => g.no === 83);
+  assert.ok(myslfGuide83);
+  assert.ok(myslfGuide83.simpleNotes.includes('Lada Hitam'));
+  assert.ok(myslfGuide83.simpleNotes.includes('Bourbon Vanilla'));
+
+  // Armani Acqua di Gio Profondo (#51) & Profumo (#52) both offer 100ml & 125ml
+  const profondo = FRAGRANCE_CATALOG.find(
+    (f) => f.id === 'armani-acqua-di-gio-profondo'
+  );
+  const profumo = FRAGRANCE_CATALOG.find(
+    (f) => f.id === 'armani-acqua-di-gio-profumo'
+  );
+  assert.ok(profondo && profumo);
+  assert.deepEqual(profondo.volumes, ['100ml', '125ml']);
+  assert.deepEqual(profumo.volumes, ['100ml', '125ml']);
+  const profondo100 = resolveVorvanSkuPricing('armani-acqua-di-gio-profondo', undefined, '100ml');
+  const profondo125 = resolveVorvanSkuPricing('armani-acqua-di-gio-profondo', undefined, '125ml');
+  assert.ok(profondo100 && profondo125);
+  assert.notEqual(profondo100.retail, profondo125.retail);
+  assert.notEqual(profondo100.price, profondo125.price);
+
+  const profumo100 = resolveVorvanSkuPricing('armani-acqua-di-gio-profumo', undefined, '100ml');
+  const profumo125 = resolveVorvanSkuPricing('armani-acqua-di-gio-profumo', undefined, '125ml');
+  assert.ok(profumo100 && profumo125);
+  assert.notEqual(profumo100.retail, profumo125.retail);
+  assert.notEqual(profumo100.price, profumo125.price);
+
+  // 2. Dynamic per-volume ml pricing across major multi-volume SKUs & WA/TG inquiry messages
+  const br540_70 = resolveVorvanSkuPricing('mfk-br540-edp', undefined, '70ml');
+  const br540_200 = resolveVorvanSkuPricing('mfk-br540-edp', undefined, '200ml');
+  assert.ok(br540_70 && br540_200);
+  assert.ok(br540_200.retail > br540_70.retail);
+  assert.ok(br540_200.price > br540_70.price);
+
+  const libre30 = resolveVorvanSkuPricing('ysl-libre-edp', undefined, '30ml');
+  const libre50 = resolveVorvanSkuPricing('ysl-libre-edp', undefined, '50ml');
+  const libre90 = resolveVorvanSkuPricing('ysl-libre-edp', undefined, '90ml');
+  assert.ok(libre30 && libre50 && libre90);
+  assert.ok(libre30.retail < libre50.retail && libre50.retail < libre90.retail);
+
+  const wa50 = decodeURIComponent(
+    buildWhatsAppInquiryUrl(tendreEdp, '50ml', '6281911675029')
+  );
+  const wa100 = decodeURIComponent(
+    buildWhatsAppInquiryUrl(tendreEdp, '100ml', '6281911675029')
+  );
+  assert.ok(wa50.includes('• Ukuran: 50ml'));
+  assert.ok(wa50.includes('Ritel Butik (50ml): Rp 2.550.000'));
+  assert.ok(wa100.includes('• Ukuran: 100ml'));
+  assert.ok(wa100.includes('Ritel Butik (100ml): Rp 3.400.000'));
+
+  const tg100 = decodeURIComponent(
+    buildTelegramInquiryUrl(tendreEdp, '100ml', 'vorvanofficial')
+  );
+  assert.ok(tg100.includes('• Ukuran: 100ml'));
+  assert.ok(tg100.includes('Ritel Butik (100ml): Rp 3.400.000'));
+
+  // 3. UI & Admin integration checks (FragranceCard, DossierModal, ExtendedArchiveBanner, EmailGatewayModal)
+  const cardCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'FragranceCard.tsx'),
+    'utf8'
+  );
+  const dossierCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'FragranceDossierModal.tsx'),
+    'utf8'
+  );
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf8'
+  );
+  const appCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    'utf8'
+  );
+  const adminCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'EmailGatewayModal.tsx'),
+    'utf8'
+  );
+
+  assert.ok(
+    cardCode.includes('resolveVorvanSkuPricing(fragrance.id, undefined, selectedVolume)')
+  );
+  assert.ok(
+    dossierCode.includes('resolveVorvanSkuPricing(fragrance.id, undefined, selectedVolume)')
+  );
+  assert.ok(explorerCode.includes('testIdPrefix="houses-extended-archive-banner"'));
+  assert.ok(appCode.includes('testIdPrefix="apex-extended-archive-banner"'));
+  assert.ok(appCode.includes('testIdPrefix="urban-extended-archive-banner"'));
+  assert.ok(adminCode.includes('handleChangeVolumeInAdminTab1'));
+  assert.ok(adminCode.includes('admin-volume-pill-'));
+});
+
+test('54. 19 Houses removes duplicate 19-brand vertical grid, unifies Search + Horizontal 19-Brand Ribbon (with origin city) in single sticky bar, defaults to Louis Vuitton, and applies smooth Auto-Center Glide & Editorial Fade', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf8'
+  );
+  const cssCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'index.css'),
+    'utf8'
+  );
+
+  // 1. Duplicate 2-column vertical 19-brand grid & back-to-grid button removed
+  assert.ok(!explorerCode.includes('data-testid="houses-brand-grid"'));
+  assert.ok(!explorerCode.includes('data-testid="vorvan-back-grid-btn"'));
+  assert.ok(!explorerCode.includes('brandGridRef'));
+  assert.ok(!explorerCode.includes('smoothScrollToBrandGrid'));
+  assert.ok(!cssCode.includes('.vorvan-back-grid-btn'));
+
+  // 2. Single Horizontal Ribbon with Brand ShortName + Origin City and default 'louis-vuitton' + null gender
+  assert.ok(explorerCode.includes("useState<BrandHouseId>('louis-vuitton')"));
+  assert.ok(explorerCode.includes('>(null);'));
+  assert.ok(explorerCode.includes('vorvan-ribbon-chip-name'));
+  assert.ok(explorerCode.includes('{brand.shortName}'));
+  assert.ok(explorerCode.includes('vorvan-ribbon-chip-origin'));
+  assert.ok(explorerCode.includes('{brand.origin}'));
+
+  // 3. Search input + Horizontal 19-Brand Ribbon + Gender Filter Ribbon live inside ONE sticky container (.vorvan-quick-brand-bar)
+  const stickyStart = explorerCode.indexOf('data-testid="vorvan-quick-brand-bar"');
+  const searchInputIdx = explorerCode.indexOf('data-testid="houses-search-input"');
+  const ribbonTrackIdx = explorerCode.indexOf('data-testid="vorvan-quick-brand-track"');
+  const genderRibbonIdx = explorerCode.indexOf('data-testid="houses-sticky-gender-ribbon"');
+  const hintIdx = explorerCode.indexOf('data-testid="awaiting-gender-selection-hint"');
+  assert.ok(stickyStart !== -1);
+  assert.ok(searchInputIdx > stickyStart);
+  assert.ok(ribbonTrackIdx > searchInputIdx);
+  assert.ok(genderRibbonIdx > ribbonTrackIdx);
+  assert.ok(hintIdx > genderRibbonIdx);
+
+  // Sticky CSS styling
+  assert.ok(cssCode.includes('position: sticky;'));
+  assert.ok(cssCode.includes('top: 56px;'));
+  assert.ok(cssCode.includes('top: 64px;'));
+  assert.ok(cssCode.includes('z-index: 40;'));
+  assert.ok(cssCode.includes('background: rgba(5, 5, 5, 0.96);'));
+  assert.ok(cssCode.includes('backdrop-filter: blur(12px);'));
+  assert.ok(cssCode.includes('border-bottom: 1px solid rgba(212, 175, 55, 0.25);'));
+
+  // 4. Pure Horizontal Auto-Center Glide (no scrollIntoView) & Editorial Fade
+  assert.ok(!explorerCode.includes('scrollIntoView'));
+  assert.ok(explorerCode.includes('buttonLeft - barWidth / 2 + buttonWidth / 2'));
+  assert.ok(cssCode.includes('transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);'));
+  assert.ok(cssCode.includes('@keyframes vorvan-editorial-fade'));
+  assert.ok(cssCode.includes('transform: translate3d(0, 8px, 0);'));
+  assert.ok(cssCode.includes('animation: vorvan-editorial-fade 0.3s ease-out forwards;'));
+  assert.ok(explorerCode.includes('animate-editorial-fade'));
+});
+
+test('55. 19 Houses positions brand card 16px below sticky bar without scrollIntoView, adds min-h-[65vh] wrapper, Chance Eau Tendre EDP uses clean 8069 image, ExtendedArchiveBanner removes extra input & emojis, and Global Multi-Token Search ranks Name/Concentration matches first', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { searchCatalogFragrances81 } = await import('./businessRules.ts');
+
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf8'
+  );
+  const bannerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'ExtendedArchiveBanner.tsx'),
+    'utf8'
+  );
+
+  // 1. Horizontal brand click uses pure horizontal bar.scrollTo (zero vertical scrollIntoView bug) + precision targetY 16px below sticky bar + min-h-[65vh]
+  assert.ok(!explorerCode.includes('scrollIntoView'));
+  assert.ok(explorerCode.includes('const stickyHeaderTotalHeight = mainHeaderHeight + stickyBarHeight;'));
+  assert.ok(explorerCode.includes('stickyHeaderTotalHeight -'));
+  assert.ok(explorerCode.includes('window.scrollTo({ top: Math.max(0, targetY), behavior: \'smooth\' });'));
+  assert.ok(explorerCode.includes('min-h-[65vh]'));
+  assert.ok(explorerCode.includes('scroll-mt-[210px] sm:scroll-mt-[230px]'));
+
+  // 2. Chanel Chance Eau Tendre EDP uses clean 8069 flacon image
+  const chanceEdp = FRAGRANCE_CATALOG.find(
+    (f) => f.id === 'chanel-chance-eau-tendre-edp'
+  );
+  assert.ok(chanceEdp);
+  assert.equal(
+    chanceEdp.image,
+    'https://fimgs.net/mdimg/perfume-thumbs/dark-375x500.8069.jpg'
+  );
+
+  // 3. ExtendedArchiveBanner removes second search input & double emojis (💬 and ✈️)
+  assert.ok(!bannerCode.includes('<input'));
+  assert.ok(!bannerCode.includes('💬'));
+  assert.ok(!bannerCode.includes('✈️'));
+  assert.ok(bannerCode.includes('TANYAKAN VIA WHATSAPP CONCIERGE'));
+  assert.ok(bannerCode.includes('TANYAKAN VIA TELEGRAM VIP'));
+
+  // 4. Global multi-token ranked search across all 83 SKUs (front/middle/back & concentration)
+  const leParfResults = searchCatalogFragrances81('le parf');
+  assert.ok(leParfResults.length > 0);
+  assert.equal(leParfResults[0].id, 'ysl-myslf-le-parfum');
+
+  const yslMyslfLe = searchCatalogFragrances81('ysl myslf le parfum');
+  assert.ok(yslMyslfLe.length >= 1);
+  assert.equal(yslMyslfLe[0].id, 'ysl-myslf-le-parfum');
+
+  const yvesMyslf = searchCatalogFragrances81('yves saint laurent myslf');
+  assert.ok(yvesMyslf.some((f) => f.id === 'ysl-myslf-edp'));
+  assert.ok(yvesMyslf.some((f) => f.id === 'ysl-myslf-le-parfum'));
+
+  const chanceEdpSearch = searchCatalogFragrances81('chance edp');
+  assert.ok(chanceEdpSearch.length > 0);
+  assert.equal(chanceEdpSearch[0].id, 'chanel-chance-eau-tendre-edp');
+
+  const br540Search = searchCatalogFragrances81('br540 extrait');
+  assert.ok(br540Search.some((f) => f.id === 'mfk-br540-extrait'));
+
+  const profumoSearch = searchCatalogFragrances81('gio profumo');
+  assert.equal(profumoSearch[0].id, 'armani-acqua-di-gio-profumo');
+});
+
+test('56. 19 HOUSES Model 3 unified 3-row sticky header & concise prompt without bulky brand showcase card', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf-8'
+  );
+  const cssCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'index.css'),
+    'utf-8'
+  );
+
+  // Bulky brand showcase card and large 2x2 grid must be removed
+  assert.ok(!explorerCode.includes('data-testid="active-brand-showcase-card"'));
+  assert.ok(!explorerCode.includes('signaturePhilosophy'));
+
+  // Unified sticky header contains all 3 slim rows in exact order
+  const stickyStart = explorerCode.indexOf('data-testid="vorvan-quick-brand-bar"');
+  const searchPos = explorerCode.indexOf('data-testid="houses-search-input"', stickyStart);
+  const ribbonPos = explorerCode.indexOf('data-testid="vorvan-quick-brand-track"', stickyStart);
+  const genderRibbonPos = explorerCode.indexOf('data-testid="houses-sticky-gender-ribbon"', stickyStart);
+  assert.ok(stickyStart > -1);
+  assert.ok(searchPos > stickyStart);
+  assert.ok(ribbonPos > searchPos);
+  assert.ok(genderRibbonPos > ribbonPos);
+
+  // Search bar 38px & Model 3 gender ribbon has 4 buttons with NO square brackets
+  assert.ok(explorerCode.includes('h-[38px]'));
+  assert.ok(explorerCode.includes('SEMUA'));
+  assert.ok(!explorerCode.includes('[ {t.allCollectionLabel} ]'));
+  assert.ok(!explorerCode.includes('[ {g.label} ]'));
+
+  // CSS enforces Model 3 4-column slim 34px strip + active gold border-bottom + sticky backdrop
+  assert.ok(cssCode.includes('background: rgba(5, 5, 5, 0.96);'));
+  assert.ok(cssCode.includes('border-bottom: 1px solid rgba(212, 175, 55, 0.25);'));
+  assert.ok(cssCode.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'));
+  assert.ok(cssCode.includes('height: 34px;'));
+  assert.ok(cssCode.includes('font-size: 10px;'));
+  assert.ok(cssCode.includes('font-size: 11px;'));
+  assert.ok(cssCode.includes('letter-spacing: 0.12em;'));
+  assert.ok(cssCode.includes('border-bottom: 2px solid #d4af37;'));
+
+  // Concise prompt shows selected brand & origin when waiting for gender selection
+  assert.ok(explorerCode.includes('data-testid="awaiting-gender-selection-hint"'));
+  assert.ok(explorerCode.includes('({activeBrand.origin})'));
+
+  // Selecting gender clears search if needed, sets selectedGender, and scrolls to catalog top
+  assert.ok(explorerCode.includes('const handleSelectGender = (gender: GenderCategory | \'ALL\') => {'));
+  assert.ok(explorerCode.includes('setSelectedGender(gender);'));
+  assert.ok(explorerCode.includes('scrollToCatalogContent();'));
+});
 

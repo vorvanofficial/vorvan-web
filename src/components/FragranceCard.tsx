@@ -31,11 +31,11 @@ const FragranceCardComponent: React.FC<FragranceCardProps> = ({
   const t = getTranslation(locale).card;
 
   const skuPricing =
-    resolveVorvanSkuPricing(fragrance.id) ||
-    resolveVorvanSkuPricing(fragrance.name);
+    resolveVorvanSkuPricing(fragrance.id, undefined, selectedVolume) ||
+    resolveVorvanSkuPricing(fragrance.name, undefined, selectedVolume);
   const retailPriceIDR = skuPricing?.retail || 4500000;
   const formattedRetail = formatIDRCurrency(retailPriceIDR);
-  const displayVolume = skuPricing?.size || selectedVolume;
+  const displayVolume = selectedVolume;
 
   const whatsappUrl = buildWhatsAppInquiryUrl(
     fragrance,

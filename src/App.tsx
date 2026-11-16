@@ -2130,10 +2130,19 @@ export default function App() {
                     className="min-h-[50px] px-7 py-3.5 rounded-xl bg-[#14131B]/95 hover:bg-[#E5C87E] text-[#F5E6B8] hover:text-zinc-950 border border-[#D4AF37]/65 hover:border-[#F5E6B8] font-brand text-xs font-bold uppercase tracking-[0.18em] transition-all duration-300 shadow-[0_10px_28px_-10px_rgba(212,175,55,0.3)] flex items-center justify-center gap-2.5 cursor-pointer"
                     data-testid="explore-all-houses-apex-btn"
                   >
-                    <span>JELAJAHI SELURUH 81 KOLEKSI DI 19 HOUSES →</span>
+                    <span>JELAJAHI SELURUH 83 KOLEKSI DI 19 HOUSES →</span>
                   </button>
                 </div>
               </ScrollReveal>
+
+              <div className="mt-8">
+                <ExtendedArchiveBanner
+                  mode="catalog-footer"
+                  whatsappNumber={siteSettings.whatsappNumber}
+                  telegramUsername={siteSettings.telegramUsername}
+                  testIdPrefix="apex-extended-archive-banner"
+                />
+              </div>
             </div>
           </section>
         )}
@@ -2208,10 +2217,19 @@ export default function App() {
                     className="min-h-[50px] px-7 py-3.5 rounded-xl bg-[#14131B]/95 hover:bg-[#E5C87E] text-[#F5E6B8] hover:text-zinc-950 border border-[#D4AF37]/65 hover:border-[#F5E6B8] font-brand text-xs font-bold uppercase tracking-[0.18em] transition-all duration-300 shadow-[0_10px_28px_-10px_rgba(212,175,55,0.3)] flex items-center justify-center gap-2.5 cursor-pointer"
                     data-testid="explore-all-houses-urban-btn"
                   >
-                    <span>JELAJAHI SELURUH 81 KOLEKSI DI 19 HOUSES →</span>
+                    <span>JELAJAHI SELURUH 83 KOLEKSI DI 19 HOUSES →</span>
                   </button>
                 </div>
               </ScrollReveal>
+
+              <div className="mt-8">
+                <ExtendedArchiveBanner
+                  mode="catalog-footer"
+                  whatsappNumber={siteSettings.whatsappNumber}
+                  telegramUsername={siteSettings.telegramUsername}
+                  testIdPrefix="urban-extended-archive-banner"
+                />
+              </div>
             </div>
           </section>
         )}
@@ -2221,6 +2239,8 @@ export default function App() {
           <BrandHierarchyExplorer
             registeredEmail={registeredEmail}
             locale={locale}
+            whatsappNumber={siteSettings.whatsappNumber}
+            telegramUsername={siteSettings.telegramUsername}
             onOpenDossier={(item, vol) =>
               setSelectedDossier({ fragrance: item, volume: vol })
             }
