@@ -1981,7 +1981,7 @@ export default function App() {
               <CuratedHousesTicker />
             </section>
 
-            {/* 3B. THE EXTENDED PRIVATE ARCHIVE (693+ PARFUMS · 63+ MAISONS) ANNOUNCEMENT IN SHOWROOM */}
+            {/* 3B. THE EXTENDED PRIVATE ARCHIVE (668 EXTENDED PARFUMS · 63 MAISONS) ANNOUNCEMENT IN SHOWROOM */}
             <section
               id="showroom-extended-archive"
               data-testid="showroom-extended-archive-section"
@@ -1991,6 +1991,7 @@ export default function App() {
                 <ScrollReveal variant="scale" delayMs={50}>
                   <ExtendedArchiveBanner
                     mode="showroom"
+                    locale={locale}
                     whatsappNumber={siteSettings.whatsappNumber}
                     telegramUsername={siteSettings.telegramUsername}
                     onExploreHouses={() => navigateToTab('houses')}
@@ -2138,6 +2139,7 @@ export default function App() {
               <div className="mt-8">
                 <ExtendedArchiveBanner
                   mode="catalog-footer"
+                  locale={locale}
                   whatsappNumber={siteSettings.whatsappNumber}
                   telegramUsername={siteSettings.telegramUsername}
                   testIdPrefix="apex-extended-archive-banner"
@@ -2225,6 +2227,7 @@ export default function App() {
               <div className="mt-8">
                 <ExtendedArchiveBanner
                   mode="catalog-footer"
+                  locale={locale}
                   whatsappNumber={siteSettings.whatsappNumber}
                   telegramUsername={siteSettings.telegramUsername}
                   testIdPrefix="urban-extended-archive-banner"

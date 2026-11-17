@@ -3818,7 +3818,7 @@ export function buildConciergeRecommendationWaText(
 }
 
 /**
- * Builds the official WhatsApp message for THE EXTENDED PRIVATE ARCHIVE (693+ PARFUMS · 63+ MAISONS)
+ * Builds the official WhatsApp message for THE EXTENDED PRIVATE ARCHIVE (668 EXTENDED PARFUMS · 63 MAISONS)
  * Bespoke Vault Inquiry.
  */
 export function buildExtendedArchiveWhatsAppMessage(
@@ -3826,11 +3826,11 @@ export function buildExtendedArchiveWhatsAppMessage(
 ): string {
   const cleanInput = (requestedPerfumeInput || '').trim();
   const targetPerfume = cleanInput || '[Tulis Merk / Nama Parfum di Sini]';
-  return `Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (693+ tipe parfum / 63+ brand) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: ${targetPerfume}. Terima kasih.`;
+  return `Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (668 tipe parfum tambahan · Total 63 Merk: +342 SKU dari 19 Merk Web & +326 SKU dari 44 Merk Baru, di luar 83 Kurasi Utama) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: ${targetPerfume}. Terima kasih.`;
 }
 
 /**
- * Builds the official WhatsApp URL for THE EXTENDED PRIVATE ARCHIVE (693+ PARFUMS · 63+ MAISONS)
+ * Builds the official WhatsApp URL for THE EXTENDED PRIVATE ARCHIVE (668 EXTENDED PARFUMS · 63 MAISONS)
  * Bespoke Vault Inquiry.
  */
 export function buildExtendedArchiveWhatsAppUrl(
@@ -3846,7 +3846,7 @@ export function buildExtendedArchiveWhatsAppUrl(
 }
 
 /**
- * Builds the official Telegram VIP URL for THE EXTENDED PRIVATE ARCHIVE (693+ PARFUMS · 63+ MAISONS)
+ * Builds the official Telegram VIP URL for THE EXTENDED PRIVATE ARCHIVE (668 EXTENDED PARFUMS · 63 MAISONS)
  * Bespoke Vault Inquiry.
  */
 export function buildExtendedArchiveTelegramUrl(

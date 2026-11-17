@@ -99,6 +99,31 @@ export interface TranslationDictionary {
     urbanTitle: string;
     urbanSubtitle: string;
   };
+  extendedArchive: {
+    scriptCrown: string;
+    badge: string;
+    showroomTitle: string;
+    catalogFooterTitle: string;
+    emptySearchTitleWithKeywordPrefix: string;
+    emptySearchTitleWithKeywordSuffix: string;
+    emptySearchTitleFallback: string;
+    showroomDescPrefix: string;
+    footerDescPrefix: string;
+    emptyDescPrefix: string;
+    highlightText: string;
+    closingNote: string;
+    box1Tag: string;
+    box1Title: string;
+    box1Desc: string;
+    box2Tag: string;
+    box2Title: string;
+    box2Desc: string;
+    ctaExploreHouses: string;
+    ctaWhatsapp: string;
+    ctaTelegram: string;
+    emptyGenderNoticePrefix: string;
+    emptyGenderNoticeSuffix: string;
+  };
   invoiceBanner: {
     scriptCrown: string;
     kicker: string;
@@ -268,6 +293,38 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       urbanTitle: 'URBAN SIGNATURES',
       urbanSubtitle:
         'Klasik kontemporer dari rumah mode Eropa terkemuka. Karakter berwibawa dan serbaguna yang memancarkan karisma bersih dari ruang rapat hingga malam gala.',
+    },
+    extendedArchive: {
+      scriptCrown: 'L’Archive Privée Étendue',
+      badge: '✨ EXTENDED VAULT ARCHIVE',
+      showroomTitle: '83 Kurasi Utama & 668 Koleksi Tambahan Dunia',
+      catalogFooterTitle: 'Koleksi atau Varian yang Anda Cari Belum Tertera di Atas?',
+      emptySearchTitleWithKeywordPrefix: 'Pencarian "',
+      emptySearchTitleWithKeywordSuffix: '" Tersedia Melalui Layanan Concierge',
+      emptySearchTitleFallback: '668 Tipe Parfum Tambahan dari 63 Merk Dunia',
+      showroomDescPrefix:
+        'Jelajahi 83 kurasi utama dari 19 Rumah Mode Eropa di etalase kami. Apabila parfum spesifik yang Anda cari belum tercantum, sistem Concierge kami terhubung langsung dengan ',
+      footerDescPrefix:
+        'Selain 83 kurasi utama dari 19 Rumah Mode di atas, sistem Concierge kami terhubung langsung dengan ',
+      emptyDescPrefix:
+        'Koleksi yang Anda cari tidak ditampilkan pada 83 etalase utama, namun sistem Concierge kami terhubung langsung dengan ',
+      highlightText: '668 tipe parfum tambahan (total 63 Merk Internasional)',
+      closingNote:
+        'Efisiensi valuasi 20%–30% di bawah ritel butik. Silakan hubungi Concierge kami untuk ketersediaan stok & penawaran harga privat.',
+      box1Tag: '+342 SKU TAMBAHAN',
+      box1Title: '19 Merk Etalase Web',
+      box1Desc:
+        'Tipe & varian lain dari 19 merk utama yang belum tampil di etalase.',
+      box2Tag: '+326 SKU BARU',
+      box2Title: '44 Merk Internasional Baru',
+      box2Desc:
+        'Koleksi dari 44 merk mewah & niche tambahan di luar daftar web.',
+      ctaExploreHouses: 'JELAJAHI & CARI DI 19 HOUSES',
+      ctaWhatsapp: 'TANYAKAN VIA WHATSAPP CONCIERGE',
+      ctaTelegram: 'TANYAKAN VIA TELEGRAM VIP',
+      emptyGenderNoticePrefix: 'Koleksi kategori ',
+      emptyGenderNoticeSuffix:
+        ' untuk rumah mode ini tidak ditampilkan pada 83 Kurasi Utama etalase web, namun tersedia melalui 668 Tipe Parfum Tambahan (Total 63 Merk):',
     },
     invoiceBanner: {
       scriptCrown: 'Transaction Privée & Sécurisée',
@@ -465,6 +522,38 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       urbanSubtitle:
         'Contemporary classics from leading European fashion houses. Versatile, commanding signatures from boardroom to evening gala.',
     },
+    extendedArchive: {
+      scriptCrown: 'L’Archive Privée Étendue',
+      badge: '✨ EXTENDED VAULT ARCHIVE',
+      showroomTitle: '83 Main Curations & 668 Extended World Collections',
+      catalogFooterTitle: 'Looking for a Fragrance or Variant Not Listed Above?',
+      emptySearchTitleWithKeywordPrefix: 'Search "',
+      emptySearchTitleWithKeywordSuffix: '" Available via Private Concierge',
+      emptySearchTitleFallback: '668 Extended Collections Across 63 International Brands',
+      showroomDescPrefix:
+        'Explore 83 Main Curations from 19 European Fashion Houses in our showcase. If your desired scent is not listed, our Concierge connects directly to ',
+      footerDescPrefix:
+        'Beyond the 83 Main Curations from 19 Houses above, our Concierge connects directly to ',
+      emptyDescPrefix:
+        'Your requested fragrance is outside our 83 Main Curations showcase, yet our Concierge connects directly to ',
+      highlightText: '668 Extended Collections (63 International Brands)',
+      closingNote:
+        'Valuation privilege 20%–30% below boutique retail. Contact our Concierge for live stock & private quotation.',
+      box1Tag: '+342 ADDITIONAL SKUs',
+      box1Title: '19 Web Showcase Brands',
+      box1Desc:
+        'Additional editions & variants from our 19 flagship houses not yet shown on the web.',
+      box2Tag: '+326 NEW SKUs',
+      box2Title: '44 New International Brands',
+      box2Desc:
+        'Curated flacons from 44 additional luxury & niche houses outside the web list.',
+      ctaExploreHouses: 'EXPLORE & SEARCH 19 HOUSES',
+      ctaWhatsapp: 'INQUIRE VIA WHATSAPP CONCIERGE',
+      ctaTelegram: 'INQUIRE VIA TELEGRAM VIP',
+      emptyGenderNoticePrefix: 'The ',
+      emptyGenderNoticeSuffix:
+        ' category for this maison is not listed in our 83 Main Curations web showcase, yet is accessible via our 668 Extended Collections (63 International Brands):',
+    },
     invoiceBanner: {
       scriptCrown: 'Transaction Privée & Sécurisée',
       kicker: 'PRIVATE WEB CHECKOUT SYSTEM',
@@ -660,6 +749,38 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       urbanTitle: 'URBAN SIGNATURES',
       urbanSubtitle:
         'Les grands classiques contemporains des maisons européennes, alliant charisme et élégance.',
+    },
+    extendedArchive: {
+      scriptCrown: 'L’Archive Privée Étendue',
+      badge: '✨ EXTENDED VAULT ARCHIVE',
+      showroomTitle: '83 Sélections Principales & 668 Collections Étendues',
+      catalogFooterTitle: 'Une Référence ou Contenance Introuvable Ci-Dessus ?',
+      emptySearchTitleWithKeywordPrefix: 'Recherche « ',
+      emptySearchTitleWithKeywordSuffix: ' » Disponible via Conciergerie',
+      emptySearchTitleFallback: '668 Références Supplémentaires de 63 Maisons Mondiales',
+      showroomDescPrefix:
+        'Découvrez nos 83 Sélections Principales issues de 19 Maisons Européennes. Si votre parfum recherché ne figure pas en vitrine, notre Conciergerie accède à ',
+      footerDescPrefix:
+        'Au-delà des 83 Sélections Principales ci-dessus, notre Conciergerie accède directement à ',
+      emptyDescPrefix:
+        'Cette référence ne figure pas dans nos 83 Sélections Principales en ligne, mais notre Conciergerie accède à ',
+      highlightText: '668 références supplémentaires (total 63 Maisons Internationales)',
+      closingNote:
+        'Valorisation privilégiée 20%–30% sous le prix boutique. Contactez notre Conciergerie pour disponibilité et cotation privée.',
+      box1Tag: '+342 SKU SUPPLÉMENTAIRES',
+      box1Title: '19 Maisons en Vitrine Web',
+      box1Desc:
+        'Autres références et éditions de nos 19 maisons principales hors vitrine.',
+      box2Tag: '+326 NOUVEAUX SKU',
+      box2Title: '44 Nouvelles Maisons Mondiales',
+      box2Desc:
+        'Créations de 44 maisons de luxe et de niche supplémentaires hors liste web.',
+      ctaExploreHouses: 'EXPLORER & CHERCHER DANS 19 HOUSES',
+      ctaWhatsapp: 'DEMANDER VIA WHATSAPP CONCIERGERIE',
+      ctaTelegram: 'DEMANDER VIA TELEGRAM VIP',
+      emptyGenderNoticePrefix: 'La catégorie ',
+      emptyGenderNoticeSuffix:
+        ' de cette maison n’est pas affichée dans nos 83 Sélections Web, mais reste accessible via nos 668 Références Supplémentaires (63 Maisons) :',
     },
     invoiceBanner: {
       scriptCrown: 'Transaction Privée & Sécurisée',
@@ -857,6 +978,38 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       urbanSubtitle:
         'كلاسيكيات عصرية من أرقى دور الأزياء الأوروبية تجمع بين الجاذبية والحضور الواثق.',
     },
+    extendedArchive: {
+      scriptCrown: 'L’Archive Privée Étendue',
+      badge: '✨ EXTENDED VAULT ARCHIVE',
+      showroomTitle: '83 إصداراً رئيسياً و 668 مجموعة إضافية عالمية',
+      catalogFooterTitle: 'هل تبحث عن عطر أو حجم غير مدرج أعلاه؟',
+      emptySearchTitleWithKeywordPrefix: 'البحث عن "',
+      emptySearchTitleWithKeywordSuffix: '" متاح عبر خدمة الكونسيرج',
+      emptySearchTitleFallback: '668 عطراً إضافياً من 63 دار عطور عالمية',
+      showroomDescPrefix:
+        'استعرض 83 إصداراً رئيسياً من 19 دار أزياء أوروبية في معرضنا. وإذا لم تجد العطر المطلوب، يتصل فريق الكونسيرج لدينا مباشرة بـ ',
+      footerDescPrefix:
+        'بالإضافة إلى 83 إصداراً رئيسياً أعلاه، يتصل فريق الكونسيرج لدينا مباشرة بـ ',
+      emptyDescPrefix:
+        'العطر الذي تبحث عنه غير معروض ضمن 83 إصداراً رئيسياً، لكن فريق الكونسيرج يتصل مباشرة بـ ',
+      highlightText: '668 عطراً إضافياً (إجمالي 63 علامة تجارية عالمية)',
+      closingNote:
+        'توفير في القيمة بنسبة 20%–30% أقل من سعر المتاجر الرسمية. تواصل مع الكونسيرج لمعرفة المخزون والعرض الخاص.',
+      box1Tag: '+342 إصدار إضافي',
+      box1Title: '19 علامة تجارية في المعرض',
+      box1Desc:
+        'أنواع وإصدارات أخرى من العلامات الـ 19 الرئيسية غير معروضة في المتجر.',
+      box2Tag: '+326 إصدار جديد',
+      box2Title: '44 علامة عالمية جديدة',
+      box2Desc:
+        'مجموعات من 44 دار عطور فاخرة ونيش إضافية خارج قائمة الموقع.',
+      ctaExploreHouses: 'استكشف وابحث في 19 دار عطور',
+      ctaWhatsapp: 'استفسر عبر واتساب الكونسيرج',
+      ctaTelegram: 'استفسر عبر تيليجرام VIP',
+      emptyGenderNoticePrefix: 'فئة ',
+      emptyGenderNoticeSuffix:
+        ' لهذه الدار غير مدرجة في قائمة الـ 83 إصداراً رئيسياً، ولكنها متوفرة ضمن الأرشيف الموسع (668 عطراً إضافياً · 63 علامة تجارية):',
+    },
     invoiceBanner: {
       scriptCrown: 'Transaction Privée & Sécurisée',
       kicker: 'نظام الدفع الإلكتروني الخاص',
@@ -1049,6 +1202,36 @@ export const TRANSLATIONS: Record<SupportedLocale, TranslationDictionary> = {
       urbanTitle: 'URBAN SIGNATURES',
       urbanSubtitle:
         '来自欧洲顶级时装屋的现代经典之作，从商务会议到晚宴盛典皆散发从容魅力。',
+    },
+    extendedArchive: {
+      scriptCrown: 'L’Archive Privée Étendue',
+      badge: '✨ EXTENDED VAULT ARCHIVE',
+      showroomTitle: '83 款核心甄选与 668 款全球延展珍藏',
+      catalogFooterTitle: '未在上方看到您寻找的香氛或规格？',
+      emptySearchTitleWithKeywordPrefix: '“',
+      emptySearchTitleWithKeywordSuffix: '” 可通过私人礼宾部专属调拨',
+      emptySearchTitleFallback: '涵盖 63 个国际品牌的 668 款延展珍藏香氛',
+      showroomDescPrefix:
+        '探索线上展厅源自 19 大欧洲时装屋的 83 款核心甄选。若您寻觅的特定香氛尚未列出，我们的礼宾系统可直连 ',
+      footerDescPrefix:
+        '除上述 83 款核心甄选外，我们的私人礼宾系统更直连 ',
+      emptyDescPrefix:
+        '您所搜寻的香氛暂未列入线上 83 款常规展陈，但我们的私人礼宾系统可直连 ',
+      highlightText: '668 款延展香氛档案（共计 63 个国际奢华品牌）',
+      closingNote:
+        '礼宾甄选尊享较专柜零售价低 20%–30% 之估值优势。请联系礼宾顾问查询现货与私人报价。',
+      box1Tag: '+342 款延展 SKU',
+      box1Title: '19 个线上核心品牌',
+      box1Desc: '来自 19 个主要品牌但暂未在线上展出的其他香调与版本。',
+      box2Tag: '+326 款全新 SKU',
+      box2Title: '44 个新增国际品牌',
+      box2Desc: '线上名录之外的 44 个欧洲高定及小众沙龙香水品牌珍藏。',
+      ctaExploreHouses: '前往 19 HOUSES 探索与搜索',
+      ctaWhatsapp: '通过 WHATSAPP 礼宾部咨询',
+      ctaTelegram: '通过 TELEGRAM VIP 咨询',
+      emptyGenderNoticePrefix: '该品牌的 ',
+      emptyGenderNoticeSuffix:
+        ' 系列未收录于线上 83 款核心展陈，但可通过 668 款延展档案（共 63 个国际品牌）调拨：',
     },
     invoiceBanner: {
       scriptCrown: 'Transaction Privée & Sécurisée',

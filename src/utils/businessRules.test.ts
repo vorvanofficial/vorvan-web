@@ -1475,7 +1475,7 @@ test('SEO Meta Tags & JSON-LD Organization Schema in index.html include vorvanof
   );
   assert.ok(
     html.includes(
-      'content="VORVAN Official (vorvanofficial.com) — Kurasi Independen 81 Parfum Full-Size Sealed dari 19 Rumah Mode Eropa melalui jalur Private Fragrance Curation &amp; Direct International Curation. Valuasi 20%–30% di bawah ritel butik resmi."'
+      'content="VORVAN Official (vorvanofficial.com) — 83 Kurasi Utama dari 19 Rumah Mode Eropa &amp; 668 Koleksi Tambahan (Total 63 Merk Internasional) Full-Size Sealed Presentation. Valuasi 20%–30% di bawah ritel butik resmi."'
     )
   );
   assert.ok(
@@ -2283,7 +2283,7 @@ test('37. APEX PRESTIGE and URBAN SIGNATURES are separated from SHOWROOM into de
   assert.ok(appCode.includes('data-testid="bottom-nav-invoice"'));
 });
 
-test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 19 Houses Empty-Search WhatsApp & Telegram buttons, and removal of duplicate Explorer in Showroom work accurately', async () => {
+test('38. Extended Private Archive (668 Extended Parfums · 63 Maisons) Showroom mode, 19 Houses Empty-Search WhatsApp & Telegram buttons, and removal of duplicate Explorer in Showroom work accurately', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
   const {
@@ -2292,19 +2292,20 @@ test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 
     buildExtendedArchiveWhatsAppUrl,
     searchCatalogFragrances81,
   } = await import('./businessRules.ts');
+  const { TRANSLATIONS } = await import('../i18n/translations.ts');
 
   // 1. Verify exact WhatsApp message with custom perfume input
   const customMsg = buildExtendedArchiveWhatsAppMessage('Bvlgari Tygar 100ml');
   assert.equal(
     customMsg,
-    'Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (693+ tipe parfum / 63+ brand) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: Bvlgari Tygar 100ml. Terima kasih.'
+    'Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (668 tipe parfum tambahan · Total 63 Merk: +342 SKU dari 19 Merk Web & +326 SKU dari 44 Merk Baru, di luar 83 Kurasi Utama) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: Bvlgari Tygar 100ml. Terima kasih.'
   );
 
   // 2. Verify fallback when input is empty
   const emptyMsg = buildExtendedArchiveWhatsAppMessage('   ');
   assert.equal(
     emptyMsg,
-    'Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (693+ tipe parfum / 63+ brand) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: [Tulis Merk / Nama Parfum di Sini]. Terima kasih.'
+    'Halo Concierge VORVAN ✨ Saya melihat informasi Extended Vault Archive (668 tipe parfum tambahan · Total 63 Merk: +342 SKU dari 19 Merk Web & +326 SKU dari 44 Merk Baru, di luar 83 Kurasi Utama) di vorvanofficial.com. Saya ingin menanyakan ketersediaan dan harga efisiensi VORVAN (20%-30% off) untuk parfum: [Tulis Merk / Nama Parfum di Sini]. Terima kasih.'
   );
 
   // 3. Verify WhatsApp & Telegram URLs point to official VORVAN accounts with encoded message
@@ -2316,7 +2317,7 @@ test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 
   assert.ok(tgUrl.startsWith('https://t.me/vorvanofficial?text='));
   assert.ok(decodeURIComponent(tgUrl).includes('Parfums de Marly Layton'));
 
-  // 4. Verify searchCatalogFragrances81 finds existing items and returns empty array for non-81 items
+  // 4. Verify searchCatalogFragrances81 finds existing items and returns empty array for non-83 items
   const lvMatches = searchCatalogFragrances81('Afternoon Swim');
   assert.ok(lvMatches.length >= 1);
   assert.equal(lvMatches[0].name, 'Afternoon Swim');
@@ -2338,33 +2339,35 @@ test('38. Extended Private Archive (693+ Parfums · 63+ Maisons) Showroom mode, 
     'utf8'
   );
 
-  assert.ok(bannerCode.includes('✨ EXTENDED VAULT ARCHIVE'));
-  assert.ok(
-    bannerCode.includes('83 Kurasi Utama & 693+ Koleksi Tambahan Dunia')
+  assert.equal(TRANSLATIONS.ID.extendedArchive.badge, '✨ EXTENDED VAULT ARCHIVE');
+  assert.equal(
+    TRANSLATIONS.ID.extendedArchive.showroomTitle,
+    '83 Kurasi Utama & 668 Koleksi Tambahan Dunia'
   );
   assert.ok(
-    bannerCode.includes(
-      'Jelajahi 83 kurasi utama dari 19 Rumah Mode Eropa di katalog kami. Apabila parfum spesifik yang Anda cari belum tercantum, sistem pencarian kami terhubung dengan'
+    TRANSLATIONS.ID.extendedArchive.showroomDescPrefix.includes(
+      'Jelajahi 83 kurasi utama dari 19 Rumah Mode Eropa di etalase kami.'
     )
   );
-  assert.ok(bannerCode.includes('JELAJAHI &amp; CARI DI 19 HOUSES'));
-  assert.ok(
-    bannerCode.includes(
-      'Pencarian "${emptySearchTerm.trim()}" Tersedia Melalui Layanan Concierge'
-    )
+  assert.equal(
+    TRANSLATIONS.ID.extendedArchive.ctaExploreHouses,
+    'JELAJAHI & CARI DI 19 HOUSES'
   );
-  assert.ok(
-    bannerCode.includes('TANYAKAN VIA WHATSAPP CONCIERGE')
+  assert.equal(
+    TRANSLATIONS.ID.extendedArchive.ctaWhatsapp,
+    'TANYAKAN VIA WHATSAPP CONCIERGE'
   );
-  assert.ok(
-    bannerCode.includes('TANYAKAN VIA TELEGRAM VIP')
+  assert.equal(
+    TRANSLATIONS.ID.extendedArchive.ctaTelegram,
+    'TANYAKAN VIA TELEGRAM VIP'
   );
   assert.ok(bannerCode.includes('gap-[10px]'));
-  assert.ok(bannerCode.includes("maxWidth: '560px'"));
+  assert.ok(bannerCode.includes('max-w-[660px]'));
   assert.ok(bannerCode.includes("textWrap: 'balance'"));
   assert.ok(!bannerCode.includes('<input'));
-  assert.ok(
-    bannerCode.includes('Koleksi atau Varian yang Anda Cari Belum Tertera di Atas?')
+  assert.equal(
+    TRANSLATIONS.ID.extendedArchive.catalogFooterTitle,
+    'Koleksi atau Varian yang Anda Cari Belum Tertera di Atas?'
   );
 
   // Verify BrandHierarchyExplorer is NOT duplicated inside Showroom block
@@ -2414,8 +2417,11 @@ test('39. ExtendedArchiveBanner uses L’Archive Privée Étendue script crown &
     'utf8'
   );
 
+  const { TRANSLATIONS } = await import('../i18n/translations.ts');
+
   // 1. ExtendedArchiveBanner script crown & Semi-Latin italic description
-  assert.ok(bannerCode.includes('L’Archive Privée Étendue'));
+  assert.equal(TRANSLATIONS.ID.extendedArchive.scriptCrown, 'L’Archive Privée Étendue');
+  assert.ok(bannerCode.includes('{t.scriptCrown}'));
   assert.ok(bannerCode.includes('font-latin-script'));
   assert.ok(bannerCode.includes('font-latin-italic italic'));
 
@@ -2639,11 +2645,9 @@ test('43. Strict 19 Houses gender filter: starts as null on open and brand switc
   );
   assert.ok(explorerCode.includes('data-testid="empty-gender-filter-card"'));
   assert.ok(explorerCode.includes('whitespace-nowrap inline-block'));
-  assert.ok(
-    explorerCode.includes(
-      'untuk rumah mode ini tidak ditampilkan pada etalase utama (83 SKU), namun tersedia lengkap melalui Extended Archive (693+ Koleksi dari 63+ Brand).'
-    )
-  );
+  assert.ok(explorerCode.includes('{archiveT.emptyGenderNoticePrefix}'));
+  assert.ok(explorerCode.includes('{archiveT.box1Tag}'));
+  assert.ok(explorerCode.includes('{archiveT.box2Tag}'));
   assert.ok(explorerCode.includes('[ LIHAT SEMUA KOLEKSI ]'));
   assert.ok(explorerCode.includes('[ TANYA CONCIERGE WA ]'));
 });
@@ -4223,12 +4227,21 @@ test('55. 19 Houses positions brand card 16px below sticky bar without scrollInt
     'https://fimgs.net/mdimg/perfume-thumbs/dark-375x500.8069.jpg'
   );
 
+  const { TRANSLATIONS } = await import('../i18n/translations.ts');
   // 3. ExtendedArchiveBanner removes second search input & double emojis (💬 and ✈️)
   assert.ok(!bannerCode.includes('<input'));
   assert.ok(!bannerCode.includes('💬'));
   assert.ok(!bannerCode.includes('✈️'));
-  assert.ok(bannerCode.includes('TANYAKAN VIA WHATSAPP CONCIERGE'));
-  assert.ok(bannerCode.includes('TANYAKAN VIA TELEGRAM VIP'));
+  assert.equal(
+    TRANSLATIONS.ID.extendedArchive.ctaWhatsapp,
+    'TANYAKAN VIA WHATSAPP CONCIERGE'
+  );
+  assert.equal(
+    TRANSLATIONS.ID.extendedArchive.ctaTelegram,
+    'TANYAKAN VIA TELEGRAM VIP'
+  );
+  assert.ok(bannerCode.includes('{t.ctaWhatsapp}'));
+  assert.ok(bannerCode.includes('{t.ctaTelegram}'));
 
   // 4. Global multi-token ranked search across all 83 SKUs (front/middle/back & concentration)
   const leParfResults = searchCatalogFragrances81('le parf');
@@ -4305,4 +4318,80 @@ test('56. 19 HOUSES Model 3 unified 3-row sticky header & concise prompt without
   assert.ok(explorerCode.includes('setSelectedGender(gender);'));
   assert.ok(explorerCode.includes('scrollToCatalogContent();'));
 });
+
+test('57. Global Extended Archive update replaces all 693 references with 668 extended collections across 63 brands (+342 & +326), symmetric 2-col card, EN dictionary, WA message, and SEO metadata', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { TRANSLATIONS } = await import('../i18n/translations.ts');
+
+  const filesToVerifyNo693 = [
+    path.join(process.cwd(), 'src', 'components', 'ExtendedArchiveBanner.tsx'),
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    path.join(process.cwd(), 'src', 'App.tsx'),
+    path.join(process.cwd(), 'src', 'utils', 'businessRules.ts'),
+    path.join(process.cwd(), 'src', 'i18n', 'translations.ts'),
+    path.join(process.cwd(), 'index.html'),
+    path.join(process.cwd(), 'public', 'llms.txt'),
+  ];
+
+  for (const fp of filesToVerifyNo693) {
+    const content = fs.readFileSync(fp, 'utf-8');
+    assert.equal(content.includes('693'), false, `Unexpected 693 found in ${fp}`);
+  }
+
+  const bannerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'ExtendedArchiveBanner.tsx'),
+    'utf-8'
+  );
+  const explorerCode = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'BrandHierarchyExplorer.tsx'),
+    'utf-8'
+  );
+  const htmlCode = fs.readFileSync(
+    path.join(process.cwd(), 'index.html'),
+    'utf-8'
+  );
+  const llmsCode = fs.readFileSync(
+    path.join(process.cwd(), 'public', 'llms.txt'),
+    'utf-8'
+  );
+
+  // Symmetric 2-column centered layout on ExtendedArchiveBanner & empty gender card
+  assert.ok(bannerCode.includes('grid-cols-1 sm:grid-cols-2 gap-3'));
+  assert.ok(bannerCode.includes('h-full flex flex-col justify-center items-center text-center'));
+  assert.ok(bannerCode.includes('text-center flex flex-col items-center justify-center'));
+
+  // ID & EN translations exact breakdown
+  assert.equal(TRANSLATIONS.ID.extendedArchive.box1Tag, '+342 SKU TAMBAHAN');
+  assert.equal(TRANSLATIONS.ID.extendedArchive.box1Title, '19 Merk Etalase Web');
+  assert.equal(TRANSLATIONS.ID.extendedArchive.box2Tag, '+326 SKU BARU');
+  assert.equal(TRANSLATIONS.ID.extendedArchive.box2Title, '44 Merk Internasional Baru');
+  assert.equal(342 + 326, 668);
+  assert.equal(19 + 44, 63);
+
+  assert.equal(
+    TRANSLATIONS.EN.extendedArchive.showroomTitle,
+    '83 Main Curations & 668 Extended World Collections'
+  );
+  assert.equal(
+    TRANSLATIONS.EN.extendedArchive.highlightText,
+    '668 Extended Collections (63 International Brands)'
+  );
+  assert.equal(TRANSLATIONS.EN.extendedArchive.box1Tag, '+342 ADDITIONAL SKUs');
+  assert.equal(TRANSLATIONS.EN.extendedArchive.box2Tag, '+326 NEW SKUs');
+
+  // Empty gender WA message & card in 19 HOUSES
+  assert.ok(explorerCode.includes('668 Tipe Parfum Tambahan · Total 63 Merk'));
+  assert.ok(explorerCode.includes('+342 SKU dari 19 Merk Web & +326 SKU dari 44 Merk Baru'));
+
+  // SEO metadata in index.html & llms.txt
+  assert.ok(htmlCode.includes('83 Kurasi Utama'));
+  assert.ok(htmlCode.includes('668 Koleksi Tambahan'));
+  assert.ok(htmlCode.includes('Total 63 Merk'));
+  assert.ok(htmlCode.includes('+342 SKU'));
+  assert.ok(htmlCode.includes('+326 SKU'));
+  assert.ok(llmsCode.includes('83 Main Curated Fragrance SKUs'));
+  assert.ok(llmsCode.includes('668 Extended Collections'));
+});
+
 

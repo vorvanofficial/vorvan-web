@@ -44,7 +44,9 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
   const catalogContentRef = useRef<HTMLDivElement | null>(null);
   const ribbonBarRef = useRef<HTMLDivElement | null>(null);
 
-  const t = getTranslation(locale).explorer;
+  const fullTranslations = getTranslation(locale);
+  const t = fullTranslations.explorer;
+  const archiveT = fullTranslations.extendedArchive;
 
   const activeBrand =
     LUXURY_BRAND_HOUSES.find((b) => b.id === selectedBrandId) ||
@@ -176,7 +178,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
     },
   ];
 
-  const emptyGenderWaMessage = `Halo Concierge VORVAN, saya sedang mengeksplorasi rumah mode *${activeBrand.name}* kategori *[ ${selectedGender || ''} ]* di halaman 19 HOUSES. Apakah terdapat koleksi *${activeBrand.name}* kategori *${selectedGender || ''}* pada Extended Archive (693+ Koleksi)? Mohon informasi ketersediaan & penawaran harga privatnya.`;
+  const emptyGenderWaMessage = `Halo Concierge VORVAN, saya sedang mengeksplorasi rumah mode *${activeBrand.name}* kategori *[ ${selectedGender || ''} ]* di halaman 19 HOUSES. Apakah terdapat koleksi *${activeBrand.name}* kategori *${selectedGender || ''}* pada Extended Vault Archive (668 Tipe Parfum Tambahan · Total 63 Merk: +342 SKU dari 19 Merk Web & +326 SKU dari 44 Merk Baru, di luar 83 Kurasi Utama)? Mohon informasi ketersediaan & penawaran harga privatnya.`;
   const emptyGenderWaUrl = `https://wa.me/628133866590?text=${encodeURIComponent(
     emptyGenderWaMessage
   )}`;
@@ -359,6 +361,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
           <ExtendedArchiveBanner
             mode="empty-search"
             emptySearchTerm={searchQuery}
+            locale={locale}
             whatsappNumber={whatsappNumber}
             telegramUsername={telegramUsername}
             testIdPrefix="houses-empty-search-extended-archive"
@@ -410,12 +413,12 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
               data-testid="empty-gender-filter-card"
               className="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-[#15141C] to-[#0D0C12] border border-[#D4AF37]/40 text-center space-y-4 shadow-[0_16px_40px_rgba(0,0,0,0.75)] animate-editorial-fade"
             >
-              <p className="font-latin-script text-2xl sm:text-3xl text-gold-champagne m-0">
-                L’Archive Privée Étendue
+              <p className="font-latin-script text-2xl sm:text-3xl text-gold-champagne text-center m-0">
+                {archiveT.scriptCrown}
               </p>
               <div
                 data-testid="empty-gender-filter-subtitle"
-                className="font-brand text-[10px] sm:text-xs uppercase tracking-[0.22em] text-[#E5C87E] font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2"
+                className="font-brand text-[10px] sm:text-xs uppercase tracking-[0.22em] text-[#E5C87E] font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-center"
               >
                 <span>{activeBrand.name}</span>
                 <span aria-hidden="true" className="hidden sm:inline">
@@ -430,20 +433,44 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
               </div>
               <p
                 data-testid="empty-gender-filter-message"
-                className="font-latin-italic italic text-base sm:text-lg text-zinc-200 max-w-xl mx-auto leading-relaxed"
+                className="font-latin-italic italic text-base sm:text-lg text-zinc-200 max-w-xl mx-auto leading-relaxed text-center"
               >
-                “Koleksi kategori{' '}
+                “{archiveT.emptyGenderNoticePrefix}
                 <span className="whitespace-nowrap inline-block font-semibold text-[#F5E6B8] not-italic">
                   [ {selectedGender} ]
-                </span>{' '}
-                untuk rumah mode ini tidak ditampilkan pada etalase utama (83 SKU), namun tersedia lengkap melalui Extended Archive (693+ Koleksi dari 63+ Brand).”
+                </span>
+                {archiveT.emptyGenderNoticeSuffix}”
               </p>
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
+                <div className="h-full flex flex-col justify-center items-center text-center p-4 rounded-xl bg-[#13121C]/90 border border-[#D4AF37]/30">
+                  <span className="font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.16em] text-[#E5C87E] tabular-nums text-center mb-1">
+                    {archiveT.box1Tag}
+                  </span>
+                  <h3 className="font-serif-luxury text-sm sm:text-base font-semibold text-white text-center m-0 mb-1">
+                    {archiveT.box1Title}
+                  </h3>
+                  <p className="font-latin-italic italic text-xs sm:text-[13px] text-zinc-300 leading-relaxed text-center m-0">
+                    {archiveT.box1Desc}
+                  </p>
+                </div>
+                <div className="h-full flex flex-col justify-center items-center text-center p-4 rounded-xl bg-[#13121C]/90 border border-[#D4AF37]/30">
+                  <span className="font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.16em] text-[#E5C87E] tabular-nums text-center mb-1">
+                    {archiveT.box2Tag}
+                  </span>
+                  <h3 className="font-serif-luxury text-sm sm:text-base font-semibold text-white text-center m-0 mb-1">
+                    {archiveT.box2Title}
+                  </h3>
+                  <p className="font-latin-italic italic text-xs sm:text-[13px] text-zinc-300 leading-relaxed text-center m-0">
+                    {archiveT.box2Desc}
+                  </p>
+                </div>
+              </div>
               <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-md mx-auto">
                 <button
                   type="button"
                   onClick={() => setSelectedGender('ALL')}
                   data-testid="empty-gender-see-all-btn"
-                  className="btn-luxury-gold h-11 px-4 rounded-xl font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.12em] flex items-center justify-center whitespace-nowrap cursor-pointer"
+                  className="btn-luxury-gold h-11 px-4 rounded-xl font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.12em] flex items-center justify-center whitespace-nowrap cursor-pointer text-center"
                 >
                   [ LIHAT SEMUA KOLEKSI ]
                 </button>
@@ -452,7 +479,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   data-testid="empty-gender-wa-btn"
-                  className="h-11 px-4 rounded-xl bg-[#16151E] hover:bg-[#1E1C28] text-[#F5E6B8] border border-[#D4AF37]/55 hover:border-[#F5E6B8] font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.12em] flex items-center justify-center whitespace-nowrap transition-all cursor-pointer no-underline"
+                  className="h-11 px-4 rounded-xl bg-[#16151E] hover:bg-[#1E1C28] text-[#F5E6B8] border border-[#D4AF37]/55 hover:border-[#F5E6B8] font-brand text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.12em] flex items-center justify-center whitespace-nowrap transition-all cursor-pointer no-underline text-center"
                 >
                   [ TANYA CONCIERGE WA ]
                 </a>
@@ -495,6 +522,7 @@ export const BrandHierarchyExplorer: React.FC<BrandHierarchyExplorerProps> = ({
               <div className="pt-4">
                 <ExtendedArchiveBanner
                   mode="catalog-footer"
+                  locale={locale}
                   whatsappNumber={whatsappNumber}
                   telegramUsername={telegramUsername}
                   testIdPrefix="houses-extended-archive-banner"
